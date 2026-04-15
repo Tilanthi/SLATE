@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#06080d">
+<title>SLATE — Self-Evolving Discovery Engine</title>
+<meta name="description" content="SLATE: Strategy Learning & Autonomous Trading Engine. Continuous self-evolving AGI trading system.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+<style>
+/* CSS RESET & ROOT VARIABLES */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-deep: #06080d;
+  --bg-panel: rgba(10, 14, 24, 0.72);
+  --bg-panel-hover: rgba(14, 20, 36, 0.85);
+  --border-glass: rgba(255, 255, 255, 0.06);
+  --border-glow: rgba(0, 229, 255, 0.25);
+  --cyan: #00e5ff;
+  --amber: #ffab00;
+  --violet: #7c4dff;
+  --emerald: #00e676;
+  --coral: #ff5252;
+  --cyan-dim: rgba(0, 229, 255, 0.15);
+  --amber-dim: rgba(255, 171, 0, 0.15);
+  --violet-dim: rgba(124, 77, 255, 0.15);
+  --emerald-dim: rgba(0, 230, 118, 0.15);
+  --coral-dim: rgba(255, 82, 82, 0.15);
+  --text-primary: rgba(255, 255, 255, 1.0);
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-tertiary: rgba(255, 255, 255, 0.45);
+  --font-heading: 'Orbitron', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+  --font-body: 'Inter', sans-serif;
+  --gap: 12px;
+  --radius: 14px;
+  --radius-sm: 8px;
+}
+
+html { font-size: 14px; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+#particle-canvas {
+  position: fixed; inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+@keyframes glowText {
+  0%, 100% { text-shadow: 0 0 8px rgba(0,229,255,0.4); }
+  50%      { text-shadow: 0 0 20px rgba(0,229,255,0.8), 0 0 40px rgba(0,229,255,0.3); }
+}
+
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(0,229,255,0.15); }
+  50%      { border-color: rgba(0,229,255,0.45); }
+}
+
+/* HEADER */
+.header {
+  position: sticky; top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: rgba(6, 8, 13, 0.92);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+.header::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--violet), var(--cyan), var(--amber), var(--cyan), var(--violet));
+  background-size: 300% 100%;
+  animation: gradientShift 6s ease infinite;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-mark {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 6px;
+  background: linear-gradient(135deg, var(--cyan), var(--violet));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: glowText 4s ease-in-out infinite;
+  cursor: default;
+}
+
+.logo-sub {
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  letter-spacing: 1px;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 1.5px;
+  color: var(--emerald);
+}
+
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 8px var(--emerald);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.header-sep { color: var(--text-tertiary); }
+
+.version {
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.nav-link {
+  color: var(--cyan);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 4px 10px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  background: var(--cyan-dim);
+}
+
+.nav-link:hover {
+  background: var(--cyan);
+  color: var(--bg-deep);
+  border-color: var(--cyan);
+}
+
+/* SAFETY STRIP */
+.safety-strip {
+  position: sticky; top: 38px; z-index: 100;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 20px;
+  background: rgba(10,12,18,0.95);
+  border-bottom: 1px solid rgba(255,82,82,0.15);
+  backdrop-filter: blur(12px);
+  font-family: var(--font-mono); font-size: 0.75rem;
+}
+
+.safety-beacon {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 8px var(--emerald);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.engine-state-badge {
+  padding: 3px 10px; border-radius: 3px; font-size: 0.65rem;
+  font-weight: 700; text-transform: uppercase;
+  background: rgba(0,230,118,0.15); color: var(--emerald);
+  border: 1px solid rgba(0,230,118,0.25);
+}
+
+.safety-spacer { flex: 1; }
+
+.safety-btn {
+  padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  transition: all 0.15s;
+}
+
+.btn-pause { background: var(--amber); color: #000; }
+.btn-safe { background: var(--violet); color: #fff; }
+.btn-estop {
+  background: var(--coral); color: #fff; min-width: 90px;
+  box-shadow: 0 0 12px rgba(255,82,82,0.4);
+}
+
+/* MAIN LAYOUT */
+.dashboard {
+  position: relative;
+  z-index: 1;
+  padding: var(--gap);
+  max-width: 1800px;
+  margin: 0 auto;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas:
+    "left-top    brain     right-top"
+    "left-bottom brain     right-bottom";
+  gap: var(--gap);
+  height: calc(100vh - 140px);
+}
+
+.panel-activity   { grid-area: left-top; animation-delay: 0.1s; }
+.panel-decision-engine { grid-area: left-bottom; animation-delay: 0.15s; }
+.panel-brain      { grid-area: brain; animation-delay: 0.05s; }
+.panel-charts     { grid-area: right-top; animation-delay: 0.2s; }
+.panel-decisions  { grid-area: right-bottom; animation-delay: 0.25s; }
+
+.metrics-row {
+  margin-top: var(--gap);
+  animation: fadeIn 0.7s ease-out 0.3s both;
+}
+
+/* GLASS PANEL */
+.panel {
+  background: var(--bg-panel);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  opacity: 0;
+  animation: fadeIn 0.6s ease-out forwards;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel:hover {
+  border-color: var(--border-glow);
+  box-shadow: 0 0 30px rgba(0,229,255,0.06), inset 0 0 30px rgba(0,229,255,0.02);
+}
+
+.panel::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0.3;
+}
+
+.panel-decision-engine::before {
+  background: linear-gradient(90deg, transparent, var(--violet), transparent);
+}
+
+.panel-charts::before {
+  background: linear-gradient(90deg, transparent, var(--amber), transparent);
+}
+
+.panel-decisions::before {
+  background: linear-gradient(90deg, transparent, var(--emerald), transparent);
+}
+
+.panel-title {
+  font-family: var(--font-heading);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.dot-cyan    { background: var(--cyan); }
+.dot-amber   { background: var(--amber); }
+.dot-violet  { background: var(--violet); }
+.dot-emerald { background: var(--emerald); }
+
+/* ACTIVITY STREAM */
+.panel-activity {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.activity-feed {
+  flex: 1;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.7;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 100%);
+  padding-right: 4px;
+  scroll-behavior: smooth;
+}
+
+.activity-feed::-webkit-scrollbar { width: 3px; }
+.activity-feed::-webkit-scrollbar-track { background: transparent; }
+.activity-feed::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.2); border-radius: 2px; }
+
+.activity-line {
+  padding: 3px 0;
+  opacity: 0;
+  animation: fadeIn 0.4s ease-out forwards;
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+}
+
+.activity-line .ts { color: var(--text-tertiary); }
+.activity-line .module { font-weight: 700; }
+.activity-line.type-discovery .module  { color: var(--cyan); }
+.activity-line.type-validation .module { color: var(--emerald); }
+.activity-line.type-deployment .module { color: var(--violet); }
+.activity-line.type-evolution .module { color: var(--amber); }
+.activity-line.type-rejection .module  { color: var(--coral); }
+
+/* DECISION ENGINE */
+.panel-decision-engine {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cycle-phases {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.phase-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: all 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.phase-item.active {
+  border-color: var(--cyan);
+  background: var(--cyan-dim);
+  animation: borderGlow 2s ease-in-out infinite;
+}
+
+.phase-icon {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 2px solid var(--text-tertiary);
+  transition: all 0.5s ease;
+}
+
+.phase-item.active .phase-icon {
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0,229,255,0.4);
+  color: var(--cyan);
+}
+
+.phase-info { flex: 1; }
+
+.phase-name {
+  font-family: var(--font-heading);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+  transition: color 0.5s;
+}
+
+.phase-item.active .phase-name { color: var(--cyan); }
+
+.phase-desc {
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  transition: color 0.5s;
+}
+
+.phase-item.active .phase-desc { color: var(--text-secondary); }
+
+/* BRAIN PANEL */
+.panel-brain {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panel-brain .panel-title { position: relative; z-index: 3; }
+
+#brain-svg {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+#brain-svg text {
+  font-family: var(--font-mono);
+  pointer-events: none;
+}
+
+.gauge-container {
+  position: absolute;
+  bottom: 16px; right: 16px;
+  z-index: 5;
+}
+
+.gauge-svg {
+  width: 120px;
+  height: 120px;
+  filter: drop-shadow(0 0 12px rgba(0,229,255,0.3));
+}
+
+.gauge-bg {
+  fill: none;
+  stroke: rgba(255,255,255,0.06);
+  stroke-width: 8;
+}
+
+.gauge-fill {
+  fill: none;
+  stroke: url(#gaugeGradient);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 283;
+  stroke-dashoffset: 283;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 1.5s ease-out;
+}
+
+.gauge-value {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  font-weight: 700;
+  fill: var(--text-primary);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.gauge-label {
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  fill: var(--text-tertiary);
+  text-anchor: middle;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* CHARTS PANEL */
+.panel-charts {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.mini-chart {
+  background: rgba(255,255,255,0.02);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255,255,255,0.03);
+  transition: border-color 0.3s;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mini-chart:hover { border-color: var(--border-glow); }
+
+.mini-chart-title {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--text-tertiary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.mini-chart canvas {
+  flex: 1;
+  min-height: 0;
+}
+
+/* DECISIONS PANEL */
+.panel-decisions {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.decisions-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.decisions-list::-webkit-scrollbar { width: 3px; }
+.decisions-list::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.2); border-radius: 2px; }
+
+.decision-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.02);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.03);
+  animation: fadeIn 0.5s ease-out both;
+  transition: border-color 0.3s;
+}
+
+.decision-entry:hover { border-color: var(--border-glow); }
+
+.decision-icon {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.decision-icon.deploy { background: var(--emerald-dim); color: var(--emerald); }
+.decision-icon.reject { background: var(--coral-dim); color: var(--coral); }
+
+.decision-body { flex: 1; }
+
+.decision-ts {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-tertiary);
+}
+
+.decision-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.decision-badge {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-top: 4px;
+  display: inline-block;
+}
+
+.badge-success { background: var(--emerald-dim); color: var(--emerald); }
+
+/* METRICS */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+  gap: 8px;
+}
+
+.metric-box {
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+}
+
+.metric-box:hover {
+  border-color: var(--border-glow);
+  background: var(--bg-panel-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3), 0 0 12px rgba(0,229,255,0.08);
+}
+
+.metric-value {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.metric-label {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--text-tertiary);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+/* FOOTER */
+.footer {
+  text-align: center;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-tertiary);
+  letter-spacing: 1.5px;
+}
+
+.footer a { color: var(--cyan); text-decoration: none; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.15); border-radius: 3px; }
+
+/* RESPONSIVE */
+@media (max-width: 1199px) and (min-width: 768px) {
+  .main-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(320px, 400px) minmax(250px, 340px) minmax(250px, 340px);
+    grid-template-areas:
+      "brain       brain"
+      "left-top    right-top"
+      "left-bottom right-bottom";
+    height: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  html { font-size: 15px; }
+  .main-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(300px, 350px) auto auto auto auto;
+    grid-template-areas:
+      "brain"
+      "left-top"
+      "left-bottom"
+      "right-top"
+      "right-bottom";
+    height: auto;
+  }
+}
+</style>
+</head>
+<body>
+<canvas id="particle-canvas"></canvas>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <div>
+      <div class="logo-mark">SLATE</div>
+      <div class="logo-sub">Strategy Learning &amp; Autonomous Trading Engine</div>
+    </div>
+  </div>
+  <div class="header-center">
+    <span class="status-dot"></span>
+    <span>AUTONOMOUS MODE&nbsp;&nbsp;●&nbsp;&nbsp;ACTIVE</span>
+  </div>
+  <div class="header-right">
+    <span id="utc-clock">--:--:--</span>
+    <span class="header-sep">|</span>
+    <span>UP <span id="uptime">0d 0h 0m</span></span>
+    <span class="header-sep">|</span>
+    <a href="/discovery-dashboard" class="nav-link">📊 Discovery Dashboard</a>
+    <span class="header-sep">|</span>
+    <span class="version">v2.0</span>
+  </div>
+</header>
+
+<!-- SAFETY STRIP -->
+<div class="safety-strip">
+  <div class="safety-beacon"></div>
+  <span class="engine-state-badge">NOMINAL</span>
+  <div class="safety-spacer"></div>
+  <button class="safety-btn btn-safe" onclick="window.open('/discovery-dashboard', '_blank')">📊 DISCOVERY</button>
+  <button class="safety-btn btn-pause" onclick="pauseDiscovery()">⏸ PAUSE</button>
+  <button class="safety-btn btn-safe">🛡 PAPER ONLY</button>
+  <button class="safety-btn btn-estop">🛑 E-STOP</button>
+</div>
+
+<!-- MAIN DASHBOARD -->
+<main class="dashboard">
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- LEFT TOP: ACTIVITY STREAM -->
+    <div class="panel panel-activity">
+      <div class="panel-title"><span class="dot"></span>ACTIVITY STREAM</div>
+      <div class="activity-feed" id="activity-feed"></div>
+    </div>
+
+    <!-- LEFT BOTTOM: DECISION ENGINE -->
+    <div class="panel panel-decision-engine">
+      <div class="panel-title"><span class="dot dot-violet"></span>THOUGHT PROCESS — DISCOVERY ENGINE</div>
+      <div class="cycle-phases" id="cycle-phases"></div>
+    </div>
+
+    <!-- CENTER: AGI BRAIN -->
+    <div class="panel panel-brain">
+      <div class="panel-title"><span class="dot"></span>AGI NEURAL TOPOLOGY</div>
+      <svg id="brain-svg"></svg>
+      <div class="gauge-container">
+        <svg class="gauge-svg" viewBox="0 0 100 100">
+          <defs>
+            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#7c4dff"/>
+              <stop offset="50%" stop-color="#00e5ff"/>
+              <stop offset="100%" stop-color="#00e676"/>
+            </linearGradient>
+          </defs>
+          <circle class="gauge-bg" cx="50" cy="50" r="45"/>
+          <circle class="gauge-fill" id="gauge-fill" cx="50" cy="50" r="45"/>
+          <text class="gauge-value" id="gauge-value" x="50" y="46">0%</text>
+          <text class="gauge-label" x="50" y="62">CONFIDENCE</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- RIGHT TOP: DATA VISUALIZATIONS -->
+    <div class="panel panel-charts">
+      <div class="panel-title"><span class="dot dot-amber"></span>DATA VISUALIZATIONS</div>
+      <div class="charts-grid">
+        <div class="mini-chart">
+          <div class="mini-chart-title">Strategy Funnel</div>
+          <canvas id="chart-funnel"></canvas>
+        </div>
+        <div class="mini-chart">
+          <div class="mini-chart-title">Domain Activity</div>
+          <canvas id="chart-domain"></canvas>
+        </div>
+        <div class="mini-chart">
+          <div class="mini-chart-title">Skill Radar</div>
+          <canvas id="chart-radar"></canvas>
+        </div>
+        <div class="mini-chart">
+          <div class="mini-chart-title">Return Distribution</div>
+          <canvas id="chart-returns"></canvas>
+        </div>
+        <div class="mini-chart">
+          <div class="mini-chart-title">Discovery Rate</div>
+          <canvas id="chart-discovery"></canvas>
+        </div>
+        <div class="mini-chart">
+          <div class="mini-chart-title">Drawdown Chart</div>
+          <canvas id="chart-drawdown"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT BOTTOM: DECISION LOG -->
+    <div class="panel panel-decisions">
+      <div class="panel-title"><span class="dot dot-emerald"></span>AUTONOMOUS DECISION LOG</div>
+      <div class="decisions-list" id="decisions-list"></div>
+    </div>
+
+  </div>
+
+  <!-- METRICS ROW -->
+  <div class="metrics-row">
+    <div class="panel">
+      <div class="panel-title"><span class="dot dot-amber"></span>SYSTEM METRICS</div>
+      <div class="metrics-grid" id="metrics-grid"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- FOOTER -->
+<div class="footer">
+  SLATE v2.0 — Strategy Learning &amp; Autonomous Trading Engine • Paper Trading Only • No Real Money •
+  <a href="/discovery-dashboard" target="_blank">Realistic Discovery</a> •
+  <a href="/docs" target="_blank">API Docs</a>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// PARTICLE NETWORK BACKGROUND
+const canvas = document.getElementById('particle-canvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const particles = [];
+const PARTICLE_COUNT = 80;
+const CONNECTION_DISTANCE = 150;
+
+class Particle {
+  constructor() {
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * canvas.height;
+    this.vx = (Math.random() - 0.5) * 0.5;
+    this.vy = (Math.random() - 0.5) * 0.5;
+    this.radius = Math.random() * 1.5 + 0.5;
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+    if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+  }
+
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 229, 255, 0.6)';
+    ctx.fill();
+  }
+}
+
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  particles.push(new Particle());
+}
+
+function animateParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles.forEach(p => {
+    p.update();
+    p.draw();
+  });
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < CONNECTION_DISTANCE) {
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = `rgba(0, 229, 255, ${1 - dist / CONNECTION_DISTANCE})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(animateParticles);
+}
+animateParticles();
+
+// API FETCHING
+const API_BASE = window.location.origin;
+
+async function fetchAPI(endpoint) {
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`);
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching ${endpoint}:`, error);
+    return null;
+  }
+}
+
+// CLOCK & UPTIME
+const startTime = Date.now();
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('utc-clock').textContent = now.toLocaleTimeString();
+  const uptime = Date.now() - startTime;
+  const days = Math.floor(uptime / 86400000);
+  const hours = Math.floor((uptime % 86400000) / 3600000);
+  const minutes = Math.floor((uptime % 3600000) / 60000);
+  document.getElementById('uptime').textContent = `${days}d ${hours}h ${minutes}m`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// DISCOVERY PHASES
+const discoveryPhases = [
+  { id: 'observe', name: 'OBSERVE', icon: 'O', desc: 'Monitor market conditions & signals' },
+  { id: 'orient', name: 'ORIENT', icon: 'O', desc: 'Analyze regime & context' },
+  { id: 'decide', name: 'DECIDE', icon: 'D', desc: 'Generate strategy candidates' },
+  { id: 'act', name: 'ACT', icon: 'A', desc: 'Validate & deploy strategies' },
+  { id: 'learn', name: 'LEARN', icon: 'L', desc: 'Update skills & evolve' }
+];
+
+function renderDiscoveryPhases(activePhase) {
+  const container = document.getElementById('cycle-phases');
+  container.innerHTML = discoveryPhases.map((phase, idx) => `
+    <div class="phase-item ${idx === activePhase ? 'active' : ''}" id="phase-${phase.id}">
+      <div class="phase-icon">${phase.icon}</div>
+      <div class="phase-info">
+        <div class="phase-name">${phase.name}</div>
+        <div class="phase-desc">${phase.desc}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ACTIVITY FEED
+function addActivity(type, module, message) {
+  const feed = document.getElementById('activity-feed');
+  const now = new Date();
+  const ts = now.toLocaleTimeString();
+  const line = document.createElement('div');
+  line.className = `activity-line type-${type}`;
+  line.innerHTML = `<span class="ts">[${ts}]</span><span class="module">${module}</span><span>${message}</span>`;
+  feed.insertBefore(line, feed.firstChild);
+  while (feed.children.length > 50) {
+    feed.removeChild(feed.lastChild);
+  }
+}
+
+// DECISIONS LIST
+function renderDecisions(deployed) {
+  const container = document.getElementById('decisions-list');
+  if (!deployed || deployed.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-tertiary);font-family:var(--font-mono);font-size:0.7rem;padding:10px;">No decisions yet...</div>';
+    return;
+  }
+  container.innerHTML = deployed.slice(0, 20).map(d => `
+    <div class="decision-entry">
+      <div class="decision-icon deploy">✓</div>
+      <div class="decision-body">
+        <div class="decision-ts">${new Date(d.deployed_at || Date.now()).toLocaleString()}</div>
+        <div class="decision-text">Deployed: ${d.name || d.strategy_type || 'Unknown Strategy'}</div>
+        <div class="decision-badge badge-success">CONFIRM</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// METRICS
+const metricsConfig = [
+  { key: 'candidates', label: 'Candidates', value: '0' },
+  { key: 'deployed', label: 'Deployed', value: '0' },
+  { key: 'total_tests', label: 'Total Tests', value: '0' },
+  { key: 'success_rate', label: 'Success Rate', value: '--%' },
+  { key: 'generation', label: 'Generation', value: '1' },
+  { key: 'sharpe_ratio', label: 'Best Sharpe', value: '--' }
+];
+
+function renderMetrics(stats) {
+  const container = document.getElementById('metrics-grid');
+  const data = stats || {};
+
+  // Extract values from nested API response structure
+  const flatData = {
+    candidates: data.strategies?.candidates || 0,
+    deployed: data.strategies?.deployed || 0,
+    total_tests: data.realistic_tests || 0,
+    success_rate: data.overview?.success_rate ? `${data.overview.success_rate.toFixed(1)}%` : '--%',
+    generation: data.overview?.generation || 1,
+    sharpe_ratio: data.best_sharpe !== undefined ? data.best_sharpe.toFixed(2) : '--'
+  };
+
+  container.innerHTML = metricsConfig.map(m => {
+    const value = flatData[m.key] !== undefined ? flatData[m.key] : m.value;
+    return `<div class="metric-box"><div class="metric-value">${value}</div><div class="metric-label">${m.label}</div></div>`;
+  }).join('');
+}
+
+// BRAIN VISUALIZATION (D3.js)
+function renderBrain() {
+  const svg = d3.select('#brain-svg');
+  const width = svg.node()?.getBoundingClientRect().width || 400;
+  const height = svg.node()?.getBoundingClientRect().height || 400;
+  svg.attr('viewBox', `0 0 ${width} ${height}`);
+
+  const skills = [
+    { name: 'Pattern Recognition', x: 0.3, y: 0.3, level: 0.5 },
+    { name: 'Anomaly Detection', x: 0.7, y: 0.3, level: 0.5 },
+    { name: 'Adaptive Optimization', x: 0.3, y: 0.7, level: 0.51 },
+    { name: 'Causal Inference', x: 0.7, y: 0.7, level: 0.3 },
+    { name: 'Meta-Learning', x: 0.5, y: 0.5, level: 0.3 }
+  ];
+
+  svg.selectAll('line')
+    .data([[0,1], [0,2], [1,3], [2,4], [3,4], [0,4], [1,2]])
+    .enter()
+    .append('line')
+    .attr('x1', d => skills[d[0]].x * width)
+    .attr('y1', d => skills[d[0]].y * height)
+    .attr('x2', d => skills[d[1]].x * width)
+    .attr('y2', d => skills[d[1]].y * height)
+    .attr('stroke', 'rgba(0, 229, 255, 0.2)')
+    .attr('stroke-width', 1);
+
+  svg.selectAll('circle')
+    .data(skills)
+    .enter()
+    .append('circle')
+    .attr('cx', d => d.x * width)
+    .attr('cy', d => d.y * height)
+    .attr('r', d => 20 + d.level * 30)
+    .attr('fill', d => {
+      const colors = ['#00e5ff', '#7c4dff', '#ffab00', '#00e676', '#ff5252'];
+      return colors[Math.floor(d.level * 10) % colors.length];
+    })
+    .attr('opacity', 0.6)
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 2);
+
+  svg.selectAll('text')
+    .data(skills)
+    .enter()
+    .append('text')
+    .attr('x', d => d.x * width)
+    .attr('y', d => d.y * height + 5)
+    .attr('text-anchor', 'middle')
+    .attr('fill', '#fff')
+    .attr('font-size', '9px')
+    .attr('font-family', 'Space Mono')
+    .text(d => `${Math.round(d.level * 100)}%`);
+}
+
+// CONFIDENCE GAUGE
+function updateGauge(value) {
+  const fill = document.getElementById('gauge-fill');
+  const valueText = document.getElementById('gauge-value');
+  const offset = 283 - (283 * value / 100);
+  fill.style.strokeDashoffset = offset;
+  valueText.textContent = `${Math.round(value)}%`;
+}
+
+// MINI CHARTS (Chart.js)
+function createMiniChart(canvasId, chartType, data, color) {
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return;
+  const chart = new Chart(ctx, {
+    type: chartType,
+    data: {
+      labels: data.labels,
+      datasets: [{
+        data: data.values,
+        borderColor: color,
+        backgroundColor: (context) => {
+          const gradient = context.chart.ctx.createLinearGradient(0, 0, 0, 100);
+          gradient.addColorStop(0, color.replace(')', ', 0.5)').replace('rgb', 'rgba'));
+          gradient.addColorStop(1, color.replace(')', ', 0)').replace('rgb', 'rgba'));
+          return gradient;
+        },
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { display: false }, y: { display: false } },
+      animation: { duration: 300 }
+    }
+  });
+}
+
+function initCharts() {
+  createMiniChart('chart-funnel', 'bar',
+    { labels: ['Gen', 'Quick', 'Deep', 'Deploy'], values: [100, 80, 40, 20] },
+    'rgb(0, 229, 255)');
+  createMiniChart('chart-domain', 'doughnut',
+    { labels: ['Param', 'Signal', 'Regime', 'MTF', 'Ens'], values: [25, 30, 20, 15, 10] },
+    'rgb(124, 77, 255)');
+  createMiniChart('chart-radar', 'radar',
+    { labels: ['Pattern', 'Anomaly', 'Adaptive', 'Causal', 'Meta'], values: [50, 50, 51, 30, 30] },
+    'rgb(255, 171, 0)');
+  createMiniChart('chart-returns', 'line',
+    { labels: Array.from({length: 20}, (_, i) => i), values: Array.from({length: 20}, () => Math.random() * 10 - 2) },
+    'rgb(0, 230, 118)');
+  createMiniChart('chart-discovery', 'line',
+    { labels: Array.from({length: 20}, (_, i) => i), values: Array.from({length: 20}, () => Math.random() * 5) },
+    'rgb(255, 82, 82)');
+  createMiniChart('chart-drawdown', 'line',
+    { labels: Array.from({length: 20}, (_, i) => i), values: [0, -2, -5, -3, -8, -6, -10, -8, -5, -3, -2, -4, -6, -5, -3, -2, -1, -2, -3, -2] },
+    'rgb(255, 171, 0)');
+}
+
+// SAFETY ACTIONS
+function pauseDiscovery() {
+  fetchAPI('/api/discovery/stop');
+  addActivity('system', 'CONTROL', 'Discovery engine paused');
+}
+
+// INITIAL DATA LOAD
+async function loadInitialData() {
+  const status = await fetchAPI('/api/discovery/status');
+  const deployed = await fetchAPI('/api/discovery/deployed');
+  renderDecisions(deployed);
+  const stats = await fetchAPI('/api/discovery/statistics');
+
+  // Get best Sharpe ratio and test count from realistic discovery
+  const realisticStats = await fetchAPI('/api/realistic-discovery/statistics');
+  if (realisticStats) {
+    stats.realistic_tests = realisticStats.total_tests || 0;
+    stats.best_sharpe = realisticStats.performance?.best_sharpe ?? '--';
+  }
+
+  renderMetrics(stats);
+  renderBrain();
+  initCharts();
+  updateGauge(65);
+  addActivity('discovery', 'SYSTEM', 'SLATE v2.0 dashboard initialized');
+  addActivity('running', 'ENGINE', `Discovery engine ${status?.running ? 'RUNNING' : 'STOPPED'}`);
+  addActivity('validation', 'METRICS', `${stats?.strategies?.deployed || 0} strategies deployed`);
+  addActivity('testing', 'REALISTIC', `${stats.realistic_tests || 0} realistic tests completed`);
+  renderDiscoveryPhases(0);
+}
+
+// PERIODIC UPDATES
+async function periodicUpdate() {
+  const status = await fetchAPI('/api/discovery/status');
+  if (status && status.running) {
+    addActivity('discovery', 'ENGINE', `Discovery cycle #${status.total_completed || 0} active`);
+  }
+  const deployed = await fetchAPI('/api/discovery/deployed');
+  if (deployed && deployed.length > 0) {
+    const latest = deployed[0];
+    addActivity('deployment', 'DEPLOY', `Strategy deployed: ${latest.name || latest.strategy_type}`);
+  }
+  const stats = await fetchAPI('/api/discovery/statistics');
+
+  // Get best Sharpe ratio and test count from realistic discovery
+  const realisticStats = await fetchAPI('/api/realistic-discovery/statistics');
+  if (realisticStats) {
+    stats.realistic_tests = realisticStats.total_tests || 0;
+    stats.best_sharpe = realisticStats.performance?.best_sharpe ?? '--';
+  }
+
+  if (stats) renderMetrics(stats);
+}
+
+// PHASE ROTATION
+let currentPhase = 0;
+function rotatePhases() {
+  currentPhase = (currentPhase + 1) % discoveryPhases.length;
+  renderDiscoveryPhases(currentPhase);
+  addActivity('discovery', 'CYCLE', `Phase: ${discoveryPhases[currentPhase].name}`);
+}
+
+// INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+  loadInitialData();
+  setInterval(rotatePhases, 5000);
+  setInterval(periodicUpdate, 10000);
+});
+
+})();
+</script>
+</body>
+</html>

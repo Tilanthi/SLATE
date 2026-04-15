@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLATE — Realistic Strategy Discovery</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+  font-family: 'Space Mono', monospace;
+  background: #06080d;
+  color: #fff;
+  min-height: 100vh;
+}
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid #1a1a1a;
+  margin-bottom: 20px;
+}
+.logo { font-family: 'Orbitron'; font-size: 1.5rem; font-weight: 700; }
+.logo span { color: #00e5ff; }
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+}
+.stat-box {
+  background: rgba(10, 14, 24, 0.8);
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  padding: 15px;
+  text-align: center;
+}
+.stat-label { font-size: 0.7rem; color: #666; text-transform: uppercase; }
+.stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 5px; }
+.stat-value.positive { color: #00e676; }
+.stat-value.negative { color: #ff5252; }
+
+.content-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+.results-panel {
+  background: rgba(10, 14, 24, 0.8);
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.panel-title {
+  font-family: 'Orbitron';
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #00e5ff;
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.results-table th {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #1a1a1a;
+  color: #666;
+  font-weight: 600;
+}
+.results-table td {
+  padding: 10px;
+  border-bottom: 1px solid #0a0a0a;
+}
+.results-table tr:hover { background: rgba(0, 229, 255, 0.05); }
+.positive { color: #00e676; }
+.negative { color: #ff5252; }
+
+.charts-panel {
+  background: rgba(10, 14, 24, 0.8);
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+}
+.chart-container { margin-bottom: 20px; }
+.chart-container:last-child { margin-bottom: 0; }
+
+.controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-family: 'Space Mono';
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-nav { background: #444; color: #fff; }
+.btn-primary { background: #00e5ff; color: #000; }
+.btn-danger { background: #ff5252; color: #fff; }
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.type-badge {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+.badge-momentum { background: rgba(0, 229, 255, 0.2); color: #00e5ff; }
+.badge-mean_reversion { background: rgba(255, 171, 0, 0.2); color: #ffab00; }
+.badge-breakout { background: rgba(0, 230, 118, 0.2); color: #00e676; }
+.badge-trend { background: rgba(124, 77, 255, 0.2); color: #7c4dff; }
+.badge-stat_arb { background: rgba(255, 82, 82, 0.2); color: #ff5252; }
+.badge-ml { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+.eval-badge {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.eval-badge.multipath {
+  background: rgba(0, 230, 118, 0.3);
+  color: #00e676;
+  border: 1px solid #00e676;
+}
+.eval-badge.singlepath {
+  background: rgba(255, 255, 255, 0.1);
+  color: #888;
+  border: 1px solid #444;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.type-distribution {
+  background: rgba(10, 14, 24, 0.8);
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.distribution-label {
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.distribution-bar {
+  display: flex;
+  height: 20px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.type-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  color: #fff;
+  transition: all 0.3s;
+}
+
+.type-segment:hover {
+  opacity: 0.8;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="logo">SLATE <span>DISCOVERY</span></div>
+    <div class="controls">
+      <button class="btn btn-nav" onclick="window.location.href='/dashboard'">← Main Dashboard</button>
+      <button class="btn btn-primary" id="startBtn" onclick="startDiscovery()">Start Discovery</button>
+      <button class="btn btn-danger" id="stopBtn" onclick="stopDiscovery()" disabled>Stop Discovery</button>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="stat-label">Total Tests</div>
+      <div class="stat-value" id="totalTests">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Multi-Path Tests</div>
+      <div class="stat-value" id="multipathTests">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Strategy Diversity</div>
+      <div class="stat-value" id="diversityScore">--</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Best Sharpe</div>
+      <div class="stat-value" id="bestSharpe">--</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Best Robustness</div>
+      <div class="stat-value" id="bestRobustness">--</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Avg Consistency</div>
+      <div class="stat-value" id="avgConsistency">--</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Best Return</div>
+      <div class="stat-value" id="bestReturn">--</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Profitable %</div>
+      <div class="stat-value" id="profitablePct">--</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Status</div>
+      <div class="stat-value" id="status">IDLE</div>
+    </div>
+  </div>
+
+  <!-- Type Distribution Bar -->
+  <div class="type-distribution" id="typeDistribution">
+    <div class="distribution-label">Strategy Type Distribution:</div>
+    <div class="distribution-bar" id="distributionBar">Loading...</div>
+  </div>
+
+  <div class="content-grid">
+    <div class="results-panel">
+      <div class="panel-title">Top Performing Strategies</div>
+      <div id="resultsContainer">
+        <div class="loading">Loading results...</div>
+      </div>
+    </div>
+
+    <div class="charts-panel">
+      <div class="panel-title">Performance Distribution</div>
+      <div class="chart-container">
+        <canvas id="returnsChart"></canvas>
+      </div>
+      <div class="panel-title">Strategy Type Performance</div>
+      <div class="chart-container">
+        <canvas id="typeChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+
+async function fetchAPI(endpoint) {
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`);
+    return await response.json();
+  } catch (error) {
+    console.error(`API Error:`, error);
+    return null;
+  }
+}
+
+async function startDiscovery() {
+  const result = await fetchAPI('/api/realistic-discovery/start?cycles=10000');
+  if (result) {
+    // Check if already running
+    if (result.status === 'already_running') {
+      console.log('Discovery already running - continuing');
+    } else {
+      console.log('Discovery started:', result);
+    }
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('stopBtn').disabled = false;
+    updateStatus();
+  }
+}
+
+async function stopDiscovery() {
+  const result = await fetchAPI('/api/realistic-discovery/stop');
+  if (result) {
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+    document.getElementById('startBtn').textContent = 'Start Discovery';
+    updateStatus();
+  }
+}
+
+async function updateStatus() {
+  const stats = await fetchAPI('/api/realistic-discovery/statistics');
+  if (stats) {
+    // Basic stats
+    const totalTests = stats.total_tests || 0;
+    const multipathTests = stats.multipath_tests || 0;
+    const singlepathTests = stats.singlepath_tests || 0;
+
+    document.getElementById('totalTests').textContent = totalTests;
+    document.getElementById('multipathTests').textContent = multipathTests;
+
+    // Get best overall result
+    const insights = stats.insights || {};
+    const bestOverall = insights.best_overall || {};
+
+    // Best Sharpe (handle both single and multi-path)
+    const bestSharpe = bestOverall.sharpe || 0;
+    document.getElementById('bestSharpe').textContent = bestSharpe.toFixed(2);
+
+    // Best Robustness (from multi-path results)
+    const robustnessSummary = insights.robustness_summary || {};
+    const bestRobustness = robustnessSummary.best_robustness || 0;
+    document.getElementById('bestRobustness').textContent = bestRobustness.toFixed(3);
+
+    // Avg Consistency
+    const avgConsistency = robustnessSummary.avg_consistency || 0;
+    document.getElementById('avgConsistency').textContent = (avgConsistency * 100).toFixed(0) + '%';
+
+    // Best Return
+    const bestReturn = bestOverall.return || 0;
+    const returnClass = bestReturn >= 0 ? 'positive' : 'negative';
+    document.getElementById('bestReturn').textContent = (bestReturn * 100).toFixed(1) + '%';
+    document.getElementById('bestReturn').className = 'stat-value ' + returnClass;
+
+    // Profitable % (from robustness summary - high consistency strategies)
+    const highConsistencyCount = robustnessSummary.high_consistency_count || 0;
+    const profitablePct = multipathTests > 0 ? (highConsistencyCount / multipathTests * 100) : 0;
+    document.getElementById('profitablePct').textContent = profitablePct.toFixed(1) + '%';
+
+    // Status and button states
+    const status = stats.running ? 'RUNNING (Auto-started)' : 'IDLE';
+    document.getElementById('status').textContent = status;
+
+    // Update button states based on running status
+    document.getElementById('startBtn').disabled = stats.running;
+    document.getElementById('stopBtn').disabled = !stats.running;
+
+    // Update button text to reflect continuous operation
+    if (stats.running) {
+      document.getElementById('startBtn').textContent = 'Discovery Running...';
+    } else {
+      document.getElementById('startBtn').textContent = 'Start Discovery';
+    }
+  }
+
+  // Update diversity metrics
+  await updateDiversityMetrics();
+
+  await updateResults();
+  await updateCharts();
+}
+
+async function updateDiversityMetrics() {
+  const diversity = await fetchAPI('/api/realistic-discovery/diversity');
+  if (diversity) {
+    // Update diversity score
+    const balancedness = diversity.balancedness_score || 0;
+    const scoreClass = balancedness > 0.7 ? 'positive' : (balancedness > 0.4 ? '' : 'negative');
+    const scoreElement = document.getElementById('diversityScore');
+    if (scoreElement) {
+      scoreElement.textContent = (balancedness * 100).toFixed(0) + '%';
+      scoreElement.className = 'stat-value ' + scoreClass;
+    }
+
+    // Update type distribution bar
+    const distribution = diversity.type_distribution || {};
+    const typeColors = {
+      'momentum': '#00e5ff',
+      'mean_reversion': '#ffab00',
+      'breakout': '#00e676',
+      'trend_following': '#7c4dff',
+      'statistical_arb': '#ff5252',
+      'machine_learning': '#ff69b4',
+      'regime_switching': '#9c27b0',
+      'order_flow': '#03a9f4',
+      'microstructure': '#00bcd4',
+      'multi_timeframe': '#ff9800'
+    };
+
+    const distributionBar = document.getElementById('distributionBar');
+    if (distributionBar && Object.keys(distribution).length > 0) {
+      let html = '';
+      for (const [type, percentage] of Object.entries(distribution)) {
+        const color = typeColors[type] || '#666';
+        const displayType = type.replace('_', ' ');
+        html += `<div class="type-segment" style="flex: ${percentage}%; background: ${color}" title="${displayType}: ${percentage.toFixed(1)}%">${percentage > 10 ? displayType.substring(0, 4) + '..' : ''}</div>`;
+      }
+      distributionBar.innerHTML = html;
+    }
+  }
+}
+
+async function updateResults() {
+  const results = await fetchAPI('/api/realistic-discovery/results/top?limit=20');
+  const container = document.getElementById('resultsContainer');
+  
+  if (!results || results.length === 0) {
+    container.innerHTML = '<div class="loading">No results yet...</div>';
+    return;
+  }
+
+  let html = `
+    <table class="results-table">
+      <thead>
+        <tr>
+          <th>Strategy</th>
+          <th>Type</th>
+          <th>Eval</th>
+          <th>Sharpe</th>
+          <th>Return</th>
+          <th>Robustness</th>
+          <th>Consistency</th>
+          <th>95% CI</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  results.forEach(r => {
+    const typeClass = `badge-${r.strategy_type.replace('_', '_')}`;
+
+    // Handle both single-path and multi-path results
+    const isMultipath = r.evaluation_type === 'multipath' || r.num_paths > 0;
+    const evalBadge = isMultipath
+      ? '<span class="eval-badge multipath">MP</span>'
+      : '<span class="eval-badge singlepath">SP</span>';
+
+    // Get metrics based on evaluation type
+    const sharpe = isMultipath ? (r.mean_sharpe || r.sharpe_ratio || 0) : (r.sharpe_ratio || 0);
+    const ret = isMultipath ? (r.mean_return || r.total_return || 0) : (r.total_return || 0);
+    const returnClass = ret >= 0 ? 'positive' : 'negative';
+
+    // Multi-path specific metrics
+    let robustnessCell = '-';
+    let consistencyCell = '-';
+    let ciCell = '-';
+
+    if (isMultipath) {
+      const robustness = r.robustness_score || 0;
+      const consistency = r.consistency_ratio || 0;
+      const ciLower = (r.return_ci_lower || 0) * 100;
+      const ciUpper = (r.return_ci_upper || 0) * 100;
+
+      const robustnessClass = robustness > 0 ? 'positive' : 'negative';
+      const consistencyClass = consistency > 0.7 ? 'positive' : (consistency > 0.5 ? '' : 'negative');
+
+      robustnessCell = `<span class="${robustnessClass}">${robustness.toFixed(3)}</span>`;
+      consistencyCell = `<span class="${consistencyClass}">${(consistency * 100).toFixed(0)}%</span>`;
+      ciCell = `[${ciLower.toFixed(1)}%, ${ciUpper.toFixed(1)}%]`;
+    }
+
+    html += `
+      <tr>
+        <td>${r.strategy_name}</td>
+        <td><span class="type-badge ${typeClass}">${r.strategy_type}</span></td>
+        <td>${evalBadge}</td>
+        <td>${sharpe.toFixed(2)}</td>
+        <td class="${returnClass}">${(ret * 100).toFixed(1)}%</td>
+        <td>${robustnessCell}</td>
+        <td>${consistencyCell}</td>
+        <td><small>${ciCell}</small></td>
+      </tr>
+    `;
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function updateCharts() {
+  const stats = await fetchAPI('/api/realistic-discovery/statistics');
+  if (!stats) return;
+
+  const insights = stats.insights || {};
+  const robustnessSummary = insights.robustness_summary || {};
+
+  // Returns distribution chart with uncertainty bands
+  const returnsCtx = document.getElementById('returnsChart');
+  if (returnsCtx) {
+    const bestOverall = insights.best_overall || {};
+    const bestReturn = (bestOverall.return || 0) * 100;
+
+    // Get some multi-path results for uncertainty bands
+    const results = await fetchAPI('/api/realistic-discovery/results/top?limit=20');
+    let confidenceData = [];
+
+    if (results && results.length > 0) {
+      // Separate multi-path results
+      const multipathResults = results.filter(r => r.evaluation_type === 'multipath' || r.num_paths > 0);
+
+      if (multipathResults.length > 0) {
+        // Show uncertainty bands for top multi-path results
+        confidenceData = multipathResults.slice(0, 5).map(r => ({
+          name: r.strategy_name.substring(0, 10),
+          mean: (r.mean_return * 100).toFixed(1),
+          ciLower: (r.return_ci_lower * 100).toFixed(1),
+          ciUpper: (r.return_ci_upper * 100).toFixed(1)
+        }));
+      }
+    }
+
+    // Build chart data
+    const labels = confidenceData.length > 0
+      ? confidenceData.map(d => d.name)
+      : ['Best', 'Avg', 'Worst'];
+
+    const meanReturns = confidenceData.length > 0
+      ? confidenceData.map(d => d.mean)
+      : [bestReturn.toFixed(1), '0.0', '-5.0'];
+
+    const ciLower = confidenceData.length > 0
+      ? confidenceData.map(d => d.ciLower)
+      : [bestReturn * 0.8, '-2.0', '-10.0'];
+
+    const ciUpper = confidenceData.length > 0
+      ? confidenceData.map(d => d.ciUpper)
+      : [bestReturn * 1.2, '2.0', '0.0'];
+
+    new Chart(returnsCtx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Mean Return %',
+            data: meanReturns,
+            backgroundColor: 'rgba(0, 229, 255, 0.6)',
+            borderColor: '#00e5ff',
+            borderWidth: 1
+          },
+          {
+            label: '95% CI Upper',
+            data: ciUpper,
+            backgroundColor: 'rgba(0, 230, 118, 0.2)',
+            borderColor: '#00e676',
+            borderWidth: 1
+          },
+          {
+            label: '95% CI Lower',
+            data: ciLower,
+            backgroundColor: 'rgba(255, 82, 82, 0.2)',
+            borderColor: '#ff5252',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { color: '#fff', font: { size: 10 }, boxWidth: 12 }
+          },
+          title: {
+            display: confidenceData.length > 0,
+            text: 'Return with 95% Confidence Intervals',
+            color: '#666',
+            font: { size: 10 }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: false,
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            ticks: { color: '#888' }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: '#888' }
+          }
+        }
+      }
+    });
+  }
+
+  // Robustness vs Consistency scatter chart
+  const typeCtx = document.getElementById('typeChart');
+  if (typeCtx) {
+    const results = await fetchAPI('/api/realistic-discovery/results/top?limit=50');
+
+    if (results && results.length > 0) {
+      // Get multi-path results
+      const multipathResults = results.filter(r =>
+        r.evaluation_type === 'multipath' || r.num_paths > 0
+      );
+
+      if (multipathResults.length > 0) {
+        // Create scatter data
+        const scatterData = multipathResults.map(r => ({
+          x: (r.consistency_ratio || 0) * 100,
+          y: r.robustness_score || 0,
+          label: r.strategy_name.substring(0, 8)
+        }));
+
+        new Chart(typeCtx, {
+          type: 'scatter',
+          data: {
+            datasets: [{
+              label: 'Strategies',
+              data: scatterData,
+              backgroundColor: scatterData.map(d =>
+                d.y > 0 ? 'rgba(0, 230, 118, 0.6)' : 'rgba(255, 82, 82, 0.6)'
+              ),
+              borderColor: scatterData.map(d =>
+                d.y > 0 ? '#00e676' : '#ff5252'
+              ),
+              pointRadius: 6,
+              pointHoverRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              title: {
+                display: true,
+                text: 'Robustness vs Consistency',
+                color: '#666',
+                font: { size: 10 }
+              },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => {
+                    const point = ctx.raw;
+                    return `${point.label}: C=${point.x.toFixed(0)}%, R=${point.y.toFixed(3)}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: 'Consistency %',
+                  color: '#888'
+                },
+                grid: { color: 'rgba(255,255,255,0.05)' },
+                ticks: { color: '#888' },
+                min: 0,
+                max: 100
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: 'Robustness Score',
+                  color: '#888'
+                },
+                grid: { color: 'rgba(255,255,255,0.05)' },
+                ticks: { color: '#888' }
+              }
+            }
+          }
+        });
+      } else {
+        // Fallback to strategy type chart if no multi-path results
+        const byType = insights.best_by_type || {};
+        const types = Object.keys(byType);
+        const sharpes = Object.values(byType).map(t => t.sharpe || 0);
+
+        new Chart(typeCtx, {
+          type: 'bar',
+          data: {
+            labels: types.map(t => t.replace('_', ' ')),
+            datasets: [{
+              label: 'Best Sharpe Ratio',
+              data: sharpes,
+              backgroundColor: [
+                'rgba(0, 229, 255, 0.6)',
+                'rgba(255, 171, 0, 0.6)',
+                'rgba(0, 230, 118, 0.6)',
+                'rgba(124, 77, 255, 0.6)',
+                'rgba(255, 82, 82, 0.6)',
+                'rgba(255, 105, 180, 0.6)',
+                'rgba(156, 39, 176, 0.6)',
+                'rgba(3, 169, 244, 0.6)',
+                'rgba(0, 188, 212, 0.6)',
+                'rgba(255, 152, 0, 0.6)'
+              ],
+              borderColor: [
+                '#00e5ff',
+                '#ffab00',
+                '#00e676',
+                '#7c4dff',
+                '#ff5252',
+                '#ff69b4',
+                '#9c27b0',
+                '#03a9f4',
+                '#00bcd4',
+                '#ff9800'
+              ],
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              title: {
+                display: true,
+                text: 'Best Sharpe Ratio by Strategy Type',
+                color: '#888',
+                font: { size: 12 }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: false,
+                grid: { color: 'rgba(255,255,255,0.05)' },
+                ticks: { color: '#888' }
+              },
+              x: {
+                grid: { display: false },
+                ticks: { color: '#888', font: { size: 8 } }
+              }
+            }
+          }
+        });
+      }
+    }
+  }
+}
+
+// Initial load and periodic updates
+document.addEventListener('DOMContentLoaded', async () => {
+  // Auto-start discovery on page load
+  await startDiscovery();
+
+  // Update all components immediately and then periodically
+  await updateStatus();
+  await updateDiversityMetrics();
+  await updateResults();
+  await updateCharts();
+
+  // Set up periodic updates
+  setInterval(async () => {
+    await updateStatus();
+    await updateDiversityMetrics();
+    await updateResults();
+  }, 5000);
+});
+</script>
+</body>
+</html>

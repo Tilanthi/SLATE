@@ -77,3 +77,4 @@ paper/figures/*.png
 *.db-shm
 *.db-wal
 astra-live/index.html
+.claude/settings.local.json

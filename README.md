@@ -30,7 +30,7 @@ pip install -r requirements.txt
 python3 -m slate_core.server
 
 # Access dashboard
-# http://localhost:8787/dashboard
+# http://localhost:8788/dashboard
 ```
 
 ## OODA Trading Cycle

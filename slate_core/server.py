@@ -20,10 +20,12 @@ from .engine import TradingEngine
 from .risk.manager import RiskManager
 from .backtest.engine import BacktestEngine
 from .discovery.engine import DiscoveryEngine
+from .discovery.self_evolving import get_discovery_engine
+from .discovery.realistic_api import router as realistic_discovery_router
 from .languages.haas_script import HaasScriptCrossCompiler
 from .languages.pine_script import PineScriptCrossCompiler
 from .monitoring import HealthMonitor, MetricsCollector
-from .dashboard import SlateDashboard
+from .dashboard import SlateEvolvingDashboard as Dashboard
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +38,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Include routers
+app.include_router(realistic_discovery_router)
+
 # Initialize core components
 trading_engine = TradingEngine()
 risk_manager = RiskManager()
@@ -45,7 +50,7 @@ haas_compiler = HaasScriptCrossCompiler()
 pine_compiler = PineScriptCrossCompiler()
 health_monitor = HealthMonitor()
 metrics_collector = MetricsCollector()
-dashboard = SlateDashboard()
+dashboard = Dashboard()
 
 # Pydantic models
 class StrategyRequest(BaseModel):
@@ -80,18 +85,9 @@ class HaasScriptImportRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint with system information."""
-    return """
-    <html>
-        <head><title>SLATE - Strategy Learning & Autonomous Trading Engine</title></head>
-        <body>
-            <h1>SLATE Trading Platform</h1>
-            <p>Mode: PAPER_TRADING_ONLY</p>
-            <p>API Documentation: <a href="/docs">/docs</a></p>
-            <p>Dashboard: <a href="/dashboard">/dashboard</a></p>
-        </body>
-    </html>
-    """
+    """Root endpoint - redirect to main dashboard."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/dashboard", status_code=302)
 
 @app.get("/health")
 async def health_check():
@@ -123,6 +119,14 @@ async def view_dashboard():
     """View the SLATE dashboard."""
     dashboard_html = await dashboard.generate()
     return HTMLResponse(content=dashboard_html)
+
+@app.get("/discovery-dashboard", response_class=HTMLResponse)
+async def view_discovery_dashboard():
+    """View the realistic discovery dashboard."""
+    from pathlib import Path
+    dashboard_path = Path(__file__).parent / "discovery" / "discovery_dashboard.html"
+    with open(dashboard_path, 'r') as f:
+        return HTMLResponse(content=f.read())
 
 
 # =============================================================================
@@ -608,6 +612,178 @@ async def get_ooda_state():
 
 
 # =============================================================================
+# Self-Evolving Discovery Endpoints (12 endpoints)
+# =============================================================================
+
+from .discovery.self_evolving import get_discovery_engine
+
+@app.post("/api/discovery/start")
+async def start_discovery():
+    """Start the self-evolving discovery engine."""
+    try:
+        engine = get_discovery_engine()
+        await engine.start()
+        return {"status": "started", "message": "Discovery engine started"}
+    except Exception as e:
+        logger.error(f"Error starting discovery: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/discovery/stop")
+async def stop_discovery():
+    """Stop the self-evolving discovery engine."""
+    try:
+        engine = get_discovery_engine()
+        await engine.stop()
+        return {"status": "stopped", "message": "Discovery engine stopped"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/discovery/status")
+async def discovery_status():
+    """Get discovery engine status."""
+    try:
+        engine = get_discovery_engine()
+        return engine.get_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/discovery/active")
+async def discovery_active():
+    """Get active discovery cycles."""
+    try:
+        engine = get_discovery_engine()
+        return {
+            "active_cycles": engine.active_cycles,
+            "methods": [m.value for m in engine.discovery_methods],
+            "recent_discoveries": engine.get_recent_discoveries(limit=5),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/discovery/candidates")
+async def get_candidates(limit: int = 20):
+    """Get recent strategy candidates."""
+    try:
+        engine = get_discovery_engine()
+        candidates = engine.candidates[-limit:]
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "type": c.type,
+                "confidence": c.confidence,
+                "expected_return": c.expected_return,
+                "sharpe_ratio": c.sharpe_ratio,
+                "status": c.status,
+                "method": c.discovery_method.value,
+                "timestamp": c.timestamp.isoformat(),
+            }
+            for c in candidates
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/discovery/deployed")
+async def get_deployed_strategies(limit: int = 10):
+    """Get deployed strategies."""
+    try:
+        engine = get_discovery_engine()
+        deployed = engine.deployed_strategies[-limit:]
+        return [
+            {
+                "id": s.id,
+                "name": s.name,
+                "type": s.type,
+                "sharpe_ratio": s.sharpe_ratio,
+                "max_drawdown": s.max_drawdown,
+                "deployed_at": s.timestamp.isoformat(),
+            }
+            for s in deployed
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/discovery/skills")
+async def get_skill_levels():
+    """Get current skill levels."""
+    try:
+        engine = get_discovery_engine()
+        return engine.skill_levels
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/discovery/convergence")
+async def get_convergence_metrics():
+    """Get convergence metrics."""
+    try:
+        engine = get_discovery_engine()
+        return {
+            "exploitation": engine.exploitation_score,
+            "exploration": engine.exploration_score,
+            "diversity": engine.diversity_index,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/discovery/evolution")
+async def get_evolution_history(limit: int = 10):
+    """Get evolution history."""
+    try:
+        engine = get_discovery_engine()
+        history = engine.evolution_history[-limit:]
+        return [
+            {
+                "timestamp": h.timestamp.isoformat(),
+                "module": h.module,
+                "change_type": h.change_type,
+                "description": h.description,
+                "impact": h.impact,
+                "success": h.success,
+            }
+            for h in history
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/discovery/trigger")
+async def trigger_discovery_cycle():
+    """Manually trigger a discovery cycle."""
+    try:
+        engine = get_discovery_engine()
+        # Run a single cycle
+        await engine._run_discovery_cycle()
+        return {"status": "completed", "cycle": engine.total_completed}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/discovery/statistics")
+async def get_discovery_statistics():
+    """Get comprehensive discovery statistics."""
+    try:
+        engine = get_discovery_engine()
+        status = engine.get_status()
+
+        return {
+            "overview": {
+                "running": status["running"],
+                "generation": status["generation"],
+                "total_mutations": status["mutations"],
+                "successful_mutations": status["successful_mutations"],
+                "success_rate": status["successful_mutations"] / max(1, status["mutations"]),
+            },
+            "strategies": {
+                "candidates": status["candidates"],
+                "deployed": status["deployed"],
+            },
+            "skills": status["skill_levels"],
+            "convergence": status["convergence"],
+            "methods": status["discovery_methods"],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Utility Endpoints (10 endpoints)
 # =============================================================================
 
@@ -641,12 +817,28 @@ async def system_info():
     """Get system information."""
     return {
         "name": "SLATE",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "mode": "PAPER_TRADING_ONLY",
-        "description": "Strategy Learning & Autonomous Trading Engine",
+        "description": "Self-Evolving Strategy Learning & Autonomous Trading Engine",
+        "capabilities": [
+            "Continuous Discovery",
+            "Self-Evolution",
+            "Multi-Language Compilation",
+            "Autonomous Strategy Generation",
+            "Adaptive Risk Management",
+            "Real-time Learning",
+        ],
         "supported_languages": ["Python", "Pine Script v5", "HaasScript v2.0"],
-        "supported_exchanges": ["Binance Futures USDT-M", "Bitget Perpetual"],
-        "total_endpoints": 89
+        "supported_exchanges": ["Binance Futures USDT-M", "Bitget Perpetual", "Paradex"],
+        "total_endpoints": 101,  # 89 + 12 new discovery endpoints
+        "discovery_methods": [
+            "parameter_variation",
+            "signal_combination",
+            "regime_adaptation",
+            "multi_timeframe",
+            "ensemble_learning",
+        ],
+        "evolution_generation": 1,
     }
 
 
@@ -660,6 +852,27 @@ async def startup_event():
     logger.info("SLATE Server starting in PAPER_TRADING mode...")
     await health_monitor.initialize()
     await metrics_collector.start()
+
+    # Start self-evolving discovery engine
+    try:
+        discovery_engine = get_discovery_engine()
+        await discovery_engine.start()
+        logger.info("Self-Evolving Discovery Engine started")
+    except Exception as e:
+        logger.error(f"Failed to start discovery engine: {e}")
+
+    # Auto-start realistic discovery system
+    try:
+        from .discovery.realistic_backtester import get_discovery_system
+        realistic_discovery = get_discovery_system()
+        # Start discovery in background with continuous cycles
+        # Reduced from 10000 to 1000 to control database growth (~3000 records)
+        import asyncio
+        asyncio.create_task(realistic_discovery.start_discovery(cycles=1000))
+        logger.info("Realistic Discovery System auto-started with 1000 cycles")
+    except Exception as e:
+        logger.error(f"Failed to auto-start realistic discovery: {e}")
+
     logger.info("SLATE Server started successfully")
 
 @app.on_event("shutdown")
@@ -667,15 +880,28 @@ async def shutdown_event():
     """Clean up on shutdown."""
     logger.info("SLATE Server shutting down...")
     await trading_engine.stop()
+
+    # Stop discovery engine
+    try:
+        discovery_engine = get_discovery_engine()
+        await discovery_engine.stop()
+        logger.info("Discovery engine stopped")
+    except Exception as e:
+        logger.error(f"Error stopping discovery engine: {e}")
+
     await metrics_collector.stop()
     logger.info("SLATE Server shutdown complete")
 
 
 if __name__ == "__main__":
     import uvicorn
+    import os
+
+    # Allow port override via environment variable
+    port = int(os.environ.get("SLATE_PORT", 8788))
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8787,
+        port=port,
         log_level="info"
     )

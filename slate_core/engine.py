@@ -119,11 +119,11 @@ class TradingEngine:
         self.last_cycle_time: Optional[datetime] = None
 
         # Import sub-modules
-        from .data.fetcher import DataFetcher
+        from .data.fetcher import HistoricalDataFetcher
         from .risk.manager import RiskManager
         from .statistics.regime import RegimeDetector
 
-        self.data_fetcher = DataFetcher()
+        self.data_fetcher = HistoricalDataFetcher()
         self.risk_manager = RiskManager()
         self.regime_detector = RegimeDetector()
 
