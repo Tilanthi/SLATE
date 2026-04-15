@@ -38,6 +38,14 @@ try:
 except ImportError:
     PERSISTENCE_AVAILABLE = False
 
+# Import stigmergic coordinator
+try:
+    from .stigmergic_coordinator import get_stigmergic_coordinator
+    STIGMERGIC_AVAILABLE = True
+except ImportError:
+    STIGMERGIC_AVAILABLE = False
+    logger.warning("Stigmergic coordinator not available")
+
 logger = logging.getLogger(__name__)
 
 
@@ -616,20 +624,64 @@ class StrategyGenerator:
         balancedness = max(0, 1 - cv/2)
         return round(balancedness, 3)
 
-    def generate_diverse_strategies(self, count: int = 3) -> List[Dict]:
+    def generate_diverse_strategies(self, count: int = 3, coordinator=None) -> List[Dict]:
         """Generate multiple strategies with guaranteed type diversity.
 
         Args:
             count: Number of strategies to generate
+            coordinator: Optional stigmergic coordinator for dynamic prioritization
 
         Returns:
             List of strategies with different types
         """
         strategies = []
 
+        # Get dynamic priorities from coordinator if available
+        priorities = {}
+        if coordinator:
+            for stype in self.strategy_types:
+                priorities[stype] = coordinator.get_strategy_priority(stype)
+            logger.debug(f"Using stigmergic priorities: {priorities}")
+
+        # Calculate type allocation based on priorities
+        if priorities:
+            # Use weighted allocation based on priorities
+            total_priority = sum(priorities.values()) or 1.0
+            type_allocation = {}
+            remaining = count
+
+            for i, stype in enumerate(self.strategy_types):
+                if i == len(self.strategy_types) - 1:
+                    # Last type gets remainder
+                    type_allocation[stype] = remaining
+                else:
+                    # Allocate based on priority proportion
+                    allocation = max(1, int(count * priorities[stype] / total_priority))
+                    allocation = min(allocation, remaining)  # Don't exceed count
+                    type_allocation[stype] = allocation
+                    remaining -= allocation
+
+            logger.debug(f"Type allocation based on priorities: {type_allocation}")
+        else:
+            # Default: equal allocation
+            type_allocation = {}
+
         for i in range(count):
-            # Always use round-robin to cycle through all types
-            strategy_type = self._get_next_strategy_type()
+            # Use priority-based allocation or round-robin fallback
+            if priorities and type_allocation:
+                # Select type based on allocation
+                for stype, alloc in type_allocation.items():
+                    if alloc > 0:
+                        strategy_type = stype
+                        type_allocation[stype] -= 1
+                        break
+                else:
+                    # Fallback to round-robin if allocation exhausted
+                    strategy_type = self._get_next_strategy_type()
+            else:
+                # Default round-robin
+                strategy_type = self._get_next_strategy_type()
+
             timeframe = self._get_next_timeframe()
 
             strategy = {
@@ -637,13 +689,17 @@ class StrategyGenerator:
                 'name': f"{strategy_type}_{timeframe}_{random.randint(1, 100)}",
                 'type': strategy_type,
                 'timeframe': timeframe,
-                'parameters': self._generate_parameters(strategy_type)
+                'parameters': self._generate_parameters(strategy_type),
+                'priority': priorities.get(strategy_type, 1.0) if priorities else 1.0
             }
 
             strategies.append(strategy)
             self._track_diversity(strategy_type)
 
-        logger.info(f"Generated {count} diverse strategies: {[s['type'] for s in strategies]}")
+        # Build priority strings separately
+        priority_strings = [f"{s['type']}={s.get('priority', 1.0):.2f}" for s in strategies]
+        logger.info(f"Generated {count} diverse strategies: {[s['type'] for s in strategies]} "
+                   f"(priorities: {priority_strings})")
         return strategies
 
     def _generate_parameters(self, strategy_type: str) -> Dict:
@@ -1045,18 +1101,31 @@ class ContinuousDiscoverySystem:
         self.generator = StrategyGenerator()
         self.evolution = EvolutionEngine(use_multipath=use_multipath, num_paths=num_paths)
         self.running = False
-        self.workers = 3
+        # Scale workers based on CPU count for better parallel processing
+        import os
+        cpu_count = os.cpu_count() or 4
+        self.workers = min(20, cpu_count * 2)  # Use up to 20 workers or 2x CPU cores
         self.multipath_sample_rate = multipath_sample_rate
         self.historical_archive = HistoricalDataArchive()
         self.current_cycle = 0  # Track discovery cycle number
+
+        # Initialize stigmergic coordinator
+        self.stigmergic_coordinator = None
+        if STIGMERGIC_AVAILABLE:
+            self.stigmergic_coordinator = get_stigmergic_coordinator()
+            logger.info("Stigmergic coordinator initialized for real-time coordination")
 
         logger.info(f"Continuous discovery initialized: multipath={use_multipath}, "
                    f"num_paths={num_paths}, sample_rate={multipath_sample_rate}")
 
     async def start_discovery(self, cycles: int = 100):
-        """Start continuous discovery."""
+        """Start continuous discovery with stigmergic coordination."""
         self.running = True
         logger.info(f"Starting continuous discovery: {cycles} cycles")
+
+        # Update dynamic priorities at start
+        if self.stigmergic_coordinator:
+            self.stigmergic_coordinator.update_dynamic_priorities()
 
         for cycle in range(cycles):
             if not self.running:
@@ -1090,20 +1159,87 @@ class ContinuousDiscoverySystem:
                     strategies.append(strategy)
             else:
                 # Generate diverse strategies with guaranteed type spread
-                strategies = self.generator.generate_diverse_strategies(self.workers)
+                # Use stigmergic priorities to influence generation
+                strategies = self.generator.generate_diverse_strategies(
+                    self.workers,
+                    coordinator=self.stigmergic_coordinator
+                )
 
-            # Create backtest tasks
-            tasks = []
+            # Filter strategies through stigmergic redundancy checks
+            filtered_strategies = []
             for strategy in strategies:
+                can_test = True
+                reason = "OK"
+
+                if self.stigmergic_coordinator:
+                    can_test, reason = await self.stigmergic_coordinator.can_test_strategy(
+                        strategy_id=strategy['id'],
+                        strategy_type=strategy['type'],
+                        parameters=strategy.get('parameters', {})
+                    )
+
+                if can_test:
+                    filtered_strategies.append(strategy)
+                else:
+                    logger.debug(f"Filtered {strategy['id']}: {reason}")
+
+            if len(filtered_strategies) == 0:
+                logger.warning("All strategies filtered by stigmergic coordinator, generating fallback strategies")
+                filtered_strategies = strategies[:1]  # Always test at least one
+
+            logger.info(f"Testing {len(filtered_strategies)} strategies (filtered from {len(strategies)})")
+
+            # Create backtest tasks and register with coordinator
+            tasks = []
+            strategy_map = {}  # Map task index to strategy
+            for i, strategy in enumerate(filtered_strategies):
+                # Register testing start with coordinator
+                if self.stigmergic_coordinator:
+                    await self.stigmergic_coordinator.register_testing_start(
+                        strategy_id=strategy['id'],
+                        strategy_type=strategy['type'],
+                        parameters=strategy.get('parameters', {}),
+                        priority=self.stigmergic_coordinator.get_strategy_priority(strategy['type'])
+                    )
+
                 task = self.backtester.run_backtest(strategy)
                 tasks.append(task)
+                strategy_map[i] = strategy
 
             # Run backtests in parallel
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
+            # Process results and register completion with coordinator
+            for i, result in enumerate(results):
+                strategy = strategy_map.get(i)
+                if not strategy:
+                    continue
+
+                if isinstance(result, BacktestResult):
+                    # Register completion with coordinator (deposit pheromone)
+                    if self.stigmergic_coordinator:
+                        await self.stigmergic_coordinator.register_testing_complete(
+                            strategy_id=strategy['id'],
+                            result={
+                                'sharpe_ratio': result.sharpe_ratio,
+                                'total_return': result.total_return,
+                                'max_drawdown': result.max_drawdown
+                            }
+                        )
+
+                    logger.info(
+                        f"Strategy {result.strategy_name}: "
+                        f"Sharpe={result.sharpe_ratio:.2f}, "
+                        f"Return={result.total_return:.2%} "
+                        f"[priority={self.stigmergic_coordinator.get_strategy_priority(result.strategy_type):.2f}]"
+                        if self.stigmergic_coordinator else
+                        f"Strategy {result.strategy_name}: "
+                        f"Sharpe={result.sharpe_ratio:.2f}, "
+                        f"Return={result.total_return:.2%}"
+                    )
+
             # Mark external candidates as completed
             if external_candidates:
-                from .candidate_queue import get_candidate_queue
                 candidate_queue = get_candidate_queue()
 
                 for i, result in enumerate(results):

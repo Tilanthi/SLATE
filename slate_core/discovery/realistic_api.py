@@ -598,3 +598,64 @@ async def get_evolution_status():
     except Exception as e:
         logger.error(f"Failed to get evolution status: {e}")
         return {"error": str(e), "feedback_loop_active": False}
+
+
+@router.get("/stigmergic/stats")
+async def get_stigmergic_stats():
+    """Get stigmergic coordination statistics."""
+    try:
+        from .stigmergic_coordinator import get_stigmergic_coordinator
+        coordinator = get_stigmergic_coordinator()
+        return coordinator.get_coordination_stats()
+    except Exception as e:
+        logger.error(f"Failed to get stigmergic stats: {e}")
+        return {"error": str(e), "stigmergic_active": False}
+
+
+@router.get("/stigmergic/priorities")
+async def get_stigmergic_priorities():
+    """Get current dynamic priorities for each strategy type."""
+    try:
+        from .stigmergic_coordinator import get_stigmergic_coordinator
+        coordinator = get_stigmergic_coordinator()
+        coordinator.update_dynamic_priorities()
+        return {
+            "priorities": coordinator.strategy_priorities,
+            "specializations": coordinator.emergent_specializations,
+            "last_updated": coordinator.last_specialization_update
+        }
+    except Exception as e:
+        logger.error(f"Failed to get stigmergic priorities: {e}")
+        return {"error": str(e)}
+
+
+@router.get("/stigmergic/pheromones")
+async def get_pheromone_trails(hours: int = 1, limit: int = 20):
+    """Get recent pheromone trails (success signals) from the environment.
+
+    Args:
+        hours: Number of hours to look back (default 1)
+        limit: Maximum number of trails to return (default 20)
+    """
+    try:
+        from .stigmergic_coordinator import get_stigmergic_coordinator
+        coordinator = get_stigmergic_coordinator()
+        trails = coordinator.get_pheromone_trails(hours=hours, limit=limit)
+
+        return {
+            "trails": [
+                {
+                    "strategy_type": t.strategy_type,
+                    "signal_strength": t.signal_strength,
+                    "timestamp": t.timestamp,
+                    "discovered_by": t.discovered_by,
+                    "metadata": t.metadata
+                }
+                for t in trails
+            ],
+            "hours": hours,
+            "count": len(trails)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get pheromone trails: {e}")
+        return {"error": str(e), "trails": []}
