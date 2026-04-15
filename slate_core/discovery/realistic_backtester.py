@@ -206,32 +206,94 @@ class RealisticBacktester:
         # Generate signals from strategy
         signals = self._generate_signals(strategy, data)
 
-        # Run backtest
+        # Run backtest with improved position management
+        stop_loss_pct = strategy.get('stop_loss', 0.05)  # 5% stop loss default
+        take_profit_pct = strategy.get('take_profit', 0.10)  # 10% take profit default
+
         for i in range(1, len(data)):
             current_price = data[i]['close']
             signal = signals[i]
+
+            # Check stop-loss / take-profit if in position
+            if position != 0:
+                if position > 0:
+                    # Long position
+                    pnl_pct = (current_price - entry_price) / entry_price
+                    if pnl_pct <= -stop_loss_pct:
+                        # Stop loss hit - exit immediately
+                        signal = 0  # Force exit
+                    elif pnl_pct >= take_profit_pct:
+                        # Take profit hit - exit immediately
+                        signal = 0  # Force exit
+                else:
+                    # Short position
+                    pnl_pct = (entry_price - current_price) / entry_price
+                    if pnl_pct <= -stop_loss_pct:
+                        # Stop loss hit - exit immediately
+                        signal = 0  # Force exit
+                    elif pnl_pct >= take_profit_pct:
+                        # Take profit hit - exit immediately
+                        signal = 0  # Force exit
+
+            # Handle signal reversals (long→short or short→long)
+            if position != 0 and signal != 0 and ((position > 0 and signal < 0) or (position < 0 and signal > 0)):
+                # Close existing position first, then open new one
+                if position > 0:
+                    # Close long position
+                    execution_price = current_price * (1 - self.config.slippage_bps / 10000)
+                    proceeds = position * execution_price
+                    exit_fee = proceeds * self.config.maker_fee
+                    capital += proceeds - exit_fee
+                    trade_pnl = (proceeds - exit_fee) - entry_cost
+                    trades.append({
+                        'entry_bar': entry_bar,
+                        'exit_bar': i,
+                        'pnl': trade_pnl,
+                        'type': 'long'
+                    })
+                else:
+                    # Close short position
+                    execution_price = current_price * (1 + self.config.slippage_bps / 10000)
+                    proceeds = abs(position) * execution_price
+                    exit_fee = proceeds * self.config.maker_fee
+                    capital += proceeds - exit_fee
+                    trade_pnl = (proceeds - exit_fee) - entry_cost
+                    trades.append({
+                        'entry_bar': entry_bar,
+                        'exit_bar': i,
+                        'pnl': trade_pnl,
+                        'type': 'short'
+                    })
+
+                position = 0
+                entry_price = 0.0
+                entry_cost = 0.0
+                # Fall through to open new position below
 
             # Apply signal
             if signal != 0 and position == 0:
                 # Entry signal
                 position_size = capital * self.config.max_position_size
+
                 if signal > 0:
                     # Long entry
                     execution_price = current_price * (1 + self.config.slippage_bps / 10000)
-                    fee = position_size * self.config.taker_fee
-                    position = (position_size - fee) / execution_price
-                    entry_price = execution_price  # Track entry price for unrealized P&L
-                    entry_cost = position_size  # Track cost for P&L calculation
+                    entry_fee = position_size * self.config.taker_fee
+                    position = (position_size - entry_fee) / execution_price
+                    entry_price = execution_price
+                    entry_cost = position_size  # Track full cost basis
                     capital -= position_size
+                    entry_bar = i  # Track entry bar for trade recording
 
                 elif signal < 0:
                     # Short entry
                     execution_price = current_price * (1 - self.config.slippage_bps / 10000)
-                    fee = position_size * self.config.taker_fee
-                    position = -(position_size - fee) / execution_price
-                    entry_price = execution_price  # Track entry price for unrealized P&L
-                    entry_cost = position_size  # Track cost for P&L calculation
+                    entry_fee = position_size * self.config.taker_fee
+                    position = -(position_size - entry_fee) / execution_price
+                    entry_price = execution_price
+                    entry_cost = position_size  # Track full cost basis
                     capital -= position_size
+                    entry_bar = i  # Track entry bar for trade recording
 
             elif signal == 0 and position != 0:
                 # Exit signal
@@ -239,45 +301,41 @@ class RealisticBacktester:
                     # Exit long
                     execution_price = current_price * (1 - self.config.slippage_bps / 10000)
                     proceeds = position * execution_price
-                    fee = proceeds * self.config.maker_fee
-                    capital += proceeds - fee
-                    pnl = (proceeds - fee) - entry_cost  # P&L = proceeds - entry_cost
+                    exit_fee = proceeds * self.config.maker_fee
+                    capital += proceeds - exit_fee
+                    trade_pnl = (proceeds - exit_fee) - entry_cost
                     trades.append({
-                        'entry_bar': i - 1,
+                        'entry_bar': entry_bar,
                         'exit_bar': i,
-                        'pnl': pnl,
+                        'pnl': trade_pnl,
                         'type': 'long'
                     })
                 else:
                     # Exit short
                     execution_price = current_price * (1 + self.config.slippage_bps / 10000)
                     proceeds = abs(position) * execution_price
-                    fee = proceeds * self.config.maker_fee
-                    capital += proceeds - fee
-                    pnl = (proceeds - fee) - entry_cost  # P&L = proceeds - entry_cost
+                    exit_fee = proceeds * self.config.maker_fee
+                    capital += proceeds - exit_fee
+                    trade_pnl = (proceeds - exit_fee) - entry_cost
                     trades.append({
-                        'entry_bar': i - 1,
+                        'entry_bar': entry_bar,
                         'exit_bar': i,
-                        'pnl': pnl,
+                        'pnl': trade_pnl,
                         'type': 'short'
                     })
                 position = 0
-                entry_cost = 0.0  # Reset entry cost
+                entry_price = 0.0
+                entry_cost = 0.0
 
             # Calculate current equity
             if position != 0:
-                # Calculate unrealized P&L from entry price, not previous bar
                 if position > 0:
-                    # Long position
                     unrealized_pnl = position * (data[i]['close'] - entry_price)
                 else:
-                    # Short position
                     unrealized_pnl = abs(position) * (entry_price - data[i]['close'])
                 current_equity = capital + unrealized_pnl
             else:
                 current_equity = capital
-                entry_price = 0.0  # Reset entry price when flat
-                entry_cost = 0.0  # Reset entry cost when flat
             equity_curve.append(current_equity)
 
         # Calculate metrics
@@ -571,10 +629,8 @@ class StrategyGenerator:
         return strategy_type
 
     def _get_next_timeframe(self) -> str:
-        """Get next timeframe using rotation."""
-        timeframe = self.timeframes[self.timeframe_rotation_index % len(self.timeframes)]
-        self.timeframe_rotation_index += 1
-        return timeframe
+        """Get next timeframe - all tests use same 4-week period for comparability."""
+        return '1m'  # All strategies use same timeframe for comparable results
 
     def _track_diversity(self, strategy_type: str):
         """Track diversity of strategy types tested."""
@@ -1202,7 +1258,11 @@ class ContinuousDiscoverySystem:
                         priority=self.stigmergic_coordinator.get_strategy_priority(strategy['type'])
                     )
 
-                task = self.backtester.run_backtest(strategy)
+                task = self.backtester.run_backtest(
+                    strategy,
+                    symbol=strategy.get('symbol', 'BTCUSDT'),
+                    timeframe='1m'  # Use same 4-week period for all tests
+                )
                 tasks.append(task)
                 strategy_map[i] = strategy
 
