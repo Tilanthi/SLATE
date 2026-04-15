@@ -99,6 +99,22 @@ body::after {
   50%      { border-color: rgba(0,229,255,0.45); }
 }
 
+@keyframes brainPulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50%      { transform: scale(1.1); opacity: 1; }
+}
+
+@keyframes signalFlow {
+  0% { stroke-dashoffset: 100; opacity: 0; }
+  50% { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+@keyframes nodeGlow {
+  0%, 100% { filter: drop-shadow(0 0 5px rgba(0,229,255,0.5)); }
+  50%      { filter: drop-shadow(0 0 15px rgba(0,229,255,0.8)); }
+}
+
 /* HEADER */
 .header {
   position: sticky; top: 0;
@@ -479,6 +495,28 @@ body::after {
 
 #brain-svg text {
   font-family: var(--font-mono);
+  pointer-events: none;
+}
+
+/* Dynamic Brain Styles */
+.brain-connection {
+  stroke-dasharray: 5, 5;
+  animation: signalFlow 3s linear infinite;
+}
+
+#brain-svg .node circle {
+  animation: nodeGlow 2s ease-in-out infinite;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+#brain-svg .node:hover circle {
+  animation: brainPulse 1s ease-in-out infinite;
+  stroke-width: 3;
+}
+
+#brain-svg .node text {
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.8);
   pointer-events: none;
 }
 
@@ -1058,58 +1096,143 @@ function renderMetrics(stats) {
   }).join('');
 }
 
-// BRAIN VISUALIZATION (D3.js)
-function renderBrain() {
+// BRAIN VISUALIZATION (D3.js) - Dynamic version
+let brainUpdateInterval = null;
+
+function renderBrain(liveSkills = null) {
   const svg = d3.select('#brain-svg');
   const width = svg.node()?.getBoundingClientRect().width || 400;
   const height = svg.node()?.getBoundingClientRect().height || 400;
   svg.attr('viewBox', `0 0 ${width} ${height}`);
 
+  // Use live skills if provided, otherwise use defaults
+  const skillLevels = liveSkills || {
+    pattern_recognition: 0.52,
+    anomaly_detection: 0.52,
+    adaptive_optimization: 0.51,
+    causal_inference: 0.30,
+    meta_learning: 0.30
+  };
+
   const skills = [
-    { name: 'Pattern Recognition', x: 0.3, y: 0.3, level: 0.5 },
-    { name: 'Anomaly Detection', x: 0.7, y: 0.3, level: 0.5 },
-    { name: 'Adaptive Optimization', x: 0.3, y: 0.7, level: 0.51 },
-    { name: 'Causal Inference', x: 0.7, y: 0.7, level: 0.3 },
-    { name: 'Meta-Learning', x: 0.5, y: 0.5, level: 0.3 }
+    { name: 'Pattern Recognition', x: 0.3, y: 0.3, level: skillLevels.pattern_recognition || 0.5 },
+    { name: 'Anomaly Detection', x: 0.7, y: 0.3, level: skillLevels.anomaly_detection || 0.5 },
+    { name: 'Adaptive Optimization', x: 0.3, y: 0.7, level: skillLevels.adaptive_optimization || 0.5 },
+    { name: 'Causal Inference', x: 0.7, y: 0.7, level: skillLevels.causal_inference || 0.3 },
+    { name: 'Meta-Learning', x: 0.5, y: 0.5, level: skillLevels.meta_learning || 0.3 }
   ];
 
+  // Clear existing SVG content
+  svg.selectAll('*').remove();
+
+  // Add connections (lines) with animated pulses
+  const connections = [[0,1], [0,2], [1,3], [2,4], [3,4], [0,4], [1,2]];
+
   svg.selectAll('line')
-    .data([[0,1], [0,2], [1,3], [2,4], [3,4], [0,4], [1,2]])
+    .data(connections)
     .enter()
     .append('line')
     .attr('x1', d => skills[d[0]].x * width)
     .attr('y1', d => skills[d[0]].y * height)
     .attr('x2', d => skills[d[1]].x * width)
     .attr('y2', d => skills[d[1]].y * height)
-    .attr('stroke', 'rgba(0, 229, 255, 0.2)')
-    .attr('stroke-width', 1);
+    .attr('stroke', 'rgba(0, 229, 255, 0.3)')
+    .attr('stroke-width', 2)
+    .attr('class', 'brain-connection');
 
-  svg.selectAll('circle')
+  // Add animated pulse circles along connections
+  connections.forEach((conn, i) => {
+    const pulse = svg.append('circle')
+      .attr('r', 3)
+      .attr('fill', '#00e5ff')
+      .attr('opacity', 0.8);
+
+    // Animate pulse along the connection
+    animatePulse(pulse, skills[conn[0]], skills[conn[1]], width, height, i * 500);
+  });
+
+  // Add skill nodes
+  const nodes = svg.selectAll('g.node')
     .data(skills)
     .enter()
-    .append('circle')
-    .attr('cx', d => d.x * width)
-    .attr('cy', d => d.y * height)
-    .attr('r', d => 20 + d.level * 30)
+    .append('g')
+    .attr('class', 'node')
+    .attr('transform', d => `translate(${d.x * width}, ${d.y * height})`);
+
+  // Add circles with dynamic sizing based on skill level
+  nodes.append('circle')
+    .attr('r', 0)  // Start with radius 0 for animation
     .attr('fill', d => {
-      const colors = ['#00e5ff', '#7c4dff', '#ffab00', '#00e676', '#ff5252'];
-      return colors[Math.floor(d.level * 10) % colors.length];
+      const level = d.level;
+      if (level > 0.7) return '#00e676';  // Green for high skill
+      if (level > 0.5) return '#00e5ff';  // Cyan for medium skill
+      if (level > 0.3) return '#7c4dff';  // Violet for low skill
+      return '#ffab00';  // Amber for very low skill
     })
-    .attr('opacity', 0.6)
+    .attr('opacity', 0.7)
     .attr('stroke', '#fff')
-    .attr('stroke-width', 2);
+    .attr('stroke-width', 2)
+    .transition()
+    .duration(800)
+    .ease(d3.easeElastic)
+    .attr('r', d => 25 + d.level * 25);  // Size based on skill level
 
-  svg.selectAll('text')
-    .data(skills)
-    .enter()
-    .append('text')
-    .attr('x', d => d.x * width)
-    .attr('y', d => d.y * height + 5)
+  // Add skill level text with percentage
+  nodes.append('text')
+    .attr('y', 5)
     .attr('text-anchor', 'middle')
     .attr('fill', '#fff')
-    .attr('font-size', '9px')
+    .attr('font-size', '11px')
     .attr('font-family', 'Space Mono')
+    .attr('font-weight', 'bold')
     .text(d => `${Math.round(d.level * 100)}%`);
+
+  // Add skill name labels
+  nodes.append('text')
+    .attr('y', -35)
+    .attr('text-anchor', 'middle')
+    .attr('fill', '#00e5ff')
+    .attr('font-size', '8px')
+    .attr('font-family', 'Inter')
+    .attr('font-weight', '500')
+    .text(d => d.name);
+}
+
+function animatePulse(pulse, start, end, width, height, delay) {
+  let progress = 0;
+  const duration = 2000;  // 2 seconds per pulse
+
+  function step() {
+    progress += 16 / duration;  // ~60fps
+
+    if (progress >= 1) {
+      progress = 0;  // Loop animation
+    }
+
+    // Interpolate position
+    const x = start.x + (end.x - start.x) * progress;
+    const y = start.y + (end.y - start.y) * progress;
+
+    pulse
+      .attr('cx', x * width)
+      .attr('cy', y * height)
+      .attr('opacity', 0.8 - Math.abs(progress - 0.5) * 1.6);  // Fade in middle
+
+    requestAnimationFrame(step);
+  }
+
+  setTimeout(() => requestAnimationFrame(step), delay);
+}
+
+async function updateBrainWithLiveSkills() {
+  try {
+    const status = await fetchAPI('/api/discovery/status');
+    if (status && status.skill_levels) {
+      renderBrain(status.skill_levels);
+    }
+  } catch (error) {
+    console.log('Could not update brain with live skills:', error);
+  }
 }
 
 // CONFIDENCE GAUGE
@@ -1196,7 +1319,14 @@ async function loadInitialData() {
   }
 
   renderMetrics(stats);
-  renderBrain();
+
+  // Render brain with live skill levels
+  if (status && status.skill_levels) {
+    renderBrain(status.skill_levels);
+  } else {
+    renderBrain();  // Use defaults if no live data
+  }
+
   initCharts();
   updateGauge(65);
   addActivity('discovery', 'SYSTEM', 'SLATE v2.0 dashboard initialized');
@@ -1227,6 +1357,11 @@ async function periodicUpdate() {
   }
 
   if (stats) renderMetrics(stats);
+
+  // Update brain visualization with live skill levels
+  if (status && status.skill_levels) {
+    renderBrain(status.skill_levels);
+  }
 }
 
 // PHASE ROTATION
