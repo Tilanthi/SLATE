@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>SLATE Dashboard - Strategy Learning & Autonomous Trading Engine</title>
+    <meta name="description" content="AI-driven autonomous trading strategy discovery system (Paper Trading Only)">
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🧪 SLATE Dashboard</h1>
+            <p class="subtitle">Strategy Learning & Autonomous Trading Engine</p>
+            <div class="warning-banner">
+                ⚠️ PAPER TRADING ONLY - No real money is ever risked
+            </div>
+        </header>
+
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card" id="status-card">
+                <h3>Status</h3>
+                <div class="value" id="status">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Tests</h3>
+                <div class="value" id="total-tests">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Profitable Strategies</h3>
+                <div class="value" id="profitable">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Best Return</h3>
+                <div class="value" id="best-return">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Best Sharpe</h3>
+                <div class="value" id="best-sharpe">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Average Win Rate</h3>
+                <div class="value" id="avg-win-rate">-</div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <h2>Discovery Control</h2>
+            <div class="control-buttons">
+                <button id="start-btn" onclick="app.startDiscovery()">
+                    <span>▶</span> Start Discovery
+                </button>
+                <button id="stop-btn" class="stop-btn" onclick="app.stopDiscovery()" disabled>
+                    <span>⏸</span> Stop Discovery
+                </button>
+                <button class="refresh-btn" onclick="app.refreshData()">
+                    <span>↻</span> Refresh Data
+                </button>
+                <button class="export-btn" onclick="app.exportToCSV()">
+                    <span>⬇</span> Export CSV
+                </button>
+                <div class="auto-refresh">
+                    <span class="indicator"></span>
+                    Auto-refresh: 5s
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-section">
+            <div class="chart-card">
+                <h3>Return Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="returnDistributionChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Win Rate by Type</h3>
+                <div class="chart-container">
+                    <canvas id="winRateChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Top 10 Strategies by Profit</h3>
+                <div class="chart-container">
+                    <canvas id="topStrategiesChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Performance Metrics</h3>
+                <div class="chart-container">
+                    <canvas id="performanceMetricsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategies List -->
+        <div class="strategy-section">
+            <h2>Strategy Performance</h2>
+            <p id="strategy-status" class="loading">Loading strategies...</p>
+
+            <!-- Filters -->
+            <div class="filters">
+                <label for="type-filter">Filter by Type:</label>
+                <select id="type-filter" onchange="app.filterByType(this.value)">
+                    <option value="all">All Types</option>
+                </select>
+
+                <label for="sort-by">Sort by:</label>
+                <select id="sort-by" onchange="app.sortStrategies(this.value)">
+                    <option value="total_profit_usdt">Profit (USDT)</option>
+                    <option value="total_return_pct">Return (%)</option>
+                    <option value="sharpe_ratio">Sharpe Ratio</option>
+                    <option value="win_rate">Win Rate</option>
+                    <option value="profit_factor">Profit Factor</option>
+                </select>
+
+                <label for="page-size">Per Page:</label>
+                <select id="page-size" onchange="app.changePageSize(this.value)">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+
+            <!-- Strategy Table -->
+            <div class="table-container">
+                <table id="strategies-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="rank">#</th>
+                            <th class="sortable" data-sort="edge_type">Type</th>
+                            <th class="sortable" data-sort="edge_description">Description</th>
+                            <th class="sortable" data-sort="total_return_pct">Return</th>
+                            <th class="sortable" data-sort="total_profit_usdt">Profit (USDT)</th>
+                            <th class="sortable" data-sort="sharpe_ratio">Sharpe</th>
+                            <th class="sortable" data-sort="win_rate">Win Rate</th>
+                            <th class="sortable" data-sort="max_drawdown_pct">Drawdown</th>
+                            <th class="sortable" data-sort="profit_factor">Profit Factor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="strategies-body">
+                        <tr>
+                            <td colspan="9" class="text-center">Loading strategies...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination">
+                <button onclick="app.previousPage()" id="prev-btn">← Previous</button>
+                <span class="page-info" id="page-info">Page 1 of 1</span>
+                <button onclick="app.nextPage()" id="next-btn">Next →</button>
+            </div>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="links-section">
+            <h2>Quick Links</h2>
+            <a href="/docs" target="_blank">📚 API Documentation</a>
+            <a href="/redoc" target="_blank">📖 ReDoc</a>
+            <a href="/api/discovery/statistics" target="_blank">📊 Statistics JSON</a>
+            <a href="/test" target="_blank">🔧 Diagnostic Tool</a>
+        </div>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

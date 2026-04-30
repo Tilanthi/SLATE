@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SLATE Dashboard Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1e3c72; color: white; }
+        .test { margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.1); }
+        .pass { color: #27ae60; }
+        .fail { color: #e74c3c; }
+        .info { color: #3498db; }
+        button { background: #27ae60; color: white; border: none; padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔍 SLATE Dashboard Diagnostic Tool</h1>
+
+    <div class="test" id="test1">Test 1: JavaScript is running... <span class="info">Pending</span></div>
+    <div class="test" id="test2">Test 2: Fetch API available... <span class="info">Pending</span></div>
+    <div class="test" id="test3">Test 3: Server connectivity... <span class="info">Pending</span></div>
+    <div class="test" id="test4">Test 4: Statistics API... <span class="info">Pending</span></div>
+    <div class="test" id="test5">Test 5: Top Strategies API... <span class="info">Pending</span></div>
+
+    <div class="test" style="margin-top: 20px;">
+        <strong>Manual Tests:</strong><br>
+        <button onclick="testStatistics()">Test /api/discovery/statistics</button>
+        <button onclick="testTopStrategies()">Test /api/discovery/top</button>
+        <button onclick="testAll()">Run All Tests</button>
+    </div>
+
+    <div class="test" id="results" style="margin-top: 20px;">
+        <strong>Results:</strong><br>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        // Test 1: JavaScript is running
+        document.getElementById('test1').innerHTML = 'Test 1: JavaScript is running... <span class="pass">✓ PASS</span>';
+
+        // Test 2: Fetch API available
+        if (typeof fetch !== 'undefined') {
+            document.getElementById('test2').innerHTML = 'Test 2: Fetch API available... <span class="pass">✓ PASS</span>';
+        } else {
+            document.getElementById('test2').innerHTML = 'Test 2: Fetch API available... <span class="fail">✗ FAIL - Fetch not supported</span>';
+        }
+
+        async function testStatistics() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<span class="info">Testing /api/discovery/statistics...</span><br>';
+
+            try {
+                const resp = await fetch('/api/discovery/statistics');
+                const data = await resp.json();
+
+                output.innerHTML += `<span class="pass">✓ Success!</span><br>`;
+                output.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+
+                document.getElementById('test4').innerHTML = 'Test 4: Statistics API... <span class="pass">✓ PASS</span>';
+            } catch (error) {
+                output.innerHTML += `<span class="fail">✗ Error: ${error.message}</span><br>`;
+                document.getElementById('test4').innerHTML = 'Test 4: Statistics API... <span class="fail">✗ FAIL</span>';
+            }
+        }
+
+        async function testTopStrategies() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<span class="info">Testing /api/discovery/top...</span><br>';
+
+            try {
+                const resp = await fetch('/api/discovery/top?limit=10');
+                const data = await resp.json();
+
+                output.innerHTML += `<span class="pass">✓ Success! Found ${data.total} strategies</span><br>`;
+                output.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+
+                document.getElementById('test5').innerHTML = 'Test 5: Top Strategies API... <span class="pass">✓ PASS</span>';
+            } catch (error) {
+                output.innerHTML += `<span class="fail">✗ Error: ${error.message}</span><br>`;
+                document.getElementById('test5').innerHTML = 'Test 5: Top Strategies API... <span class="fail">✗ FAIL</span>';
+            }
+        }
+
+        async function testAll() {
+            document.getElementById('output').innerHTML = 'Running all tests...<br>';
+            await testStatistics();
+            await testTopStrategies();
+        }
+
+        // Auto-run tests on load
+        window.addEventListener('load', async () => {
+            // Test 3: Server connectivity
+            try {
+                const resp = await fetch('/health');
+                if (resp.ok) {
+                    document.getElementById('test3').innerHTML = 'Test 3: Server connectivity... <span class="pass">✓ PASS</span>';
+                } else {
+                    document.getElementById('test3').innerHTML = 'Test 3: Server connectivity... <span class="fail">✗ FAIL - Server returned error</span>';
+                }
+            } catch (error) {
+                document.getElementById('test3').innerHTML = `Test 3: Server connectivity... <span class="fail">✗ FAIL - ${error.message}</span>`;
+            }
+
+            // Auto-run API tests
+            await testAll();
+        });
+    </script>
+</body>
+</html>

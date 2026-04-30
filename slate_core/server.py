@@ -60,6 +60,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files directory
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    logger.info(f"Static files mounted from: {static_dir}")
+else:
+    logger.warning(f"Static directory not found: {static_dir}")
+
 # Global state
 discovery_running = False
 discovery_task: Optional[asyncio.Task] = None
@@ -362,297 +370,88 @@ async def get_discovery_statistics():
 # Web Dashboard
 # ============================================================================
 
-@app.get("/", response_class=HTMLResponse)
-async def dashboard():
-    """Main dashboard landing page."""
-
-    html = """
-<!DOCTYPE html>
+@app.get("/minimal", response_class=HTMLResponse)
+async def minimal_dashboard():
+    """Minimal test dashboard to isolate JavaScript issues."""
+    return """<!DOCTYPE html>
 <html>
 <head>
-    <title>SLATE Dashboard</title>
+    <title>Minimal Dashboard Test</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        h1 {
-            color: white;
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-        }
-        .subtitle {
-            text-align: center;
-            color: rgba(255,255,255,0.8);
-            margin-bottom: 30px;
-        }
-        .warning {
-            background: #e74c3c;
-            color: white;
-            text-align: center;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .stat-card h3 {
-            color: #2c3e50;
-            margin-bottom: 10px;
-            font-size: 0.9em;
-            text-transform: uppercase;
-        }
-        .stat-card .value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #3498db;
-        }
-        .stat-card .value.running {
-            color: #27ae60;
-        }
-        .stat-card .value.idle {
-            color: #95a5a6;
-        }
-        .strategy-item {
-            border-bottom: 1px solid #ecf0f1;
-            padding: 12px 0;
-        }
-        .strategy-item:last-child {
-            border-bottom: none;
-        }
-        .strategy-item small {
-            color: #7f8c8d;
-        }
-        .loading {
-            color: #95a5a6;
-            font-style: italic;
-        }
-        .actions {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .actions h2 {
-            margin-bottom: 15px;
-            color: #2c3e50;
-        }
-        button {
-            background: #27ae60;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 5px;
-            font-size: 1em;
-            cursor: pointer;
-            margin-right: 10px;
-        }
-        button:hover {
-            background: #229954;
-        }
-        button:disabled {
-            background: #95a5a6;
-            cursor: not-allowed;
-        }
-        .links {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-        }
-        .links h2 {
-            margin-bottom: 15px;
-            color: #2c3e50;
-        }
-        .links a {
-            color: #3498db;
-            text-decoration: none;
-            margin-right: 20px;
-        }
-        .links a:hover {
-            text-decoration: underline;
-        }
-        #strategies {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-        #strategies h2 {
-            margin-bottom: 15px;
-            color: #2c3e50;
-        }
-        .strategy-item {
-            border-bottom: 1px solid #ecf0f1;
-            padding: 10px 0;
-        }
-        .strategy-item:last-child {
-            border-bottom: none;
-        }
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1e3c72; color: white; }
+        .result { margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.1); }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🧪 SLATE Dashboard</h1>
-        <p class="subtitle">Strategy Learning & Autonomous Trading Engine</p>
-
-        <div class="warning">
-            ⚠️ PAPER TRADING ONLY - No real money is ever risked
-        </div>
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Status</h3>
-                <div class="value" id="status">Loading...</div>
-            </div>
-            <div class="stat-card">
-                <h3>Total Tests</h3>
-                <div class="value" id="total-tests">-</div>
-            </div>
-            <div class="stat-card">
-                <h3>Profitable</h3>
-                <div class="value" id="profitable">-</div>
-            </div>
-            <div class="stat-card">
-                <h3>Best Return</h3>
-                <div class="value" id="best-return">-</div>
-            </div>
-        </div>
-
-        <div class="actions">
-            <h2>Discovery Control</h2>
-            <button onclick="startDiscovery()" id="start-btn">Start Discovery</button>
-            <button onclick="stopDiscovery()" id="stop-btn" disabled>Stop Discovery</button>
-            <button onclick="refreshData()">Refresh Data</button>
-        </div>
-
-        <div class="links">
-            <h2>Quick Links</h2>
-            <a href="/docs" target="_blank">📚 API Documentation</a>
-            <a href="/redoc" target="_blank">📖 ReDoc</a>
-            <a href="/api/discovery/statistics" target="_blank">📊 Statistics JSON</a>
-        </div>
-
-        <div id="strategies">
-            <h2>Top Strategies</h2>
-            <p id="discovery-status" class="loading">Discovery runs automatically in the background...</p>
-            <div id="strategies-list"></div>
-        </div>
-    </div>
+    <h1>Minimal Dashboard Test</h1>
+    <div class="result" id="test1">Test 1: Pending...</div>
+    <div class="result" id="test2">Test 2: Pending...</div>
+    <div class="result" id="test3">Test 3: Pending...</div>
 
     <script>
-        async function refreshData() {
+        console.log('[MINIMAL] Script started');
+        document.getElementById('test1').textContent = 'Test 1: JavaScript works! ✓';
+        document.getElementById('test1').style.color = '#27ae60';
+
+        setTimeout(() => {
+            console.log('[MINIMAL] setTimeout executed');
+            document.getElementById('test2').textContent = 'Test 2: setTimeout works! ✓';
+            document.getElementById('test2').style.color = '#27ae60';
+        }, 1000);
+
+        (async () => {
+            console.log('[MINIMAL] async function started');
             try {
-                // Get statistics
-                const statsResp = await fetch('/api/discovery/statistics');
-                const stats = await statsResp.json();
-
-                const statusEl = document.getElementById('status');
-                if (stats.discovery_running) {
-                    statusEl.textContent = '● Running';
-                    statusEl.className = 'value running';
-                } else {
-                    statusEl.textContent = '○ Idle';
-                    statusEl.className = 'value idle';
-                }
-
-                document.getElementById('total-tests').textContent = stats.total_tests || 0;
-                document.getElementById('profitable').textContent = stats.profitable_strategies || 0;
-                // best_return is now a decimal (0.0379), multiply by 100 for percentage
-                document.getElementById('best-return').textContent = stats.best_return !== undefined ? (stats.best_return * 100).toFixed(1) + '%' : '-';
-
-                // Get top strategies
-                const strategiesResp = await fetch('/api/discovery/top?limit=10');
-                const data = await strategiesResp.json();
-
-                const list = document.getElementById('strategies-list');
-                const statusEl = document.getElementById('discovery-status');
-
-                if (data.strategies && data.strategies.length > 0) {
-                    // Hide the status message when we have strategies
-                    if (statusEl) statusEl.style.display = 'none';
-
-                    list.innerHTML = data.strategies.map((s, i) => `
-                        <div class="strategy-item">
-                            <strong>#${i+1} ${s.edge_type}</strong>: ${s.edge_description}<br>
-                            <small>
-                            Return: ${(s.total_return_pct * 100).toFixed(2)}% |
-                            Profit: $${s.total_profit_usdt.toFixed(2)} |
-                            Sharpe: ${s.sharpe_ratio.toFixed(2)} |
-                            Win Rate: ${(s.win_rate * 100).toFixed(1)}% |
-                            Drawdown: ${(s.max_drawdown_pct * 100).toFixed(2)}%
-                            </small>
-                        </div>
-                    `).join('');
-                } else {
-                    // Show loading status when no strategies yet
-                    if (statusEl) {
-                        statusEl.style.display = 'block';
-                        statusEl.textContent = stats.discovery_running
-                            ? 'Discovery is running... Strategies will appear here shortly.'
-                            : 'No strategies yet. Click "Start Discovery" to begin.';
-                    }
-                    list.innerHTML = '';
-                }
-
-                // Update button states
-                document.getElementById('start-btn').disabled = stats.discovery_running;
-                document.getElementById('stop-btn').disabled = !stats.discovery_running;
-
-            } catch (error) {
-                console.error('Error refreshing data:', error);
-            }
-        }
-
-        async function startDiscovery() {
-            try {
-                const resp = await fetch('/api/discovery/start', { method: 'POST' });
+                const resp = await fetch('/api/discovery/statistics');
+                console.log('[MINIMAL] fetch completed');
                 const data = await resp.json();
-                alert(data.message);
-                setTimeout(refreshData, 1000);
-            } catch (error) {
-                alert('Error starting discovery: ' + error);
-            }
-        }
+                console.log('[MINIMAL] data received:', data);
 
-        async function stopDiscovery() {
-            try {
-                const resp = await fetch('/api/discovery/stop', { method: 'POST' });
-                const data = await resp.json();
-                alert(data.message);
-                setTimeout(refreshData, 1000);
+                document.getElementById('test3').textContent = `Test 3: API works! Found ${data.total_tests} tests ✓`;
+                document.getElementById('test3').style.color = '#27ae60';
             } catch (error) {
-                alert('Error stopping discovery: ' + error);
+                console.error('[MINIMAL] Error:', error);
+                document.getElementById('test3').textContent = `Test 3: Error: ${error.message} ✗`;
+                document.getElementById('test3').style.color = '#e74c3c';
             }
-        }
-
-        // Auto-refresh every 5 seconds
-        refreshData();
-        setInterval(refreshData, 5000);
+        })();
     </script>
 </body>
-</html>
-    """
+</html>"""
 
-    return html
+@app.get("/test", response_class=HTMLResponse)
+async def test_dashboard():
+    """Diagnostic test page for debugging dashboard issues."""
+    from pathlib import Path
+    test_file = Path(__file__).parent / "test_dashboard.html"
+    if test_file.exists():
+        return test_file.read_text()
+    return "<h1>Test file not found</h1>"
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard():
+    """Main dashboard landing page - serves static HTML file."""
+    static_index = Path(__file__).parent / "static" / "index.html"
+    if static_index.exists():
+        return static_index.read_text()
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>SLATE Dashboard - Not Found</title>
+        <style>
+            body { font-family: sans-serif; padding: 40px; text-align: center; background: #1e3c72; color: white; }
+            h1 { color: #e74c3c; }
+        </style>
+    </head>
+    <body>
+        <h1>Dashboard Not Found</h1>
+        <p>The static dashboard file could not be found.</p>
+        <p>Please ensure <code>slate_core/static/index.html</code> exists.</p>
+        <p><a href="/docs" style="color: #3498db;">View API Documentation</a></p>
+    </body>
+    </html>
+    """
 
 
 # ============================================================================
