@@ -3,24 +3,27 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-*.egg-info/
-*.egg
-dist/
+.Python
 build/
-*.whl
+develop-eggs/
+dist/
+downloads/
+eggs/
 .eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Virtual environments
-.venv/
 venv/
 ENV/
 env/
-
-# Environment / secrets
-.env
-.env.*
-*.key
-*.pem
 
 # IDE
 .vscode/
@@ -33,48 +36,34 @@ env/
 .DS_Store
 Thumbs.db
 
-# Node
-node_modules/
+# SLATE specific
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+slate_realistic_discoveries.db
+slate_discoveries.db
+
+# Cache data (optional - comment out if you want to track sample data)
+# btc_data_cache/
+# sol_data_cache/
+# palace_data/
 
 # Logs
 *.log
-nohup.out
+logs/
 
-# Test / coverage
-.pytest_cache/
-.coverage
+# Environment variables
+.env
+.env.local
+
+# Coverage
 htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# pytest
+.pytest_cache/
 .tox/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Data (large files)
-*.fits
-*.csv
-*.hdf5
-data/
-*.dat
-.evolution_*
-.evolution_checkpoint_*
-.claude/
-
-# LaTeX build artifacts
-*.aux
-*.bbl
-*.blg
-*.out
-*.toc
-*.fls
-*.fdb_latexmk
-*.synctex.gz
-
-# Compiled PDFs (regenerate from source)
-paper/*.pdf
-paper/figures/*.pdf
-paper/figures/*.png
-*.db
-*.db-shm
-*.db-wal
-astra-live/index.html
-.claude/settings.local.json

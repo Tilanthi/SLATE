@@ -1,0 +1,96 @@
+{
+  "902685a1e6d3": {
+    "id": "902685a1e6d3",
+    "type": "discovered_edge",
+    "properties": {
+      "edge_type": "time_pattern",
+      "description": "Asian session range fade (LONG or SHORT)",
+      "profit_usdt": 299.9386731966206,
+      "return_pct": 0.029993867319662058,
+      "drawdown_pct": 0.004588331588380718,
+      "sharpe": 4.303440468321859,
+      "beat_market": true,
+      "vs_buy_hold": 1836.7506817741769,
+      "mc_win_rate": 0.99,
+      "passed": true,
+      "start_price": 97.93,
+      "end_price": 82.88,
+      "volatility_regime": "unknown",
+      "timestamp": "2026-04-30T13:16:27.329501",
+      "cycle": 5
+    },
+    "relationships": {
+      "related_to": [
+        "902685a1e6d3",
+        "4c84c892761f"
+      ],
+      "improves_on": [],
+      "similar_to": [
+        "902685a1e6d3",
+        "4c84c892761f"
+      ]
+    }
+  },
+  "4c84c892761f": {
+    "id": "4c84c892761f",
+    "type": "discovered_edge",
+    "properties": {
+      "edge_type": "time_pattern",
+      "description": "London open volatility breakout (LONG or SHORT)",
+      "profit_usdt": 307.16755942461896,
+      "return_pct": 0.030716755942461895,
+      "drawdown_pct": 0.004755185694650159,
+      "sharpe": 4.568846303951965,
+      "beat_market": true,
+      "vs_buy_hold": 1843.9795680021753,
+      "mc_win_rate": 0.73,
+      "passed": true,
+      "start_price": 97.93,
+      "end_price": 82.88,
+      "volatility_regime": "unknown",
+      "timestamp": "2026-04-30T13:16:33.387061",
+      "cycle": 5
+    },
+    "relationships": {
+      "related_to": [
+        "902685a1e6d3",
+        "4c84c892761f"
+      ],
+      "improves_on": [],
+      "similar_to": [
+        "902685a1e6d3",
+        "4c84c892761f"
+      ]
+    }
+  },
+  "b1c5f0321535": {
+    "id": "b1c5f0321535",
+    "type": "discovered_edge",
+    "properties": {
+      "edge_type": "market_microstructure",
+      "description": "Liquidity sweep detection and reversal (LONG or SHORT)",
+      "profit_usdt": 20.04737731471687,
+      "return_pct": 0.002004737731471687,
+      "drawdown_pct": 0.00493481030225048,
+      "sharpe": 0.8914806027245301,
+      "beat_market": true,
+      "vs_buy_hold": 1556.8593858922732,
+      "mc_win_rate": 0.7,
+      "passed": true,
+      "start_price": 97.93,
+      "end_price": 82.88,
+      "volatility_regime": "unknown",
+      "timestamp": "2026-04-30T13:16:20.629491",
+      "cycle": 5
+    },
+    "relationships": {
+      "related_to": [
+        "b1c5f0321535"
+      ],
+      "improves_on": [],
+      "similar_to": [
+        "b1c5f0321535"
+      ]
+    }
+  }
+}
