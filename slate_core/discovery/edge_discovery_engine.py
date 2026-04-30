@@ -281,202 +281,237 @@ class EdgeDiscoveryEngine:
 
     def generate_edge_candidates(self) -> List[EdgeCandidate]:
         """
-        Generate edge candidates based on market structure hypotheses.
-
-        Returns diverse edge types with randomized parameters for continuous discovery.
-        Each cycle generates unique variations to accumulate test results.
+        Generate diverse edge candidates from a large strategy library.
+        Each cycle randomly selects different strategies to test for true exploration.
         """
         import random
+        import uuid
+
+        # Large library of diverse strategy templates
+        strategy_library = [
+            # MOMENTUM STRATEGIES
+            {
+                "name": "EMA Crossover Momentum",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._ema_crossover_strategy()
+            },
+            {
+                "name": "RSI Momentum Breakout",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._rsi_momentum_strategy()
+            },
+            {
+                "name": "MACD Histogram Momentum",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._macd_momentum_strategy()
+            },
+            {
+                "name": "Breakout Pullback Entry",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._breakout_pullback_strategy()
+            },
+
+            # MEAN REVERSION STRATEGIES
+            {
+                "name": "Bollinger Band Mean Reversion",
+                "edge_type": EdgeType.VOLATILITY_REGIME,
+                "template": lambda: self._bollinger_reversion_strategy()
+            },
+            {
+                "name": "RSI Extremes Reversal",
+                "edge_type": EdgeType.VOLATILITY_REGIME,
+                "template": lambda: self._rsi_reversal_strategy()
+            },
+            {
+                "name": "Support Resistance Bounce",
+                "edge_type": EdgeType.MARKET_MICROSTRUCTURE,
+                "template": lambda: self._sr_bounce_strategy()
+            },
+            {
+                "name": "Fibonacci Retracement Fade",
+                "edge_type": EdgeType.VOLATILITY_REGIME,
+                "template": lambda: self._fib_reversal_strategy()
+            },
+
+            # VOLATILITY STRATEGIES
+            {
+                "name": "ATR Breakout Expansion",
+                "edge_type": EdgeType.VOLATILITY_REGIME,
+                "template": lambda: self._atr_breakout_strategy()
+            },
+            {
+                "name": "Volatility Squeeze Play",
+                "edge_type": EdgeType.VOLATILITY_REGIME,
+                "template": lambda: self._vol_squeeze_strategy()
+            },
+            {
+                "name": "VIX Proxy Spike Fade",
+                "edge_type": EdgeType.VOLATILITY_REGIME,
+                "template": lambda: self._vix_spike_strategy()
+            },
+            {
+                "name": "Gamma Exposure Scalping",
+                "edge_type": EdgeType.MARKET_MICROSTRUCTURE,
+                "template": lambda: self._gamma_scalp_strategy()
+            },
+
+            # TIME-BASED STRATEGIES
+            {
+                "name": "Asian Session Range Fade",
+                "edge_type": EdgeType.TIME_PATTERN,
+                "template": lambda: self._asian_session_strategy()
+            },
+            {
+                "name": "London Open Breakout",
+                "edge_type": EdgeType.TIME_PATTERN,
+                "template": lambda: self._london_open_strategy()
+            },
+            {
+                "name": "NY Open Momentum",
+                "edge_type": EdgeType.TIME_PATTERN,
+                "template": lambda: self._ny_open_strategy()
+            },
+            {
+                "name": "End of Day Reversal",
+                "edge_type": EdgeType.TIME_PATTERN,
+                "template": lambda: self._eod_reversal_strategy()
+            },
+            {
+                "name": "Weekend Gap Fade",
+                "edge_type": EdgeType.TIME_PATTERN,
+                "template": lambda: self._weekend_gap_strategy()
+            },
+            {
+                "name": "CPI/Pivot News Play",
+                "edge_type": EdgeType.TIME_PATTERN,
+                "template": lambda: self._news_play_strategy()
+            },
+
+            # MARKET MICROSTRUCTURE
+            {
+                "name": "Order Flow Imbalance",
+                "edge_type": EdgeType.MARKET_MICROSTRUCTURE,
+                "template": lambda: self._order_flow_strategy()
+            },
+            {
+                "name": "Liquidity Sweep Reversal",
+                "edge_type": EdgeType.MARKET_MICROSTRUCTURE,
+                "template": lambda: self._liquidity_sweep_strategy()
+            },
+            {
+                "name": "Iceberg Order Detection",
+                "edge_type": EdgeType.MARKET_MICROSTRUCTURE,
+                "template": lambda: self._iceberg_strategy()
+            },
+            {
+                "name": "Tick Volume Anomaly",
+                "edge_type": EdgeType.MARKET_MICROSTRUCTURE,
+                "template": lambda: self._tick_volume_strategy()
+            },
+            {
+                "name": "Bid-Ask Spread Dynamics",
+                "edge_type": EdgeType.MARKET_MICROSTRUCTURE,
+                "template": lambda: self._spread_dynamics_strategy()
+            },
+
+            # STATISTICAL ARBITRAGE
+            {
+                "name": "Pairs Trading Signal",
+                "edge_type": EdgeType.CORRELATION_ARBITRAGE,
+                "template": lambda: self._pairs_trading_strategy()
+            },
+            {
+                "name": "Statistical Mean Reversion",
+                "edge_type": EdgeType.CORRELATION_ARBITRAGE,
+                "template": lambda: self._stat_arb_strategy()
+            },
+            {
+                "name": "Cointegration Breakdown",
+                "edge_type": EdgeType.CORRELATION_ARBITRAGE,
+                "template": lambda: self._cointegration_strategy()
+            },
+            {
+                "name": "Z-Score Extreme Entry",
+                "edge_type": EdgeType.CORRELATION_ARBITRAGE,
+                "template": lambda: self._zscore_strategy()
+            },
+
+            # PATTERN RECOGNITION
+            {
+                "name": "Double Top/Bottom",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._double_pattern_strategy()
+            },
+            {
+                "name": "Head and Shoulders",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._head_shoulders_strategy()
+            },
+            {
+                "name": "Triangle Breakout",
+                "edge_type": EdgeType.VOLATILITY_REGIME,
+                "template": lambda: self._triangle_breakout_strategy()
+            },
+            {
+                "name": "Flag Pattern Continuation",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._flag_strategy()
+            },
+            {
+                "name": "Cup and Handle",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._cup_handle_strategy()
+            },
+
+            # ADVANCED/ML-INSPIRED
+            {
+                "name": "Multi-Timeframe Alignment",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._multi_timeframe_strategy()
+            },
+            {
+                "name": "Trend Strength Adaptive",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._trend_strength_strategy()
+            },
+            {
+                "name": "Regime Switching Model",
+                "edge_type": EdgeType.VOLATILITY_REGIME,
+                "template": lambda: self._regime_switch_strategy()
+            },
+            {
+                "name": "Momentum Decay Model",
+                "edge_type": EdgeType.MOMENTUM_MEAN_REVERSION,
+                "template": lambda: self._momentum_decay_strategy()
+            },
+        ]
+
+        # Randomly select strategies to test this cycle (exploration over exploitation)
+        num_strategies_to_test = random.randint(3, 8)
+        selected_strategies = random.sample(strategy_library, num_strategies_to_test)
+
         candidates = []
+        for strategy in selected_strategies:
+            try:
+                candidate = strategy["template"]()
+                # Add unique identifier for database tracking
+                unique_id = str(uuid.uuid4())[:8]
+                candidate = EdgeCandidate(
+                    edge_type=candidate.edge_type,
+                    description=f"{candidate.description} [{unique_id}]",
+                    entry_conditions=candidate.entry_conditions,
+                    exit_conditions=candidate.exit_conditions,
+                    risk_params=candidate.risk_params,
+                    confidence=candidate.confidence,
+                    expected_return=candidate.expected_return,
+                    expected_drawdown=candidate.expected_drawdown
+                )
+                candidates.append(candidate)
+            except Exception as e:
+                logger.warning(f"Failed to generate {strategy['name']}: {e}")
 
-        # Add randomness for parameter variations
-        atr_ratio = round(random.uniform(0.3, 0.7), 2)
-        bollinger_width = round(random.uniform(0.015, 0.025), 3)
-        atr_expansion = round(random.uniform(1.8, 2.5), 1)
-        time_stop_hours = random.randint(3, 6)
-        position_size = round(random.uniform(0.02, 0.05), 3)
-        stop_atr_mult = round(random.uniform(1.2, 2.0), 1)
-
-        # 1. Volatility Regime Edges (Both Long and Short) - with random variations
-        candidates.extend([
-            EdgeCandidate(
-                edge_type=EdgeType.VOLATILITY_REGIME,
-                description=f"ATR breakout during low volatility (LONG or SHORT) - ATR<{atr_ratio} BW<{bollinger_width}",
-                entry_conditions={
-                    "atr_ratio": f"< {atr_ratio}",
-                    "bollinger_width": f"< {bollinger_width}",
-                    "direction": "trade the breakout direction"
-                },
-                exit_conditions={
-                    "atr_expansion": f"> {atr_expansion}",
-                    "time_stop": f"{time_stop_hours} hours"
-                },
-                risk_params={
-                    "position_size": str(position_size),
-                    "stop_atr_multiple": str(stop_atr_mult)
-                },
-                confidence=round(random.uniform(0.5, 0.7), 2),
-                expected_return=round(random.uniform(0.015, 0.025), 3),
-                expected_drawdown=round(random.uniform(0.06, 0.10), 2)
-            ),
-            EdgeCandidate(
-                edge_type=EdgeType.VOLATILITY_REGIME,
-                description=f"Mean reversion after volatility spike (LONG or SHORT) - v2.{random.randint(1,100)}",
-                entry_conditions={
-                    "vix_proxy": f"> {round(random.uniform(1.8, 2.5), 1)}",
-                    "price_change": f"> {round(random.uniform(1.5, 2.5), 1)}% in 1h",
-                    "direction": "fade the spike"
-                },
-                exit_conditions={
-                    "reversion_target": f"{round(random.uniform(0.4, 0.6), 1)} * std_dev",
-                    "time_stop": f"{random.randint(5, 8)} hours"
-                },
-                risk_params={
-                    "position_size": str(round(random.uniform(0.03, 0.05), 3)),
-                    "stop_atr_multiple": str(round(random.uniform(0.8, 1.2), 1))
-                },
-                confidence=round(random.uniform(0.4, 0.6), 2),
-                expected_return=round(random.uniform(0.01, 0.02), 3),
-                expected_drawdown=round(random.uniform(0.05, 0.08), 2)
-            ),
-        ])
-
-        # 2. Market Microstructure Edges (Both Long and Short) - with random variations
-        candidates.extend([
-            EdgeCandidate(
-                edge_type=EdgeType.MARKET_MICROSTRUCTURE,
-                description=f"Bid-ask bounce mean reversion (LONG or SHORT) - v{random.randint(1,100)}",
-                entry_conditions={
-                    "spread_widening": f"> {round(random.uniform(1.5, 2.5), 1)}x average",
-                    "bollinger_touch": f"price at ±{round(random.uniform(1.5, 2.5), 1)} std",
-                    "direction": "fade the extension"
-                },
-                exit_conditions={
-                    "spread_normalization": "return to 1x",
-                    "time_stop": f"{random.randint(20, 45)} minutes"
-                },
-                risk_params={
-                    "position_size": str(round(random.uniform(0.015, 0.025), 3)),
-                    "stop_atr_multiple": str(round(random.uniform(0.4, 0.6), 1))
-                },
-                confidence=round(random.uniform(0.35, 0.45), 2),
-                expected_return=round(random.uniform(0.003, 0.007), 3),
-                expected_drawdown=round(random.uniform(0.02, 0.04), 2)
-            ),
-            EdgeCandidate(
-                edge_type=EdgeType.MARKET_MICROSTRUCTURE,
-                description=f"Liquidity sweep detection and reversal (LONG or SHORT) - vol{random.randint(1,100)}",
-                entry_conditions={
-                    "volume_spike": f"> {round(random.uniform(2.5, 3.5), 1)}x average",
-                    "price_rejection": f"wicks > {round(random.uniform(40, 60), 0)}% of candle",
-                    "direction": "trade the rejection"
-                },
-                exit_conditions={
-                    "target": "sweep_origin_price",
-                    "time_stop": f"{random.randint(1, 3)} hours"
-                },
-                risk_params={
-                    "position_size": str(round(random.uniform(0.025, 0.035), 3)),
-                    "stop_atr_multiple": str(round(random.uniform(0.7, 0.9), 1))
-                },
-                confidence=round(random.uniform(0.45, 0.55), 2),
-                expected_return=round(random.uniform(0.008, 0.012), 3),
-                expected_drawdown=round(random.uniform(0.04, 0.06), 2)
-            ),
-        ])
-
-        # 3. Time Pattern Edges (Both Long and Short) - with random variations
-        candidates.extend([
-            EdgeCandidate(
-                edge_type=EdgeType.TIME_PATTERN,
-                description=f"Asian session range fade (LONG or SHORT) - session{random.randint(1,100)}",
-                entry_conditions={
-                    "time": "UTC 20:00 - 02:00",
-                    "volume": "below daily average",
-                    "direction": "fade price moves"
-                },
-                exit_conditions={
-                    "target": "session mean reversion",
-                    "time_stop": "session end"
-                },
-                risk_params={
-                    "position_size": str(round(random.uniform(0.035, 0.045), 3)),
-                    "stop_atr_multiple": str(round(random.uniform(0.9, 1.1), 1))
-                },
-                confidence=round(random.uniform(0.40, 0.50), 2),
-                expected_return=round(random.uniform(0.006, 0.010), 3),
-                expected_drawdown=round(random.uniform(0.05, 0.07), 2)
-            ),
-            EdgeCandidate(
-                edge_type=EdgeType.TIME_PATTERN,
-                description=f"London open volatility breakout (LONG or SHORT) - break{random.randint(1,100)}",
-                entry_conditions={
-                    "time": "UTC 07:00 - 08:00",
-                    "direction": "trade the breakout direction"
-                },
-                exit_conditions={
-                    "breakout_confirmation": "sustained move",
-                    "time_stop": "12:00 UTC"
-                },
-                risk_params={
-                    "position_size": str(round(random.uniform(0.045, 0.055), 3)),
-                    "stop_atr_multiple": str(round(random.uniform(1.3, 1.7), 1))
-                },
-                confidence=round(random.uniform(0.50, 0.60), 2),
-                expected_return=round(random.uniform(0.010, 0.014), 3),
-                expected_drawdown=round(random.uniform(0.07, 0.09), 2)
-            ),
-        ])
-
-        # 4. Momentum-Mean Reversion Hybrid (Both Directions) - with random variations
-        candidates.extend([
-            EdgeCandidate(
-                edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
-                description=f"Trend-following with pullback entries (LONG in uptrend, SHORT in downtrend) - trend{random.randint(1,100)}",
-                entry_conditions={
-                    "trend": "EMA200 slope determines direction",
-                    "entry": "pullback to EMA50",
-                    "rsi": "30-70 zone"
-                },
-                exit_conditions={
-                    "target": "previous swing point",
-                    "stop": "beyond pullback extreme"
-                },
-                risk_params={
-                    "position_size": str(round(random.uniform(0.035, 0.045), 3)),
-                    "stop_atr_multiple": str(round(random.uniform(1.8, 2.2), 1))
-                },
-                confidence=round(random.uniform(0.55, 0.65), 2),
-                expected_return=round(random.uniform(0.015, 0.021), 3),
-                expected_drawdown=round(random.uniform(0.09, 0.11), 2)
-            ),
-        ])
-
-        # 5. Statistical Arbitrage Edges (Both Long and Short) - with random variations
-        candidates.extend([
-            EdgeCandidate(
-                edge_type=EdgeType.CORRELATION_ARBITRAGE,
-                description=f"Price deviation mean reversion (LONG or SHORT) - dev{random.randint(1,100)}",
-                entry_conditions={
-                    "deviation": f"> {round(random.uniform(1.8, 2.2), 1)} std from 20-period mean",
-                    "volatility": "elevated (>1.5x ATR)",
-                    "direction": "fade the deviation"
-                },
-                exit_conditions={
-                    "convergence": "return to 1 std",
-                    "time_stop": f"{random.randint(3, 5)} hours"
-                },
-                risk_params={
-                    "position_size": str(round(random.uniform(0.025, 0.035), 3)),
-                    "stop_atr_multiple": str(round(random.uniform(1.3, 1.7), 1))
-                },
-                confidence=round(random.uniform(0.35, 0.45), 2),
-                expected_return=round(random.uniform(0.008, 0.012), 3),
-                expected_drawdown=round(random.uniform(0.06, 0.08), 2)
-            ),
-        ])
-
-        logger.info(f"Generated {len(candidates)} edge candidates across {len(EdgeType)} types")
+        logger.info(f"Generated {len(candidates)} diverse edge candidates from {num_strategies_to_test} unique strategies")
+        return candidates
         return candidates
 
     async def fetch_solusdt_data(self, days: int = 90) -> Optional[pd.DataFrame]:
@@ -612,14 +647,20 @@ class EdgeDiscoveryEngine:
             raise RuntimeError(f"FAILED to fetch real market data. Discovery aborted. Error: {e}")
 
     def _calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate technical indicators for edge detection."""
-        # ATR
+        """Calculate comprehensive technical indicators for diverse strategy detection."""
+
+        # ATR (multiple periods)
         high_low = df["high"] - df["low"]
         high_close = np.abs(df["high"] - df["close"].shift())
         low_close = np.abs(df["low"] - df["close"].shift())
         true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+
         df["atr"] = true_range.rolling(window=14).mean()
-        df["atr_ratio"] = df["atr"] / df["atr"].rolling(window=20).mean()
+        df["atr_ratio"] = df["atr"] / df["atr"].rolling(window=50).mean()
+
+        # Multiple ATR periods for diverse strategies
+        for period in [7, 11, 20, 43]:
+            df[f"atr_{period}"] = true_range.rolling(window=period).mean()
 
         # Bollinger Bands
         df["sma_20"] = df["close"].rolling(window=20).mean()
@@ -628,23 +669,40 @@ class EdgeDiscoveryEngine:
         df["bollinger_lower"] = df["sma_20"] - 2 * df["std_20"]
         df["bollinger_width"] = (df["bollinger_upper"] - df["bollinger_lower"]) / df["sma_20"]
 
-        # Volume
+        # Volume indicators
         df["volume_avg"] = df["volume"].rolling(window=20).mean()
         df["volume_ratio"] = df["volume"] / df["volume_avg"]
 
-        # EMAs
-        df["ema_50"] = df["close"].ewm(span=50).mean()
-        df["ema_200"] = df["close"].ewm(span=200).mean()
+        # Multiple EMA periods for diverse strategies
+        for period in [7, 10, 14, 17, 20, 33, 36, 50, 68, 72, 200]:
+            df[f"ema_{period}"] = df["close"].ewm(span=period).mean()
 
-        # RSI
-        delta = df["close"].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        df["rsi"] = 100 - (100 / (1 + rs))
+        # RSI (multiple periods)
+        def calculate_rsi(series, period=14):
+            delta = series.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+            rs = gain / loss
+            return 100 - (100 / (1 + rs))
+
+        df["rsi"] = calculate_rsi(df["close"], 14)
+        for period in [10, 17, 38, 41, 43]:
+            df[f"rsi_{period}"] = calculate_rsi(df["close"], period)
+
+        # MACD
+        ema_12 = df["close"].ewm(span=12).mean()
+        ema_26 = df["close"].ewm(span=26).mean()
+        df["macd"] = ema_12 - ema_26
+        df["macd_signal"] = df["macd"].ewm(span=9).mean()
+        df["macd_hist"] = df["macd"] - df["macd_signal"]
 
         # Returns
         df["returns"] = df["close"].pct_change()
+
+        # Rolling high/low for breakout strategies
+        for period in [10, 20, 35, 50, 78, 120]:
+            df[f"high_{period}"] = df["high"].rolling(window=period).max()
+            df[f"low_{period}"] = df["low"].rolling(window=period).min()
 
         return df.dropna()
 
@@ -874,96 +932,327 @@ class EdgeDiscoveryEngine:
 
     def _check_entry_signal(self, df: pd.DataFrame, i: int, candidate: EdgeCandidate) -> int:
         """
-        Check if entry conditions are met for PERPETUAL FUTURES trading.
+        Check if entry conditions are met for diverse strategy types.
 
-        Returns:
-            1 for LONG position
-            -1 for SHORT position
-            0 for no signal
-
-        Perpetual futures support BOTH directions - we take long positions when
-        expecting price increases and short positions when expecting decreases.
+        Comprehensive signal generation for 35+ strategy templates.
+        Returns: 1 (LONG), -1 (SHORT), 0 (no signal)
         """
         row = df.iloc[i]
+        desc = candidate.description.lower()
 
-        if candidate.edge_type == EdgeType.VOLATILITY_REGIME:
-            if "compression" in candidate.description.lower():
-                # Low volatility compression - trade the breakout direction
-                if row["atr_ratio"] < 0.5 and row["bollinger_width"] < 0.02:
-                    # Long if price is near upper band, short if near lower band
-                    if row["close"] > row["sma_20"]:
-                        return 1  # Long - expecting upside breakout
-                    else:
-                        return -1  # Short - expecting downside breakout
+        # Extract parameters from description when available
+        import re
 
-            elif "spike" in candidate.description.lower():
-                # Volatility spike - mean reversion
-                if row["atr_ratio"] > 2.0 and abs(row["returns"]) > 0.02:
-                    # Short after large up move, long after large down move
-                    if row["returns"] > 0.02:  # Large up move
-                        return -1  # Short - expecting reversion down
-                    elif row["returns"] < -0.02:  # Large down move
-                        return 1  # Long - expecting reversion up
+        # MOMENTUM STRATEGIES
+        if "ema crossover" in desc:
+            # EMA[period]/EMA[period*2] crossover
+            ema_match = re.search(r'ema(\d+)', desc)
+            if ema_match:
+                period = int(ema_match.group(1))
+                fast_col = f"ema_{period}"
+                slow_col = f"ema_{period*2}"
+                if fast_col in row.columns and slow_col in row.columns:
+                    if row[fast_col] > row[slow_col] and row["close"] > row["sma_20"]:
+                        return 1  # Golden cross - uptrend
+                    elif row[fast_col] < row[slow_col] and row["close"] < row["sma_20"]:
+                        return -1  # Death cross - downtrend
 
-        elif candidate.edge_type == EdgeType.MARKET_MICROSTRUCTURE:
-            if "bid-ask" in candidate.description.lower():
-                # Bid-ask bounce - fade the moves
-                if row["bollinger_width"] > 0.03:  # Wide spread
-                    if row["close"] > row["sma_20"] + row["std_20"]:
-                        return -1  # Short - fade the upper band touch
-                    elif row["close"] < row["sma_20"] - row["std_20"]:
-                        return 1  # Long - fade the lower band touch
+        elif "rsi momentum" in desc:
+            # RI breakout strategy
+            rsi_match = re.search(r'rsi(\d+)', desc)
+            thresh_match = re.search(r'treshold=(\d+\.?\d*)', desc)
+            if rsi_match and thresh_match:
+                period = int(rsi_match.group(1))
+                threshold = float(thresh_match.group(1))
+                rsi_col = f"rsi_{period}" if period != 14 else "rsi"
+                if rsi_col in row.columns:
+                    if row[rsi_col] > (50 + threshold * 10) and row["volume_ratio"] > 1.0:
+                        return 1  # Strong momentum up
+                    elif row[rsi_col] < (50 - threshold * 10) and row["volume_ratio"] > 1.0:
+                        return -1  # Strong momentum down
 
-            elif "sweep" in candidate.description.lower():
-                # Liquidity sweep - reversal after spike
-                if row["volume_ratio"] > 3.0:
-                    # Check for rejection wicks
-                    candle_range = row["high"] - row["low"]
-                    if row["close"] < row["open"] and (row["high"] - row["close"]) / candle_range > 0.5:
-                        return 1  # Long - rejecting upside
-                    elif row["close"] > row["open"] and (row["close"] - row["low"]) / candle_range > 0.5:
-                        return -1  # Short - rejecting downside
+        elif "macd" in desc:
+            # MACD histogram momentum
+            if "macd_hist" in row.columns and row["macd_hist"] > 0:
+                return 1  # Bullish momentum
+            elif "macd_hist" in row.columns and row["macd_hist"] < 0:
+                return -1  # Bearish momentum
 
-        elif candidate.edge_type == EdgeType.TIME_PATTERN:
-            hour = df.index[i].hour
+        elif "breakout pullback" in desc:
+            # Pullback to key level after breakout
+            period_match = re.search(r'(\d+)-period', desc)
+            if period_match:
+                period = int(period_match.group(1))
+                high_col = f"high_{period}"
+                low_col = f"low_{period}"
+                if high_col in row.columns and low_col in row.columns:
+                    if row["close"] > row[high_col].shift(1) and row["close"] < row["close"].shift(1):
+                        return 1  # Pullback after upside breakout
+                    elif row["close"] < row[low_col].shift(1) and row["close"] > row["close"].shift(1):
+                        return -1  # Pullback after downside breakout
 
-            if "asian" in candidate.description.lower():
-                # Asian session - range trading fade
-                if 20 <= hour or hour <= 2:
-                    if row["volume_ratio"] < 0.8:  # Low volume
+        elif "trend strength" in desc or "adx" in desc.lower():
+            # Adaptive based on trend strength
+            if row["ema_50"] > row["ema_200"] and 30 < row["rsi"] < 70:
+                return 1  # Pullback in uptrend
+            elif row["ema_50"] < row["ema_200"] and 30 < row["rsi"] < 70:
+                return -1  # Rally in downtrend
+
+        # MEAN REVERSION STRATEGIES
+        elif "bollinger" in desc and "reversion" in desc:
+            # Bollinger band reversion
+            bb_match = re.search(r'(\d+)-period', desc)
+            std_match = re.search(r'([\d.]+) std', desc)
+            if bb_match and std_match:
+                period = int(bb_match.group(1))
+                std_mult = float(std_match.group(1))
+                if row["close"] > row["sma_20"] + std_mult * row["std_20"]:
+                    return -1  # Short upper band
+                elif row["close"] < row["sma_20"] - std_mult * row["std_20"]:
+                    return 1  # Long lower band
+
+        elif "rsi extremes" in desc or "rsi.*reversal" in desc:
+            # RSI overbought/oversold reversal
+            rsi_match = re.search(r'rsi(\d+)', desc)
+            if rsi_match:
+                period = int(rsi_match.group(1))
+                rsi_col = f"rsi_{period}" if period != 14 else "rsi"
+                if rsi_col in row.columns:
+                    if row[rsi_col] > 70:  # Overbought
+                        return -1  # Short reversal
+                    elif row[rsi_col] < 30:  # Oversold
+                        return 1  # Long reversal
+
+        elif "support" in desc or "resistance" in desc or "sr" in desc:
+            # Support/resistance bounce
+            period_match = re.search(r'(\d+)-period', desc)
+            if period_match:
+                period = int(period_match.group(1))
+                # Check if price is near recent high/low
+                recent_high = row["close"].rolling(period).max().iloc[-1]
+                recent_low = row["close"].rolling(period).min().iloc[-1]
+                if abs(row["close"] - recent_low) / row["close"] < 0.01:
+                    return 1  # Bounce off support
+                elif abs(row["close"] - recent_high) / row["close"] < 0.01:
+                    return -1  # Bounce off resistance
+
+        elif "fibonacci" in desc or "fib" in desc:
+            # Fibonacci retracement
+            if row["close"] < row["sma_20"] and row["returns"] < -0.02:
+                return 1  # Long at Fib support
+            elif row["close"] > row["sma_20"] and row["returns"] > 0.02:
+                return -1  # Short at Fib resistance
+
+        # VOLATILITY STRATEGIES
+        elif "atr breakout" in desc or "atr.*expansion" in desc:
+            # ATR breakout strategy
+            atr_match = re.search(r'atr(\d+)', desc)
+            mult_match = re.search(r'>([\d.]+)x', desc)
+            if atr_match and mult_match:
+                period = int(atr_match.group(1))
+                atr_col = f"atr_{period}" if period != 14 else "atr"
+                if atr_col in row.columns:
+                    atr_ratio = row[atr_col] / row[atr_col].rolling(50).mean().iloc[-1]
+                    if atr_ratio > float(mult_match.group(1)):
                         if row["close"] > row["sma_20"]:
-                            return -1  # Short - fade the rise in quiet session
+                            return 1  # Breakout up
                         else:
-                            return 1  # Long - fade the drop in quiet session
+                            return -1  # Breakout down
 
-            elif "london" in candidate.description.lower():
-                # London open - volatility breakout
-                if 7 <= hour <= 8:
-                    # Trade the direction of the initial move
-                    if row["returns"] > 0.001:  # Positive move
-                        return 1  # Long - follow the breakout
-                    elif row["returns"] < -0.001:  # Negative move
-                        return -1  # Short - follow the breakdown
+        elif "volatility squeeze" in desc or "squeeze" in desc:
+            # Volatility squeeze breakout
+            if row["bollinger_width"] < row["bollinger_width"].rolling(50).quantile(0.1).iloc[-1]:
+                # In squeeze - wait for breakout
+                if abs(row["returns"]) > 0.01 and row["volume_ratio"] > 1.5:
+                    if row["returns"] > 0:
+                        return 1  # Upside breakout
+                    else:
+                        return -1  # Downside breakout
 
-        elif candidate.edge_type == EdgeType.MOMENTUM_MEAN_REVERSION:
-            # Trend-following with mean reversion entries
-            if row["ema_50"] > row["ema_200"]:  # Uptrend
-                if row["close"] < row["ema_50"] and 30 < row["rsi"] < 70:
-                    return 1  # Long - buy dip in uptrend
-            elif row["ema_50"] < row["ema_200"]:  # Downtrend
-                if row["close"] > row["ema_50"] and 30 < row["rsi"] < 70:
-                    return -1  # Short - sell rally in downtrend
+        elif "vix" in desc or "volatility.*spike" in desc:
+            # Volatility spike fade
+            if row["atr_ratio"] > 2.0 and abs(row["returns"]) > 0.02:
+                if row["returns"] > 0:
+                    return -1  # Fade up spike
+                else:
+                    return 1  # Fade down spike
 
-        elif candidate.edge_type == EdgeType.CORRELATION_ARBITRAGE:
-            # Correlation arbitrage - trade the convergence
-            # This would typically involve two assets, but for SOL we use
-            # price deviation from expected value based on trend
-            if row["atr_ratio"] > 1.5:
-                # Price extended from mean - potential reversal
-                if row["close"] > row["sma_20"] + 2 * row["std_20"]:
-                    return -1  # Short - overextended
-                elif row["close"] < row["sma_20"] - 2 * row["std_20"]:
-                    return 1  # Long - overextended downside
+        elif "gamma" in desc:
+            # Gamma exposure scalping
+            if row["volume_ratio"] > 2.0 and abs(row["returns"]) > 0.015:
+                return 1 if row["returns"] > 0 else -1  # Ride momentum
+
+        # TIME-BASED STRATEGIES
+        elif "asian" in desc:
+            # Asian session range fade
+            hour = df.index[i].hour
+            if 20 <= hour or hour <= 2:
+                if row["volume_ratio"] < 0.8:
+                    if row["close"] > row["sma_20"]:
+                        return -1  # Short rise in quiet session
+                    else:
+                        return 1  # Long drop in quiet session
+
+        elif "london" in desc:
+            # London open breakout
+            hour = df.index[i].hour
+            if 7 <= hour <= 8:
+                if abs(row["returns"]) > 0.001:
+                    return 1 if row["returns"] > 0 else -1  # Follow breakout
+
+        elif "ny" in desc or "new york" in desc or "13:00" in desc:
+            # NY open momentum
+            hour = df.index[i].hour
+            if 13 <= hour <= 14:
+                if row["ema_20"] > row["ema_50"]:
+                    return 1  # Follow uptrend
+                elif row["ema_20"] < row["ema_50"]:
+                    return -1  # Follow downtrend
+
+        elif "eod" in desc or "end of day" in desc:
+            # End-of-day reversal
+            hour = df.index[i].hour
+            if 22 <= hour or hour <= 0:
+                if abs(row["returns"][:5].sum()) > 0.02:  # Strong daily move
+                    return -1 if row["returns"].iloc[-1] > 0 else 1  # Fade daily trend
+
+        elif "weekend" in desc or "gap" in desc:
+            # Weekend gap fade (check for large opening move)
+            if i > 0 and abs(row["open"] - df.iloc[i-1]["close"]) / df.iloc[i-1]["close"] > 0.01:
+                return -1 if row["open"] > df.iloc[i-1]["close"] else 1  # Fade gap
+
+        elif "news" in desc or "cpi" in desc or "fomc" in desc:
+            # News event volatility
+            if row["volume_ratio"] > 1.5 and abs(row["returns"]) > 0.005:
+                return 1 if row["returns"] > 0 else -1  # Follow news move
+
+        # MARKET MICROSTRUCTURE
+        elif "order flow" in desc or "tick" in desc:
+            # Order flow / tick volume
+            if row["volume_ratio"] > 1.5:
+                if row["close"] > row["sma_20"] and row["volume_ratio"] > 2.0:
+                    return 1  # Strong flow up
+                elif row["close"] < row["sma_20"] and row["volume_ratio"] > 2.0:
+                    return -1  # Strong flow down
+
+        elif "sweep" in desc or "liquidity" in desc:
+            # Liquidity sweep
+            if row["volume_ratio"] > 2.0:
+                candle_range = row["high"] - row["low"]
+                if candle_range > 0:
+                    wick_ratio = (row["high"] - row["close"]) / candle_range
+                    if wick_ratio > 0.4 and row["close"] < row["open"]:
+                        return 1  # Reject upside - go long
+                    wick_ratio_lower = (row["close"] - row["low"]) / candle_range
+                    if wick_ratio_lower > 0.4 and row["close"] > row["open"]:
+                        return -1  # Reject downside - go short
+
+        elif "iceberg" in desc or "absorption" in desc:
+            # Iceberg / absorption
+            if row["volume_ratio"] > 1.5 and abs(row["returns"]) < 0.005:
+                return -1 if row["close"] > row["sma_20"] else 1  # Fade stalled move
+
+        elif "spread" in desc:
+            # Bid-ask spread dynamics
+            if row["bollinger_width"] > 0.02:
+                return -1 if row["close"] > row["sma_20"] + row["std_20"] else 1
+
+        # STATISTICAL ARBITRAGE
+        elif "pairs" in desc:
+            # Pairs trading (use BTC correlation proxy)
+            if abs(row["close"] - row["sma_20"]) > 2 * row["std_20"]:
+                return -1 if row["close"] > row["sma_20"] else 1  # Mean reversion
+
+        elif "statistical" in desc or "stat arb" in desc:
+            # Statistical mean reversion
+            dev_match = re.search(r'[-+]?([\d.]+)std', desc)
+            if dev_match:
+                threshold = float(dev_match.group(1))
+                deviation = (row["close"] - row["sma_20"]) / row["std_20"]
+                if abs(deviation) > threshold:
+                    return -1 if deviation > 0 else 1  # Fade deviation
+
+        elif "cointegration" in desc:
+            # Cointegration breakdown
+            if abs(row["close"] - row["sma_20"]) / row["close"] > 0.02:
+                return -1 if row["close"] > row["sma_20"] else 1
+
+        elif "z-score" in desc or "zscore" in desc:
+            # Z-score extreme
+            z_score = (row["close"] - row["sma_20"]) / row["std_20"]
+            mult_match = re.search(r'z>([-+]?[\d.]+)', desc)
+            if mult_match:
+                threshold = float(mult_match.group(1))
+                if abs(z_score) > threshold:
+                    return -1 if z_score > 0 else 1  # Fade extreme z-score
+
+        # PATTERN RECOGNITION
+        elif "double" in desc:
+            # Double top/bottom (simplified)
+            if row["close"] > row["sma_20"] + 2 * row["std_20"] and row["rsi"] > 70:
+                return -1  # Double top
+            elif row["close"] < row["sma_20"] - 2 * row["std_20"] and row["rsi"] < 30:
+                return 1  # Double bottom
+
+        elif "head" in desc or "h&s" in desc:
+            # Head and shoulders (simplified)
+            if row["close"] > row["sma_20"] + 1.5 * row["std_20"] and row["volume_ratio"] < 0.8:
+                return -1  # Potential top
+            elif row["close"] < row["sma_20"] - 1.5 * row["std_20"] and row["volume_ratio"] < 0.8:
+                return 1  # Potential bottom
+
+        elif "triangle" in desc:
+            # Triangle consolidation breakout
+            if row["bollinger_width"] < row["bollinger_width"].rolling(20).mean().iloc[-1] * 0.7:
+                if abs(row["returns"]) > 0.01:
+                    return 1 if row["returns"] > 0 else -1  # Breakout direction
+
+        elif "flag" in desc:
+            # Flag pattern continuation
+            if row["ema_20"] > row["ema_50"] and row["close"] > row["sma_20"]:
+                return 1  # Bullish flag continuation
+            elif row["ema_20"] < row["ema_50"] and row["close"] < row["sma_20"]:
+                return -1  # Bearish flag continuation
+
+        elif "cup" in desc:
+            # Cup and handle
+            if row["close"] > row["sma_20"] and row["volume_ratio"] > 1.2:
+                return 1  # Cup completion
+
+        # ADVANCED / ML-INSPIRED
+        elif "multi-timeframe" in desc or "multi timeframe" in desc:
+            # Multi-timeframe alignment
+            if row["ema_20"] > row["ema_50"] > row["ema_200"]:
+                return 1  # All timeframes bullish
+            elif row["ema_20"] < row["ema_50"] < row["ema_200"]:
+                return -1  # All timeframes bearish
+
+        elif "regime" in desc:
+            # Regime switching
+            if row["atr_ratio"] < 1.0:  # Low vol regime
+                if row["close"] > row["sma_20"]:
+                    return 1  # Range trade - buy low
+            else:  # High vol regime
+                if row["returns"] > 0.01:
+                    return 1  # Momentum trade
+                elif row["returns"] < -0.01:
+                    return -1  # Momentum trade short
+
+        elif "momentum.*decay" in desc or "decay" in desc:
+            # Momentum decay
+            if abs(row["returns"]) > 0.015:
+                # Check if momentum is slowing
+                recent_returns = row["returns"].rolling(5).sum()
+                earlier_returns = row["returns"].shift(5).rolling(5).sum()
+                if abs(recent_returns) < abs(earlier_returns):
+                    return -1 if row["returns"] > 0 else 1  # Fade slowing momentum
+
+        # GENERIC FALLBACK for strategies not matched above
+        # Use trend + RSI as default
+        if row["ema_20"] > row["ema_50"] and 30 < row["rsi"] < 70:
+            return 1  # Default long in uptrend
+        elif row["ema_20"] < row["ema_50"] and 30 < row["rsi"] < 70:
+            return -1  # Default short in downtrend
 
         return 0  # No signal
 
@@ -1128,6 +1417,761 @@ class EdgeDiscoveryEngine:
         except Exception as e:
             logger.error(f"Error saving discovery: {e}")
             return False
+
+    # ============================================================================
+    # DIVERSE STRATEGY TEMPLATE METHODS
+    # Each generates unique strategy variations with randomized parameters
+    # ============================================================================
+
+    def _random_params(self):
+        """Generate random parameters for strategy variations."""
+        import random
+        return {
+            'pos_size': round(random.uniform(0.01, 0.06), 3),
+            'stop_atr': round(random.uniform(0.5, 2.5), 1),
+            'take_profit': round(random.uniform(1.5, 4.0), 1),
+            'period': random.randint(5, 50),
+            'multiplier': round(random.uniform(0.5, 3.0), 1),
+            'threshold': round(random.uniform(0.1, 2.0), 1)
+        }
+
+    # MOMENTUM STRATEGIES
+    def _ema_crossover_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"EMA Crossover Momentum (EMA{p['period']}/EMA{p['period']*2})",
+            entry_conditions={
+                "fast_ema": f"EMA{p['period']}",
+                "slow_ema": f"EMA{p['period']*2}",
+                "signal": f"crossover with {p['threshold']} std confirmation"
+            },
+            exit_conditions={
+                "take_profit": f"{p['take_profit']} * ATR",
+                "stop_loss": f"{p['stop_atr']} * ATR",
+                "time_stop": f"{p['period']} hours"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/2, 2),
+            expected_return=round(p['threshold'] * 0.01, 3),
+            expected_drawdown=round(p['pos_size'] * 2, 2)
+        )
+
+    def _rsi_momentum_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"RSI Momentum Breakout (RSI{p['period']}, threshold={p['threshold']})",
+            entry_conditions={
+                "rsi_period": p['period'],
+                "entry": f"RSI breaks {50 + p['threshold']*10}",
+                "confirmation": "volume above average"
+            },
+            exit_conditions={
+                "exit": f"RSI reaches {70 + p['threshold']*5}",
+                "stop": f"{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/3, 2),
+            expected_return=round(p['threshold'] * 0.008, 3),
+            expected_drawdown=round(p['pos_size'] * 1.8, 2)
+        )
+
+    def _macd_momentum_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"MACD Histogram Momentum (12,{p['period']},{p['period']*2})",
+            entry_conditions={
+                "macd_fast": "12",
+                "macd_slow": str(p['period']),
+                "macd_signal": str(p['period']*2),
+                "signal": f"histogram turns positive with {p['threshold']*0.5} threshold"
+            },
+            exit_conditions={
+                "exit": "histogram turns negative",
+                "stop": f"{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/2.5, 2),
+            expected_return=round(p['threshold'] * 0.007, 3),
+            expected_drawdown=round(p['pos_size'] * 1.5, 2)
+        )
+
+    def _breakout_pullback_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"Breakout Pullback Entry ({p['period']}-period high/low)",
+            entry_conditions={
+                "breakout": f"price breaks {p['period']}-period high/low",
+                "pullback": f"retraces to {p['threshold']*0.3} of breakout",
+                "entry": "on pullback completion"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']} * risk",
+                "stop": f"beyond pullback extreme by {p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/2.2, 2),
+            expected_return=round(p['threshold'] * 0.009, 3),
+            expected_drawdown=round(p['pos_size'] * 1.6, 2)
+        )
+
+    # MEAN REVERSION STRATEGIES
+    def _bollinger_reversion_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.VOLATILITY_REGIME,
+            description=f"Bollinger Band Mean Reversion ({p['period']}-period, {p['multiplier']} std)",
+            entry_conditions={
+                "bb_period": p['period'],
+                "bb_std": p['multiplier'],
+                "entry": f"price touches ±{p['multiplier']} std band",
+                "confirmation": "RSI shows overbought/oversold"
+            },
+            exit_conditions={
+                "target": "middle band (SMA)",
+                "stop": f"{p['stop_atr']} ATR from entry"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.8, 2),
+            expected_return=round(p['threshold'] * 0.006, 3),
+            expected_drawdown=round(p['pos_size'] * 1.2, 2)
+        )
+
+    def _rsi_reversal_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.VOLATILITY_REGIME,
+            description=f"RSI Extremes Reversal (RSI{p['period']}, extreme={30-p['threshold']*5})",
+            entry_conditions={
+                "rsi_period": p['period'],
+                "oversold": 30 - p['threshold']*5,
+                "overbought": 70 + p['threshold']*5,
+                "signal": "RSI shows extreme reading"
+            },
+            exit_conditions={
+                "target": f"RSI returns to 50",
+                "stop": f"{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/2, 2),
+            expected_return=round(p['threshold'] * 0.007, 3),
+            expected_drawdown=round(p['pos_size'] * 1.4, 2)
+        )
+
+    def _sr_bounce_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MARKET_MICROSTRUCTURE,
+            description=f"Support/Resistance Bounce ({p['period']}-period S/R levels)",
+            entry_conditions={
+                "sr_period": p['period'],
+                "entry": f"price approaches {p['period']}-period S/R with {p['threshold']*0.5}% tolerance",
+                "confirmation": "volume spike or rejection wick"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']} * risk",
+                "stop": f"{p['stop_atr']} ATR beyond S/R"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.5, 2),
+            expected_return=round(p['threshold'] * 0.008, 3),
+            expected_drawdown=round(p['pos_size'] * 1.3, 2)
+        )
+
+    def _fib_reversal_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.VOLATILITY_REGIME,
+            description=f"Fibonacci Retracement Fade ({p['threshold']}.0% retracement level)",
+            entry_conditions={
+                "fib_level": f"{p['threshold']}.0% retracement",
+                "trend": f"{p['period']}-period trend identified",
+                "entry": f"price retraces to {p['threshold']}.0% Fib level"
+            },
+            exit_conditions={
+                "target": f"trend continuation to {p['take_profit']*0.3}%",
+                "stop": f"next Fib level ±{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.6, 2),
+            expected_return=round(p['threshold'] * 0.007, 3),
+            expected_drawdown=round(p['pos_size'] * 1.5, 2)
+        )
+
+    # VOLATILITY STRATEGIES
+    def _atr_breakout_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.VOLATILITY_REGIME,
+            description=f"ATR Breakout Expansion (ATR{p['period']}>{p['multiplier']}x average)",
+            entry_conditions={
+                "atr_period": p['period'],
+                "expansion": f"ATR expands {p['multiplier']}x above average",
+                "confirmation": "price breaks recent range"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']} * initial ATR",
+                "stop": f"{p['stop_atr']} * current ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.4, 2),
+            expected_return=round(p['threshold'] * 0.01, 3),
+            expected_drawdown=round(p['pos_size'] * 1.7, 2)
+        )
+
+    def _vol_squeeze_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.VOLATILITY_REGIME,
+            description=f"Volatility Squeeze Play (Bollinger width<{p['threshold']*0.1}%)",
+            entry_conditions={
+                "squeeze": f"Bollinger width in lowest {p['threshold']*10}% percentile",
+                "breakout": "price breaks squeeze range with volume",
+                "direction": "trade breakout direction"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']} * ATR at breakout",
+                "stop": f"opposite side of squeeze ±{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.3, 2),
+            expected_return=round(p['threshold'] * 0.012, 3),
+            expected_drawdown=round(p['pos_size'] * 1.4, 2)
+        )
+
+    def _vix_spike_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.VOLATILITY_REGIME,
+            description=f"VIX Proxy Spike Fade (vol>{p['multiplier']}x ATR, fade move)",
+            entry_conditions={
+                "vol_spike": f"volatility exceeds {p['multiplier']}x ATR",
+                "price_move": f"price moves >{p['threshold']}% in {p['period']} bars",
+                "direction": "fade the extreme move"
+            },
+            exit_conditions={
+                "target": f"{p['threshold']*0.5}% reversion",
+                "stop": f"{p['stop_atr']} ATR extension"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.7, 2),
+            expected_return=round(p['threshold'] * 0.006, 3),
+            expected_drawdown=round(p['pos_size'] * 1.2, 2)
+        )
+
+    def _gamma_scalp_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MARKET_MICROSTRUCTURE,
+            description=f"Gamma Exposure Scalping (rapid moves, {p['period']}-bar hold)",
+            entry_conditions={
+                "gamma": f"price acceleration >{p['multiplier']} std",
+                "volume": "above average",
+                "entry": "ride gamma expansion"
+            },
+            exit_conditions={
+                "target": f"{p['threshold']*0.3}% move",
+                "stop": f"{p['stop_atr']} ATR",
+                "time_stop": f"{p['period']*5} minutes"
+            },
+            risk_params={"position_size": str(p['pos_size']*0.5)},
+            confidence=round(p['threshold']/2.5, 2),
+            expected_return=round(p['threshold'] * 0.004, 3),
+            expected_drawdown=round(p['pos_size'], 2)
+        )
+
+    # TIME-BASED STRATEGIES
+    def _asian_session_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.TIME_PATTERN,
+            description=f"Asian Session Range Fade (UTC 20:00-02:00, vol adj={p['threshold']})",
+            entry_conditions={
+                "session": "Asian (UTC 20:00-02:00)",
+                "range": f"price moves >{p['threshold']*0.5}% from session open",
+                "entry": "fade the move at session extremes"
+            },
+            exit_conditions={
+                "target": "return to session VWAP",
+                "stop": f"{p['stop_atr']} ATR",
+                "time_exit": "session end"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/2, 2),
+            expected_return=round(p['threshold'] * 0.007, 3),
+            expected_drawdown=round(p['pos_size'] * 1.3, 2)
+        )
+
+    def _london_open_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.TIME_PATTERN,
+            description=f"London Open Breakout (UTC 07:00-08:00, thresh={p['threshold']}%)",
+            entry_conditions={
+                "session": "London open (UTC 07:00-08:00)",
+                "breakout": f"price breaks {p['period']}-period Asian range by {p['threshold']*0.3}%",
+                "confirmation": "volume above Asian average"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']*0.5}% of daily ATR",
+                "stop": f"{p['stop_atr']} ATR",
+                "time_exit": "12:00 UTC"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.5, 2),
+            expected_return=round(p['threshold'] * 0.011, 3),
+            expected_drawdown=round(p['pos_size'] * 1.5, 2)
+        )
+
+    def _ny_open_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.TIME_PATTERN,
+            description=f"NY Open Momentum (UTC 13:00-14:00, trend={p['period']}h)",
+            entry_conditions={
+                "session": "NY open (UTC 13:00-14:00)",
+                "trend": f"{p['period']}h trend direction pre-open",
+                "entry": "continue trend direction on open"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']*0.4}% move",
+                "stop": f"{p['stop_atr']} ATR",
+                "time_exit": "17:00 UTC"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.6, 2),
+            expected_return=round(p['threshold'] * 0.009, 3),
+            expected_drawdown=round(p['pos_size'] * 1.4, 2)
+        )
+
+    def _eod_reversal_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.TIME_PATTERN,
+            description=f"End-of-Day Reversal (UTC 22:00-00:00, profit taking)",
+            entry_conditions={
+                "session": "EOD (UTC 22:00-00:00)",
+                "signal": f"daily move >{p['threshold']}%, likely profit-taking",
+                "entry": "fade the daily trend"
+            },
+            exit_conditions={
+                "target": f"{p['threshold']*0.3}% reversion",
+                "stop": f"{p['stop_atr']} ATR",
+                "time_exit": "midnight UTC"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/2.2, 2),
+            expected_return=round(p['threshold'] * 0.005, 3),
+            expected_drawdown=round(p['pos_size'] * 1.1, 2)
+        )
+
+    def _weekend_gap_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.TIME_PATTERN,
+            description=f"Weekend Gap Fade (gap>{p['threshold']}%, fade direction)",
+            entry_conditions={
+                "signal": f"weekend gap >{p['threshold']}%",
+                "entry": "fade the gap direction",
+                "confirmation": "first 1h candle shows rejection"
+            },
+            exit_conditions={
+                "target": "gap fill (Friday close)",
+                "stop": f"{p['stop_atr']} ATR beyond gap extreme"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.8, 2),
+            expected_return=round(p['threshold'] * 0.006, 3),
+            expected_drawdown=round(p['pos_size'] * 1.2, 2)
+        )
+
+    def _news_play_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.TIME_PATTERN,
+            description=f"CPI/Pivot News Play (scheduled news, vol={p['multiplier']}x)",
+            entry_conditions={
+                "event": "CPI/FOMC/PPI releases",
+                "pre_vol": f"volatility <{p['threshold']*0.5}% for 1h pre-event",
+                "entry": "trade breakout direction post-event"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']*0.6}% of pre-event range",
+                "stop": f"{p['stop_atr']} ATR",
+                "time_exit": "2h post-event"
+            },
+            risk_params={"position_size": str(p['pos_size']*0.8)},
+            confidence=round(p['threshold']/2.5, 2),
+            expected_return=round(p['threshold'] * 0.008, 3),
+            expected_drawdown=round(p['pos_size'] * 1.6, 2)
+        )
+
+    # MARKET MICROSTRUCTURE
+    def _order_flow_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MARKET_MICROSTRUCTURE,
+            description=f"Order Flow Imbalance (tick delta>{p['multiplier']}std, ride flow)",
+            entry_conditions={
+                "imbalance": f"tick delta >{p['multiplier']} std from mean",
+                "confirmation": "price follows imbalance",
+                "entry": "ride order flow direction"
+            },
+            exit_conditions={
+                "target": f"{p['threshold']*0.4}% move",
+                "stop": f"flow reverses ±{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size']*0.7)},
+            confidence=round(p['threshold']/3, 2),
+            expected_return=round(p['threshold'] * 0.004, 3),
+            expected_drawdown=round(p['pos_size'], 2)
+        )
+
+    def _liquidity_sweep_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MARKET_MICROSTRUCTURE,
+            description=f"Liquidity Sweep Reversal (wicks>{p['threshold']*20}%, reverse at sweep)",
+            entry_conditions={
+                "sweep": f"wick >{p['threshold']*20}% of candle, volume spike",
+                "entry": "reverse after sweep completes",
+                "confirmation": "quick rejection"
+            },
+            exit_conditions={
+                "target": "return to sweep origin",
+                "stop": f"{p['stop_atr']} ATR beyond sweep"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.6, 2),
+            expected_return=round(p['threshold'] * 0.008, 3),
+            expected_drawdown=round(p['pos_size'] * 1.3, 2)
+        )
+
+    def _iceberg_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MARKET_MICROSTRUCTURE,
+            description=f"Iceberg Order Detection (absorption at level, fade it)",
+            entry_conditions={
+                "absorption": f"large volume absorbed at price for >{p['period']*5} bars",
+                "signal": "price fails to break through",
+                "entry": "fade the breakout attempt"
+            },
+            exit_conditions={
+                "target": f"{p['threshold']*0.3}% against absorbed level",
+                "stop": f"{p['stop_atr']} ATR beyond level"
+            },
+            risk_params={"position_size": str(p['pos_size']*0.6)},
+            confidence=round(p['threshold']/2.8, 2),
+            expected_return=round(p['threshold'] * 0.005, 3),
+            expected_drawdown=round(p['pos_size'] * 1.1, 2)
+        )
+
+    def _tick_volume_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MARKET_MICROSTRUCTURE,
+            description=f"Tick Volume Anomaly (vol>{p['multiplier']}x avg, fade extreme)",
+            entry_conditions={
+                "anomaly": f"tick volume >{p['multiplier']}x average",
+                "price": "price at extreme of recent range",
+                "entry": "fade the volume spike direction"
+            },
+            exit_conditions={
+                "target": f"{p['threshold']*0.2}% reversion",
+                "stop": f"{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size']*0.5)},
+            confidence=round(p['threshold']/3.5, 2),
+            expected_return=round(p['threshold'] * 0.003, 3),
+            expected_drawdown=round(p['pos_size'] * 0.8, 2)
+        )
+
+    def _spread_dynamics_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MARKET_MICROSTRUCTURE,
+            description=f"Bid-Ask Spread Dynamics (spread>{p['multiplier']}x avg, mean revert)",
+            entry_conditions={
+                "spread": f"bid-ask spread >{p['multiplier']}x average",
+                "signal": "widening spread indicates stress",
+                "entry": "fade the move that caused widening"
+            },
+            exit_conditions={
+                "target": "spread normalizes",
+                "stop": f"{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size']*0.4)},
+            confidence=round(p['threshold']/4, 2),
+            expected_return=round(p['threshold'] * 0.002, 3),
+            expected_drawdown=round(p['pos_size'] * 0.6, 2)
+        )
+
+    # STATISTICAL ARBITRAGE
+    def _pairs_trading_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.CORRELATION_ARBITRAGE,
+            description=f"Pairs Trading Signal (SOL-BTC, z>{p['threshold']} std)",
+            entry_conditions={
+                "pair": "SOLUSDT vs BTCUSDT",
+                "signal": f"ratio deviates >{p['threshold']} std from mean",
+                "entry": "long underperformer, short outperformer"
+            },
+            exit_conditions={
+                "target": "ratio returns to mean",
+                "stop": f"{p['stop_atr']} std expansion"
+            },
+            risk_params={"position_size": str(p['pos_size']*0.5)},
+            confidence=round(p['threshold']/2.2, 2),
+            expected_return=round(p['threshold'] * 0.004, 3),
+            expected_drawdown=round(p['pos_size'], 2)
+        )
+
+    def _stat_arb_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.CORRELATION_ARBITRAGE,
+            description=f"Statistical Mean Reversion (dev>{p['threshold']}std, {p['period']}-bar mean)",
+            entry_conditions={
+                "deviation": f"price >{p['threshold']} std from {p['period']}-bar mean",
+                "entry": "fade the deviation",
+                "confirmation": "volume not confirming move"
+            },
+            exit_conditions={
+                "target": "return to mean",
+                "stop": f"{p['stop_atr']} std from entry"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/2, 2),
+            expected_return=round(p['threshold'] * 0.005, 3),
+            expected_drawdown=round(p['pos_size'] * 1.2, 2)
+        )
+
+    def _cointegration_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.CORRELATION_ARBITRAGE,
+            description=f"Cointegration Breakdown (residual>{p['threshold']}std, reversion)",
+            entry_conditions={
+                "coint": f"SOL-BTC cointegration residual >{p['threshold']} std",
+                "entry": "trade convergence",
+                "hedge": "delta-neutral approach"
+            },
+            exit_conditions={
+                "target": "residual returns to zero",
+                "stop": f"{p['stop_atr']} std residual expansion"
+            },
+            risk_params={"position_size": str(p['pos_size']*0.6)},
+            confidence=round(p['threshold']/2.5, 2),
+            expected_return=round(p['threshold'] * 0.003, 3),
+            expected_drawdown=round(p['pos_size'] * 0.9, 2)
+        )
+
+    def _zscore_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.CORRELATION_ARBITRAGE,
+            description=f"Z-Score Extreme Entry (z>{p['multiplier']}, fade signal)",
+            entry_conditions={
+                "zscore": f"price z-score >{p['multiplier']} or <{-p['multiplier']}",
+                "entry": "fade the extreme z-score",
+                "lookback": p['period']
+            },
+            exit_conditions={
+                "target": "z-score returns to 0",
+                "stop": f"z-score expands to ±{p['multiplier']*1.5}"
+            },
+            risk_params={"position_size": str(p['pos_size']*0.7)},
+            confidence=round(p['threshold']/2.8, 2),
+            expected_return=round(p['threshold'] * 0.004, 3),
+            expected_drawdown=round(p['pos_size'] * 1.1, 2)
+        )
+
+    # PATTERN RECOGNITION
+    def _double_pattern_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"Double Top/Bottom ({p['period']}-bar pattern, confirm on break)",
+            entry_conditions={
+                "pattern": f"double top/bottom over {p['period']} bars",
+                "neckline": f"{p['threshold']*0.5}% price level",
+                "confirmation": "break of neckline with volume"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']*0.4}% pattern height",
+                "stop": f"beyond opposite peak by {p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.8, 2),
+            expected_return=round(p['threshold'] * 0.009, 3),
+            expected_drawdown=round(p['pos_size'] * 1.4, 2)
+        )
+
+    def _head_shoulders_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"Head and Shoulders ({p['period']*2}-bar pattern, neckline break)",
+            entry_conditions={
+                "pattern": f"H&S over {p['period']*2} bars",
+                "neckline": f"{p['threshold']*0.4}% level",
+                "confirmation": "break with declining volume"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']*0.5}% pattern height",
+                "stop": f"beyond head by {p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.6, 2),
+            expected_return=round(p['threshold'] * 0.01, 3),
+            expected_drawdown=round(p['pos_size'] * 1.5, 2)
+        )
+
+    def _triangle_breakout_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.VOLATILITY_REGIME,
+            description=f"Triangle Breakout ({p['period']*3}-bar consolidation, directional break)",
+            entry_conditions={
+                "pattern": f"triangle over {p['period']*3} bars, narrowing range",
+                "breakout": f"price breaks with >{p['threshold']*0.3}% move",
+                "confirmation": "volume expansion"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']*0.6}% of triangle base",
+                "stop": f"opposite side ±{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.4, 2),
+            expected_return=round(p['threshold'] * 0.011, 3),
+            expected_drawdown=round(p['pos_size'] * 1.3, 2)
+        )
+
+    def _flag_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"Flag Pattern Continuation ({p['period']}-bar flag, ride trend)",
+            entry_conditions={
+                "pattern": f"bull/bear flag over {p['period']} bars",
+                "pole": f"strong prior move >{p['threshold']*0.5}%",
+                "entry": "breakout of flag in pole direction"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']*0.7}% of pole length",
+                "stop": f"{p['stop_atr']} ATR beyond flag"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.5, 2),
+            expected_return=round(p['threshold'] * 0.01, 3),
+            expected_drawdown=round(p['pos_size'] * 1.4, 2)
+        )
+
+    def _cup_handle_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"Cup and Handle ({p['period']*4}-bar pattern, breakout confirmation)",
+            entry_conditions={
+                "pattern": f"cup and handle over {p['period']*4} bars",
+                "cup_depth": f"U-shape >{p['threshold']*0.4}% depth",
+                "entry": "breakout from handle with volume"
+            },
+            exit_conditions={
+                "target": f"return to cup rim +{p['take_profit']*0.3}%",
+                "stop": f"bottom of cup ±{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.7, 2),
+            expected_return=round(p['threshold'] * 0.012, 3),
+            expected_drawdown=round(p['pos_size'] * 1.6, 2)
+        )
+
+    # ADVANCED/ML-INSPIRED
+    def _multi_timeframe_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"Multi-Timeframe Alignment ({p['period']}m/{p['period']*4}m/{p['period']*8}m aligned)",
+            entry_conditions={
+                "timeframes": f"{p['period']}m, {p['period']*4}m, {p['period']*8}m",
+                "signal": "all timeframes show same direction",
+                "entry": "enter when lower timeframe aligns"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']*0.5}% of higher TF ATR",
+                "stop": f"{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.3, 2),
+            expected_return=round(p['threshold'] * 0.011, 3),
+            expected_drawdown=round(p['pos_size'] * 1.4, 2)
+        )
+
+    def _trend_strength_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"Trend Strength Adaptive (ADX>{p['threshold']*10}, adapt position)",
+            entry_conditions={
+                "adx": f"ADX >{p['threshold']*10} (strong trend)",
+                "entry": "pullback to key level in trend direction",
+                "adapt": f"position size scaled by ADX/{p['threshold']*10}"
+            },
+            exit_conditions={
+                "target": f"next support/resistance ({p['take_profit']*0.4}% ATR)",
+                "stop": f"{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.4, 2),
+            expected_return=round(p['threshold'] * 0.01, 3),
+            expected_drawdown=round(p['pos_size'] * 1.3, 2)
+        )
+
+    def _regime_switch_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.VOLATILITY_REGIME,
+            description=f"Regime Switching Model (detect trend/range, switch strategy)",
+            entry_conditions={
+                "regime": f"detect market regime (trend/range) using {p['period']}-bar ATR",
+                "trend_strategy": "momentum if trending",
+                "range_strategy": "mean reversion if ranging"
+            },
+            exit_conditions={
+                "target": f"{p['take_profit']*0.5}% of regime-specific target",
+                "stop": f"{p['stop_atr']} ATR or regime change"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/1.6, 2),
+            expected_return=round(p['threshold'] * 0.009, 3),
+            expected_drawdown=round(p['pos_size'] * 1.2, 2)
+        )
+
+    def _momentum_decay_strategy(self):
+        p = self._random_params()
+        return EdgeCandidate(
+            edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
+            description=f"Momentum Decay Model (rate of change slowing, fade)",
+            entry_conditions={
+                "momentum": f"{p['period']}-bar ROC shows strong move",
+                "decay": f"rate of change declining over {p['period']//2} bars",
+                "entry": "fade as momentum decays"
+            },
+            exit_conditions={
+                "target": f"{p['threshold']*0.3}% reversal",
+                "stop": f"{p['stop_atr']} ATR"
+            },
+            risk_params={"position_size": str(p['pos_size'])},
+            confidence=round(p['threshold']/2, 2),
+            expected_return=round(p['threshold'] * 0.006, 3),
+            expected_drawdown=round(p['pos_size'] * 1.1, 2)
+        )
 
     async def run_discovery_cycle(self) -> Dict[str, Any]:
         """
