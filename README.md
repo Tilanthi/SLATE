@@ -1,0 +1,284 @@
+# SLATE - Strategy Learning & Autonomous Trading Engine
+
+**AI-driven autonomous trading strategy discovery system for cryptocurrency markets**
+
+![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Paper Trading](https://img.shields.io/badge/trading-paper_only-orange.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+## 🧪 What is SLATE?
+
+SLATE (Strategy Learning & Autonomous Trading Engine) is an intelligent system that automatically discovers, tests, and validates cryptocurrency trading strategies using machine learning and statistical analysis. It continuously explores diverse strategy templates to find profitable edges in market data.
+
+**⚠️ IMPORTANT:** SLATE runs in **PAPER TRADING MODE ONLY**. No real money is ever risked.
+
+## ✨ Key Features
+
+- **🤖 Autonomous Discovery**: Continuously tests 35+ diverse strategy templates
+- **📊 Modern Dashboard**: Real-time web interface with charts and analytics
+- **💰 Brutal Realism**: Honest backtesting with realistic fees, slippage, and fill rates
+- **🎯 Diverse Strategies**: Momentum, mean reversion, time patterns, microstructure, statistical arbitrage, and more
+- **🧠 Monte Carlo Validation**: 100+ path validation for robustness
+- **📈 Performance Metrics**: Sharpe ratio, drawdown, win rate, profit factor analysis
+- **🔄 Continuous Learning**: Auto-runs discovery cycles every 5 seconds
+- **🗄️ Persistent Memory**: Knowledge graph storage of discovered edges
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.8+
+- Dependencies: `pip install -e ".[dev]`
+
+### Installation
+
+```bash
+git clone https://github.com/Tilanthi/SLATE.git
+cd SLATE
+pip install -e .
+```
+
+### Start the Server
+
+```bash
+python -m slate_core.server
+```
+
+The dashboard will be available at: **http://127.0.0.1:8788**
+
+## 📱 Dashboard Features
+
+### Main Dashboard (http://127.0.0.1:8788)
+
+- **Real-time Statistics**: Live discovery metrics and performance
+- **Strategy Performance**: Top strategies with detailed metrics
+- **Interactive Charts**: Return distribution, win rates, performance over time
+- **Discovery Control**: Start/stop discovery, manual refresh
+- **Strategy Filtering**: Sort by return, profit, Sharpe ratio, win rate
+- **CSV Export**: Export strategy data for further analysis
+- **Auto-refresh**: Updates every 5 seconds
+
+### API Documentation
+
+- **Swagger UI**: http://127.0.0.1:8788/docs
+- **ReDoc**: http://127.0.0.1:8788/redoc
+- **Statistics API**: `/api/discovery/statistics`
+- **Top Strategies**: `/api/discovery/top?limit=10&sort_by=total_profit_usdt`
+
+## 🧩 Strategy Types
+
+SLATE tests **35+ diverse strategy templates** across 8 categories:
+
+### Momentum Strategies
+- EMA Crossover Momentum
+- RSI Momentum Breakout
+- MACD Histogram Momentum
+- Breakout Pullback Entry
+
+### Mean Reversion Strategies
+- Bollinger Band Mean Reversion
+- RSI Extremes Reversal
+- Support/Resistance Bounce
+- Fibonacci Retracement Fade
+
+### Volatility Strategies
+- ATR Breakout Expansion
+- Volatility Squeeze Play
+- VIX Proxy Spike Fade
+- Gamma Exposure Scalping
+
+### Time-Based Strategies
+- Asian Session Range Fade
+- London Open Volatility Breakout
+- NY Open Momentum
+- End-of-Day Reversal
+- Weekend Gap Fade
+- CPI/Pivot News Play
+
+### Market Microstructure
+- Order Flow Imbalance
+- Liquidity Sweep Reversal
+- Iceberg Order Detection
+- Tick Volume Anomaly
+- Bid-Ask Spread Dynamics
+
+### Statistical Arbitrage
+- Pairs Trading Signal
+- Statistical Mean Reversion
+- Cointegration Breakdown
+- Z-Score Extreme Entry
+
+### Pattern Recognition
+- Double Top/Bottom
+- Head and Shoulders
+- Triangle Breakout
+- Flag Pattern Continuation
+- Cup and Handle
+
+### Advanced/ML-Inspired
+- Multi-Timeframe Alignment
+- Trend Strength Adaptive
+- Regime Switching Model
+- Momentum Decay Model
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# API Keys (if using external data sources)
+BINANCE_API_KEY=your_api_key
+BINANCE_API_SECRET=your_api_secret
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8788
+```
+
+### Backtest Configuration
+
+Located in `slate_core/discovery/edge_discovery_engine.py`:
+
+```python
+@dataclass
+class EdgeBacktestConfig:
+    # Transaction costs
+    maker_fee: float = 0.0002      # 0.02%
+    taker_fee: float = 0.0005      # 0.05%
+    base_slippage_bps: int = 10     # 10 bps
+    
+    # Fill realism
+    base_fill_rate: float = 0.85    # 85% fill rate
+    partial_fill_probability: float = 0.15
+    partial_fill_min_size: float = 0.3  # 30% minimum fill
+    
+    # Risk management
+    max_position_size: float = 0.05  # 5% max per position
+    stop_loss_atr_multiple: float = 2.0
+    take_profit_atr_multiple: float = 3.0
+    
+    # Validation
+    monte_carlo_paths: int = 100     # 100 Monte Carlo paths
+    walk_forward_windows: int = 5
+```
+
+## 📊 Performance Metrics
+
+Each strategy is evaluated using:
+
+- **USDT Profit**: Primary metric (actual profit in USDT)
+- **Return Percentage**: ROI on initial capital
+- **Sharpe Ratio**: Risk-adjusted returns
+- **Sortino Ratio**: Downside risk-adjusted returns
+- **Maximum Drawdown**: Largest peak-to-trough decline
+- **Win Rate**: Percentage of profitable trades
+- **Profit Factor**: Gross profit / gross loss
+- **Beat Market**: Performance vs buy-and-hold
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+SLATE/
+├── slate_core/
+│   ├── server.py                 # FastAPI server & dashboard
+│   ├── static/                    # Web dashboard assets
+│   │   ├── index.html            # Main dashboard
+│   │   ├── css/
+│   │   │   └── dashboard.css     # Dashboard styling
+│   │   └── js/
+│   │       ├── api.js             # API client with retry logic
+│   │       ├── app.js             # Dashboard application logic
+│   │       ├── charts.js          # Chart.js visualizations
+│   │       └── utils.js           # Utility functions
+│   ├── discovery/
+│   │   ├── edge_discovery_engine.py  # Main discovery engine
+│   │   └── discovery_memory.py       # Persistent memory system
+│   └── palace_data/               # Knowledge graph storage
+├── tests/                         # Test suite
+└── requirements.txt               # Python dependencies
+```
+
+### Adding New Strategies
+
+To add a new strategy template:
+
+1. Add a new template method in `edge_discovery_engine.py`
+2. Implement the `_check_entry_signal()` logic for your strategy
+3. Add any required technical indicators to `_calculate_indicators()`
+4. The system will automatically test it with random variations
+
+### Running Tests
+
+```bash
+pytest tests/ -v
+```
+
+## 📈 API Endpoints
+
+### Statistics
+```bash
+GET /api/discovery/statistics
+```
+
+### Top Strategies
+```bash
+GET /api/discovery/top?limit=10&sort_by=total_profit_usdt
+```
+
+### Discovery Control
+```bash
+POST /api/discovery/start
+POST /api/discovery/stop
+GET /api/discovery/status
+```
+
+### Health Check
+```bash
+GET /health
+```
+
+## ⚠️ Disclaimer
+
+**THIS IS PAPER TRADING ONLY**
+
+- No real money is ever risked
+- All results are simulated
+- Past performance does not guarantee future results
+- Always do your own research before trading
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- Built with FastAPI, Python, and JavaScript
+- Uses Chart.js for visualizations
+- Market data from Binance public API
+- Inspired by quantitative trading research
+
+## 📞 Support
+
+For issues, questions, or suggestions:
+- Open an issue on GitHub
+- Check the API documentation at `/docs`
+- Review the test files for examples
+
+---
+
+**Note**: SLATE is actively developed. Features and APIs may change as the system evolves.
+
+**Status**: ✅ Active Development | 🧪 Paper Trading Only
