@@ -5,24 +5,28 @@
     "properties": {
       "edge_type": "market_microstructure",
       "description": "Liquidity sweep detection and reversal (LONG or SHORT)",
-      "profit_usdt": 47.98819470057424,
-      "return_pct": 0.004798819470057424,
-      "drawdown_pct": 0.0036758043084879318,
-      "sharpe": 2.3946679821062187,
+      "profit_usdt": 59.092350912253096,
+      "return_pct": 0.00590923509122531,
+      "drawdown_pct": 0.0015020492499818363,
+      "sharpe": 3.8461247201814914,
       "beat_market": true,
-      "vs_buy_hold": 1584.8002032781305,
-      "mc_win_rate": 0.69,
+      "vs_buy_hold": 1595.9043594898094,
+      "mc_win_rate": 0.65,
       "passed": true,
       "start_price": 97.93,
       "end_price": 82.88,
       "volatility_regime": "unknown",
-      "timestamp": "2026-04-30T14:36:48.422842",
-      "cycle": 1
+      "timestamp": "2026-04-30T17:39:29.583655",
+      "cycle": 3
     },
     "relationships": {
-      "related_to": [],
+      "related_to": [
+        "b1c5f0321535"
+      ],
       "improves_on": [],
-      "similar_to": []
+      "similar_to": [
+        "b1c5f0321535"
+      ]
     }
   },
   "902685a1e6d3": {
@@ -31,24 +35,30 @@
     "properties": {
       "edge_type": "time_pattern",
       "description": "Asian session range fade (LONG or SHORT)",
-      "profit_usdt": 297.1752518588073,
-      "return_pct": 0.029717525185880733,
-      "drawdown_pct": 0.0032736547564910317,
-      "sharpe": 4.281789067629951,
+      "profit_usdt": 315.76899349646555,
+      "return_pct": 0.03157689934964655,
+      "drawdown_pct": 0.0036425515497558246,
+      "sharpe": 4.546043167969922,
       "beat_market": true,
-      "vs_buy_hold": 1833.9872604363636,
+      "vs_buy_hold": 1852.5810020740219,
       "mc_win_rate": 1.0,
       "passed": true,
       "start_price": 97.93,
       "end_price": 82.88,
       "volatility_regime": "unknown",
-      "timestamp": "2026-04-30T14:36:55.150378",
-      "cycle": 1
+      "timestamp": "2026-04-30T17:39:35.999732",
+      "cycle": 3
     },
     "relationships": {
-      "related_to": [],
+      "related_to": [
+        "902685a1e6d3",
+        "4c84c892761f"
+      ],
       "improves_on": [],
-      "similar_to": []
+      "similar_to": [
+        "902685a1e6d3",
+        "4c84c892761f"
+      ]
     }
   },
   "4c84c892761f": {
@@ -57,26 +67,30 @@
     "properties": {
       "edge_type": "time_pattern",
       "description": "London open volatility breakout (LONG or SHORT)",
-      "profit_usdt": 409.1450929729326,
-      "return_pct": 0.04091450929729326,
-      "drawdown_pct": 0.003187487426573989,
-      "sharpe": 5.924462759100503,
+      "profit_usdt": 375.6450643606422,
+      "return_pct": 0.037564506436064224,
+      "drawdown_pct": 0.0022370760903504244,
+      "sharpe": 5.823613126932507,
       "beat_market": true,
-      "vs_buy_hold": 1945.957101550489,
-      "mc_win_rate": 0.8,
+      "vs_buy_hold": 1912.4570729381985,
+      "mc_win_rate": 0.71,
       "passed": true,
       "start_price": 97.93,
       "end_price": 82.88,
       "volatility_regime": "unknown",
-      "timestamp": "2026-04-30T14:37:01.201096",
-      "cycle": 1
+      "timestamp": "2026-04-30T17:39:41.860131",
+      "cycle": 3
     },
     "relationships": {
       "related_to": [
-        "902685a1e6d3"
+        "902685a1e6d3",
+        "4c84c892761f"
       ],
       "improves_on": [],
-      "similar_to": []
+      "similar_to": [
+        "902685a1e6d3",
+        "4c84c892761f"
+      ]
     }
   }
 }

@@ -245,7 +245,7 @@ async def get_top_strategies(limit: int = 10, sort_by: str = "total_profit_usdt"
         query = f"""
             SELECT
                 edge_type,
-                parameters,
+                edge_description,
                 total_profit_usdt,
                 total_return_pct,
                 sharpe_ratio,
@@ -267,7 +267,7 @@ async def get_top_strategies(limit: int = 10, sort_by: str = "total_profit_usdt"
         for row in rows:
             strategies.append({
                 "edge_type": row[0],
-                "parameters": row[1],
+                "edge_description": row[1],
                 "total_profit_usdt": row[2],
                 "total_return_pct": row[3],  # This is the decimal percentage (0.0379 = 3.79%)
                 "sharpe_ratio": row[4],
@@ -426,6 +426,26 @@ async def dashboard():
             font-weight: bold;
             color: #3498db;
         }
+        .stat-card .value.running {
+            color: #27ae60;
+        }
+        .stat-card .value.idle {
+            color: #95a5a6;
+        }
+        .strategy-item {
+            border-bottom: 1px solid #ecf0f1;
+            padding: 12px 0;
+        }
+        .strategy-item:last-child {
+            border-bottom: none;
+        }
+        .strategy-item small {
+            color: #7f8c8d;
+        }
+        .loading {
+            color: #95a5a6;
+            font-style: italic;
+        }
         .actions {
             background: white;
             border-radius: 10px;
@@ -533,7 +553,8 @@ async def dashboard():
 
         <div id="strategies">
             <h2>Top Strategies</h2>
-            <div id="strategies-list">Loading strategies...</div>
+            <p id="discovery-status" class="loading">Discovery runs automatically in the background...</p>
+            <div id="strategies-list"></div>
         </div>
     </div>
 
@@ -544,7 +565,15 @@ async def dashboard():
                 const statsResp = await fetch('/api/discovery/statistics');
                 const stats = await statsResp.json();
 
-                document.getElementById('status').textContent = stats.discovery_running ? 'Running' : 'Idle';
+                const statusEl = document.getElementById('status');
+                if (stats.discovery_running) {
+                    statusEl.textContent = '● Running';
+                    statusEl.className = 'value running';
+                } else {
+                    statusEl.textContent = '○ Idle';
+                    statusEl.className = 'value idle';
+                }
+
                 document.getElementById('total-tests').textContent = stats.total_tests || 0;
                 document.getElementById('profitable').textContent = stats.profitable_strategies || 0;
                 // best_return is now a decimal (0.0379), multiply by 100 for percentage
@@ -555,19 +584,33 @@ async def dashboard():
                 const data = await strategiesResp.json();
 
                 const list = document.getElementById('strategies-list');
+                const statusEl = document.getElementById('discovery-status');
+
                 if (data.strategies && data.strategies.length > 0) {
+                    // Hide the status message when we have strategies
+                    if (statusEl) statusEl.style.display = 'none';
+
                     list.innerHTML = data.strategies.map((s, i) => `
                         <div class="strategy-item">
-                            <strong>#${i+1} ${s.edge_type}</strong><br>
+                            <strong>#${i+1} ${s.edge_type}</strong>: ${s.edge_description}<br>
+                            <small>
                             Return: ${(s.total_return_pct * 100).toFixed(2)}% |
                             Profit: $${s.total_profit_usdt.toFixed(2)} |
                             Sharpe: ${s.sharpe_ratio.toFixed(2)} |
                             Win Rate: ${(s.win_rate * 100).toFixed(1)}% |
-                            Drawdown: ${(s.max_drawdown_pct * 100).toFixed(1)}%
+                            Drawdown: ${(s.max_drawdown_pct * 100).toFixed(2)}%
+                            </small>
                         </div>
                     `).join('');
                 } else {
-                    list.innerHTML = '<p>No strategies discovered yet. Start discovery to begin.</p>';
+                    // Show loading status when no strategies yet
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.textContent = stats.discovery_running
+                            ? 'Discovery is running... Strategies will appear here shortly.'
+                            : 'No strategies yet. Click "Start Discovery" to begin.';
+                    }
+                    list.innerHTML = '';
                 }
 
                 // Update button states
