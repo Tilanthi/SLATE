@@ -2,793 +2,1265 @@
 
 **Strategy Learning & Autonomous Trading Engine**
 
-*Complete Guide to Installation, Architecture, and Usage*
+*A Complete Guide to Discovering, Testing, and Evolving Trading Strategies*
 
 ---
 
 ## Table of Contents
 
-1. [Introduction](#1-introduction)
-2. [System Architecture](#2-system-architecture)
-3. [Installation Guide](#3-installation-guide)
-4. [Getting Started](#4-getting-started)
-5. [The Dashboard Interface](#5-the-dashboard-interface)
-6. [Building Trading Strategies](#6-building-trading-strategies)
-7. [Discovery and Self-Evolution](#7-discovery-and-self-evolution)
-8. [10 Examples for Finding Alpha](#8-10-examples-for-finding-alpha)
-9. [API Reference](#9-api-reference)
-10. [Troubleshooting](#10-troubleshooting)
+1. [Welcome to SLATE](#1-welcome-to-slate)
+2. [What SLATE Can Do For You](#2-what-slate-can-do-for-you)
+3. [Getting SLATE Running](#3-getting-slate-running)
+4. [Understanding How SLATE Works](#4-understanding-how-slate-works)
+5. [Using SLATE: Question & Answer Examples](#5-using-slate-question--answer-examples)
+6. [The Discovery System Explained](#6-the-discovery-system-explained)
+7. [How SLATE Evolves and Improves](#7-how-slate-evolves-and-improves)
+8. [Finding Profitable Strategies: 10 Practical Examples](#8-finding-profitable-strategies-10-practical-examples)
+9. [API Quick Reference](#9-api-quick-reference)
+10. [Common Problems and Solutions](#10-common-problems-and-solutions)
 
 ---
 
-## 1. Introduction
+## 1. Welcome to SLATE
 
-SLATE (Strategy Learning & Autonomous Trading Engine) is an advanced AI-driven framework for autonomous trading strategy discovery, backtesting, and evolution. Unlike traditional trading platforms, SLATE focuses on **paper trading only** - no real money is ever risked, making it safe for experimentation and learning.
+Welcome to SLATE - your personal AI research assistant for discovering profitable trading strategies.
 
-### What Makes SLATE Different?
+### What Exactly Is SLATE?
 
-- **Autonomous Discovery**: SLATE discovers new trading strategies automatically using machine learning
-- **Realistic Testing**: All strategies are tested with real market conditions - transaction costs, slippage, and partial fills
-- **Self-Evolution**: Strategies improve over time through continuous learning
-- **Multi-Language Support**: Write strategies in Python, Pine Script, or HaasScript
-- **Risk-Focused**: Built-in Kelly Criterion, VaR calculations, and drawdown controls
+Think of SLATE as an automated research laboratory for trading strategies. Just as a pharmaceutical company uses robots to test thousands of chemical compounds to find effective medicines, SLATE uses artificial intelligence to test thousands of trading strategies to find ones that actually make money.
 
-### Key Principles
+Here's the key difference: SLATE never trades with real money. It only does paper trading - simulating trades to see what would have happened. This means you can experiment freely without any financial risk.
 
-1. **Paper Trading Only**: SLATE never executes real trades
-2. **Brutal Honesty**: No artificial profits - all testing includes realistic fees and slippage
-3. **Continuous Learning**: The system gets smarter with each discovery cycle
-4. **Diversity**: Multiple strategies run simultaneously to reduce risk
-5. **Transparency**: Every decision is logged and explainable
+### Who Is SLATE For?
 
----
+SLATE is designed for:
 
-## 2. System Architecture
+- **Traders** who want to find new strategies without spending months manually testing ideas
+- **Data Scientists** who want a reliable backtesting environment with realistic market assumptions
+- **Researchers** studying market behavior and strategy evolution
+- **Students** learning about algorithmic trading and risk management
+- **Anyone** curious about whether trading strategies can be discovered by AI
 
-SLATE consists of several integrated components that work together autonomously:
+### What "Paper Trading Only" Means
 
-![SLATE Architecture Overview](images/architecture_overview.png)
+SLATE will never:
+- Connect to your exchange account
+- Execute real trades with your money
+- Require API keys for live trading
 
-### Core Components
-
-#### Trading Engine (OODA Cycle)
-
-The heart of SLATE is the Trading Engine, which implements the OODA (Observe-Orient-Decide-Act) cycle:
-
-![OODA Cycle](images/ooda_cycle.png)
-
-1. **Observe**: Collect market data, prices, volumes, and orderbook information
-2. **Orient**: Analyze market conditions, detect regimes, and calculate indicators
-3. **Decide**: Select the best strategy and calculate position sizes
-4. **Act**: Execute paper trades and monitor positions
-5. **Learn**: Update performance metrics and adapt parameters
-
-#### Discovery System
-
-SLATE's discovery system continuously searches for profitable strategies:
-
-![Discovery System](images/discovery_system.png)
-
-**Key Features:**
-- **Realistic Backtesting**: 0.02% maker fee, 0.05% taker fee, 5 basis points slippage
-- **Multi-Path Testing**: Tests each strategy across 100+ bootstrapped price paths
-- **Stigmergic Coordination**: Swarm intelligence ensures strategy diversity
-- **Self-Evolution**: Best strategies are automatically optimized over time
-
-#### Risk Management
-
-- **Kelly Criterion**: Calculates optimal position sizes
-- **Value at Risk (VaR)**: Measures potential losses
-- **Drawdown Control**: Limits maximum drawdown
-- **Portfolio Optimization**: Balances risk across strategies
-
-#### Data Management
-
-- **GraphPalace Database**: Knowledge graph storing strategy relationships
-- **Discovery Database**: SQLite database with tiered storage
-- **Historical Data Archive**: Cached market data for backtesting
+SLATE will:
+- Simulate trades using historical market data
+- Calculate realistic fees and slippage
+- Track what would have happened with real money
+- Help you learn without any financial risk
 
 ---
 
-## 3. Installation Guide
+## 2. What SLATE Can Do For You
 
-### System Requirements
+SLATE automates the entire process of strategy research. Here's what it can do for you:
 
-**Operating System:**
-- macOS 10.15+ (Catalina or later)
-- Linux (Ubuntu 20.04+, Debian 11+, or similar)
-- Windows 10/11 with WSL2
+### Automatic Strategy Discovery
+
+Instead of manually thinking up strategy ideas and testing them one by one, SLATE can generate and test hundreds of strategies automatically.
+
+**What this means for you:**
+- You tell SLATE what market you're interested in (like Bitcoin)
+- SLATE generates different strategy types and tests them
+- SLATE tells you which ones performed best historically
+- You get a ranked list of strategies to explore further
+
+### Realistic Performance Testing
+
+Many backtesting systems give overly optimistic results because they ignore trading costs. SLATE includes realistic market assumptions:
+
+- **Trading fees:** 0.02% for maker orders, 0.05% for taker orders
+- **Slippage:** 0.05% price movement between signal and execution
+- **Partial fills:** 5% of orders don't execute at all
+- **Position limits:** No single trade uses more than 10% of capital
+
+**Why this matters:**
+A strategy that looks great in testing might fail in real life if it only makes small profits that get eaten up by fees. SLATE catches these problems early by being brutally honest about costs.
+
+### Multi-Path Stress Testing
+
+SLATE doesn't just test a strategy once on historical data. It uses "bootstrap resampling" to create 100+ alternative price paths from the same historical data.
+
+**Think of it this way:**
+Imagine you're testing a strategy on Bitcoin price data from 2023. But what if 2023 had played out slightly differently? SLATE creates 100 different "what if" versions of 2023 and tests your strategy on all of them.
+
+**If a strategy performs well on all 100 paths, it's robust. If it only works on one, it's lucky.**
+
+### Swarm Intelligence (Stigmergic Coordination)
+
+SLATE uses a technique inspired by nature called "stigmergy." Ants use stigmergy when they follow pheromone trails left by other ants. SLATE does something similar:
+
+- When a strategy finds a profitable approach, it leaves a "trail" in the knowledge base
+- Other strategies notice these trails and explore similar areas
+- But SLATE also penalizes over-explored areas to maintain diversity
+- The result: a diverse portfolio of strategies, not just copies of one idea
+
+### Self-Evolution
+
+SLATE doesn't just generate random strategies. It learns from what works:
+
+1. **Generate:** Create diverse strategies with different parameters
+2. **Test:** Run realistic backtests on historical data
+3. **Select:** Keep the best performers (top 10% by return)
+4. **Evolve:** Create new strategies by tweaking the best ones
+5. **Repeat:** Keep improving cycle after cycle
+
+Over time, SLATE "evolves" better strategies through survival of the fittest.
+
+### Risk Management Built-In
+
+Every strategy SLATE creates includes automatic risk management:
+
+- **Kelly Criterion:** Calculates the optimal position size based on win rate and average win/loss amounts
+- **Maximum Drawdown Limits:** Strategies that lose too much too fast are discarded
+- **Value at Risk (VaR):** Estimates worst-case scenario losses
+- **Position Sizing:** Never bets more than 10% of capital on a single trade
+
+---
+
+## 3. Getting SLATE Running
+
+### What You Need
 
 **Hardware:**
-- Minimum: 4GB RAM, 2 CPU cores
-- Recommended: 8GB+ RAM, 4+ CPU cores
-- Storage: 500MB free space (+ additional for historical data)
+- Any modern computer (Mac, Linux, or Windows)
+- 4GB of RAM minimum (8GB+ recommended)
+- 500MB of free disk space
 
 **Software:**
 - Python 3.8 or higher
-- pip (Python package installer)
+- An internet connection (to fetch market data)
 
-### Step-by-Step Installation
+### Installation in Three Steps
 
-#### Step 1: Install Python
+#### Step 1: Download SLATE
 
-**On macOS:**
+Open your terminal and navigate to where you want SLATE to live:
+
 ```bash
-# Install Homebrew if not already installed
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install Python
-brew install python@3.11
+cd ~/astrodata/SWARM/SLATE
 ```
 
-**On Linux (Ubuntu/Debian):**
-```bash
-sudo apt update
-sudo apt install python3.11 python3-pip python3-venv
-```
-
-**On Windows:**
-Download and install Python from [python.org](https://www.python.org/downloads/)
-
-#### Step 2: Download SLATE
+Or if you're cloning from GitHub:
 
 ```bash
-# Clone from GitHub
 git clone https://github.com/Tilanthi/SLATE.git
 cd SLATE
 ```
 
-Or download the ZIP file from GitHub and extract it.
+#### Step 2: Install Dependencies
 
-#### Step 3: Install Dependencies
+SLATE needs several Python libraries. Install them all at once:
 
-SLATE requires several Python packages. Install them with:
+```bash
+pip install fastapi uvicorn numpy pandas scipy aiohttp ccxt pytest matplotlib
+```
+
+If you have a requirements.txt file:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Required packages:**
-- `fastapi` - Web framework for the API server
-- `uvicorn` - ASGI server for running FastAPI
-- `numpy`, `pandas` - Data processing
-- `scipy` - Statistical calculations
-- `aiohttp` - Async HTTP client
-- `ccxt` - Cryptocurrency exchange library
-- `pytest` - Testing framework
+#### Step 3: Verify Installation
 
-#### Step 4: Verify Installation
-
-Run the test suite to verify everything works:
+Run the test suite to make sure everything works:
 
 ```bash
 python3 slate_core/run_tests.py
 ```
 
-You should see:
+You should see something like:
+
 ```
-Results: 31 passed, 0 failed
-```
-
-#### Step 5: Configure Environment (Optional)
-
-Create a `.env` file in the SLATE directory:
-
-```bash
-cp .env.example .env
+========= 31 passed in 2.45s =========
 ```
 
-Edit `.env` to customize settings:
-```bash
-# Server Configuration
-SLATE_PORT=8788              # Default port for the web interface
-SLATE_HOST=0.0.0.0           # Listen on all interfaces
-
-# GraphPalace (Optional)
-GRAPHPALACE_ENABLED=false    # Enable advanced knowledge graph
-GRAPHPALACE_PATH=./slate_core/palace_data
-```
-
----
-
-## 4. Getting Started
+All tests passing means SLATE is ready to go!
 
 ### Starting SLATE
 
-Start the SLATE server with:
+Once installed, start SLATE with this command:
 
 ```bash
-python3 -m slate_core.server
+python3 -m slate_core.autonomous_research.server
 ```
 
-You should see output like:
+You'll see output indicating SLATE is running:
+
 ```
-INFO:     Started server process [12345]
+INFO:     Started server process
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8788
 ```
 
-### Accessing the Dashboard
+SLATE is now running and ready to accept requests!
 
-Once SLATE is running, open your web browser and navigate to:
+**Note:** Port 8788 is used to avoid conflicts with other trading systems (ASTRA uses 8787). You can change this with the SLATE_PORT environment variable if needed.
 
-**Main Dashboard:** http://localhost:8788/dashboard
+### Checking That SLATE Works
 
-This shows:
-- Active strategies
-- Current positions (paper trading)
-- Performance metrics
-- System status
-
-**Discovery Dashboard:** http://localhost:8788/discovery-dashboard
-
-This shows:
-- Real-time discovery statistics
-- Top performing strategies
-- Evolution progress
-- Performance charts
-
-**API Documentation:** http://localhost:8788/docs
-
-Interactive API documentation with testing capabilities.
-
-### Quick Test
-
-Let's run a quick discovery cycle to verify everything works:
-
-1. Open a new terminal window
-2. Run this command:
+Let's run a simple test to make sure everything is connected:
 
 ```bash
-curl -X POST http://localhost:8788/api/discovery/trigger
+curl http://localhost:8788/health
 ```
 
-3. Wait a few seconds, then check the Discovery Dashboard
-
-You should see new strategies being discovered and tested!
-
----
-
-## 5. The Dashboard Interface
-
-SLATE provides two main dashboards for monitoring and control:
-
-### Main Dashboard
-
-Located at `http://localhost:8788/dashboard`
-
-**Features:**
-
-**Left Panel - Strategy Management:**
-- Create new strategies
-- Activate/deactivate strategies
-- View strategy performance
-- Edit strategy parameters
-
-**Center Panel - Performance:**
-- Real-time P&L chart
-- Win/Loss ratio
-- Sharpe ratio
-- Maximum drawdown
-
-**Right Panel - Positions:**
-- Current open positions
-- Position sizes
-- Entry/exit prices
-- Unrealized P&L
-
-**Bottom Panel - Activity Feed:**
-- Recent trades
-- System events
-- Discovery notifications
-- Error messages
-
-### Discovery Dashboard
-
-Located at `http://localhost:8788/discovery-dashboard`
-
-**Features:**
-
-**Statistics Cards:**
-- Total tests run
-- Best Sharpe ratio
-- Best return percentage
-- Profitable strategy percentage
-
-**Top Strategies Table:**
-- Strategy name
-- Return percentage
-- Sharpe ratio
-- Max drawdown
-- Win rate
-
-**Performance Charts:**
-- Return distribution
-- Sharpe ratio over time
-- Strategy type breakdown
-
-**Control Buttons:**
-- Start/Stop discovery
-- Trigger single cycle
-- Cleanup database
-- Export results
-
-### Navigation
-
-Both dashboards are accessible from the top navigation bar. You can switch between them seamlessly while SLATE continues running in the background.
-
----
-
-## 6. Building Trading Strategies
-
-SLATE supports multiple ways to create and test trading strategies:
-
-### Strategy Types
-
-SLATE includes 10+ built-in strategy types:
-
-1. **Momentum**: Trades based on price momentum
-2. **Mean Reversion**: Trades price reversals using Bollinger Bands
-3. **Breakout**: Trades breakouts from consolidation
-4. **Trend Following**: Uses moving average crossovers
-5. **Statistical Arbitrage**: Z-score based pairs trading
-6. **Machine Learning**: Uses ML for signal generation
-7. **Regime Switching**: Adapts to market conditions
-8. **Order Flow**: Trades based on orderbook imbalances
-9. **Microstructure**: Exploits market inefficiencies
-10. **Multi-Timeframe**: Combines signals across timeframes
-
-### Creating Strategies via API
-
-**Example 1: Create a Simple Momentum Strategy**
-
-Send a POST request to create a strategy:
+You should get a response like:
 
 ```json
-POST http://localhost:8788/api/strategies
-{
-  "name": "BTC Momentum 1H",
-  "type": "momentum",
-  "symbol": "BTCUSDT",
-  "timeframe": "1h",
-  "parameters": {
-    "period": 14,
-    "threshold": 0.02
+{"status": "healthy", "mode": "paper_trading"}
+```
+
+This confirms SLATE is running in safe paper trading mode.
+
+---
+
+## 4. Understanding How SLATE Works
+
+### The Big Picture
+
+SLATE consists of several interconnected components. Think of it like a research laboratory with different departments:
+
+![SLATE Architecture](images/architecture_overview.png)
+
+Let's walk through what each component does:
+
+### The Trading Engine (OODA Cycle)
+
+SLATE uses a decision-making framework called OODA (Observe-Orient-Decide-Act):
+
+![OODA Cycle](images/ooda_cycle.png)
+
+**Here's how it works:**
+
+1. **Observe:** SLATE watches the market and collects data
+   - Current prices
+   - Trading volume
+   - Order book depth
+   - Market events
+
+2. **Orient:** SLATE analyzes the data
+   - Calculates technical indicators (RSI, MACD, etc.)
+   - Detects market conditions (trending vs ranging)
+   - Assesses risk levels
+   - Ranks available strategies
+
+3. **Decide:** SLATE chooses what to do
+   - Selects the best strategy for current conditions
+   - Calculates how much to trade (position sizing)
+   - Sets entry and exit points
+   - Applies risk rules
+
+4. **Act:** SLATE executes the trade (on paper)
+   - Records the paper trade
+   - Monitors the position
+   - Tracks performance
+
+5. **Learn:** SLATE updates its knowledge
+   - Records what worked and what didn't
+   - Updates strategy performance metrics
+   - Adjusts parameters for next time
+
+### The Discovery System
+
+This is where SLATE gets really interesting. The discovery system is SLATE's research department:
+
+![Discovery System](images/discovery_system.png)
+
+**The discovery process:**
+
+1. **Strategy Generator:** Creates new strategies to test
+   - 10+ different strategy types
+   - Randomized parameters within sensible ranges
+   - Multiple timeframes (15 minutes to 1 day)
+
+2. **Realistic Backtester:** Tests each strategy honestly
+   - Includes all trading fees
+   - Models slippage realistically
+   - Simulates partial fills
+   - No artificial advantages
+
+3. **Multi-Path Testing:** Stress tests each strategy
+   - Creates 100+ price path scenarios
+   - Tests strategy on each path
+   - Keeps only strategies that work on most paths
+
+4. **Self-Evolution Engine:** Improves strategies over time
+   - Selects top performers
+   - Creates optimized variants
+   - Discards underperformers
+   - Continuously improves the gene pool
+
+### The Memory Systems
+
+SLATE has two types of memory:
+
+**GraphPalace (Knowledge Graph):**
+- Remembers relationships between strategies
+- Tracks how strategies evolve over time
+- Stores market context information
+- Like a "brain" that understands connections
+
+**Discovery Database:**
+- Stores all backtest results
+- Uses tiered storage (keeps detailed records for recent tests)
+- Automatically archives old results to save space
+- Like a "filing cabinet" for test results
+
+### The API Layer
+
+SLATE provides a REST API that lets you interact with all these components. You can:
+- Start and stop discovery
+- Query results
+- Create custom strategies
+- Check system health
+- Export data for analysis
+
+---
+
+## 5. Using SLATE: Question & Answer Examples
+
+The best way to understand SLATE is to see it in action. Here are common questions you might ask, and how SLATE answers them.
+
+### Q: "What's the best strategy for trading Bitcoin?"
+
+**How to ask SLATE:**
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cycles": 100,
+    "symbols": ["BTCUSDT"],
+    "timeframes": ["1h"]
+  }'
+```
+
+**What SLATE does:**
+1. Generates 100 different Bitcoin trading strategies
+2. Tests each one on historical hourly data
+3. Ranks them by actual profit (after fees)
+4. Stores the results
+
+**How to get the answer:**
+
+```bash
+curl http://localhost:8788/api/discovery/realistic/top?limit=5
+```
+
+**Example answer:**
+
+```json
+[
+  {
+    "rank": 1,
+    "strategy_name": "momentum_14_1h_btcusdt",
+    "total_return": 0.234,
+    "sharpe_ratio": 1.82,
+    "max_drawdown": 0.18,
+    "profit_factor": 2.1,
+    "num_trades": 156
+  },
+  {
+    "rank": 2,
+    "strategy_name": "trend_follow_12_26_1h_btcusdt",
+    "total_return": 0.198,
+    "sharpe_ratio": 1.65,
+    "max_drawdown": 0.22,
+    "profit_factor": 1.9,
+    "num_trades": 89
   }
-}
+]
 ```
 
-**Example 2: Create a Mean Reversion Strategy**
+**What this tells you:**
+- The momentum strategy made 23.4% return
+- It has a good risk-adjusted return (Sharpe 1.82)
+- Maximum loss was 18% from peak to trough
+- It won 2.1 times more than it lost
+- It made 156 trades over the test period
+
+### Q: "Will this strategy work on Ethereum too?"
+
+**How to ask SLATE:**
+
+```bash
+curl -X POST http://localhost:8788/api/strategies/backtest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy_type": "momentum",
+    "parameters": {"period": 14},
+    "symbol": "ETHUSDT",
+    "timeframe": "1h",
+    "start_date": "2024-01-01",
+    "end_date": "2024-04-01"
+  }'
+```
+
+**Example answer:**
 
 ```json
-POST http://localhost:8788/api/strategies
 {
-  "name": "ETH Bollinger Bands",
-  "type": "mean_reversion",
-  "symbol": "ETHUSDT",
-  "timeframe": "15m",
-  "parameters": {
-    "period": 20,
-    "std_dev": 2.0,
-    "entry_threshold": 0.95
-  }
+  "total_return": 0.156,
+  "sharpe_ratio": 1.23,
+  "max_drawdown": 0.28,
+  "num_trades": 143,
+  "win_rate": 0.52
 }
 ```
 
-**Example 3: Create a Trend Following Strategy**
+**What this tells you:**
+- The same strategy makes less money on ETH (15.6% vs 23.4%)
+- It has higher risk (28% drawdown vs 18%)
+- Maybe stick with Bitcoin for this strategy
+
+### Q: "What time frame works best for mean reversion?"
+
+**How to ask SLATE:**
+
+Run three separate discoveries:
+
+```bash
+# 15-minute timeframe
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{"cycles": 50, "symbols": ["BTCUSDT"], "timeframes": ["15m"]}'
+
+# Wait for completion, then 1-hour
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{"cycles": 50, "symbols": ["BTCUSDT"], "timeframes": ["1h"]}'
+
+# Wait for completion, then 4-hour
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{"cycles": 50, "symbols": ["BTCUSDT"], "timeframes": ["4h"]}'
+```
+
+**Compare the results from each run to see which timeframe gives the best mean reversion performance.**
+
+### Q: "How much should I risk per trade?"
+
+**How to ask SLATE:**
+
+```bash
+curl -X POST http://localhost:8788/api/risk/kelly \
+  -H "Content-Type: application/json" \
+  -d '{
+    "win_rate": 0.55,
+    "average_win": 120,
+    "average_loss": 80
+  }'
+```
+
+**Example answer:**
 
 ```json
-POST http://localhost:8788/api/strategies
 {
-  "name": "BTC Trend Follower",
-  "type": "trend_following",
-  "symbol": "BTCUSDT",
-  "timeframe": "4h",
-  "parameters": {
-    "fast_period": 12,
-    "slow_period": 26,
-    "signal_period": 9
-  }
+  "kelly_percentage": 0.1875,
+  "recommendation": "Risk 18.75% of capital per trade",
+  "half_kelly": 0.09375,
+  "conservative": "Consider using half-Kelly: 9.38%"
 }
 ```
 
-### Strategy Parameters
+**What this tells you:**
+- With a 55% win rate and 1.5:1 reward ratio
+- Kelly says risk 18.75% per trade
+- Half-Kelly (more conservative) suggests 9.38%
+- SLATE caps position size at 10% for safety
 
-Each strategy type accepts different parameters:
+### Q: "Is SLATE currently running?"
 
-**Common Parameters:**
-- `symbol`: Trading pair (e.g., BTCUSDT, ETHUSDT)
-- `timeframe`: Candle timeframe (1m, 5m, 15m, 1h, 4h, 1d)
-- `initial_capital`: Starting capital (default: 10,000 USDT)
-- `max_position_size`: Maximum position as percentage (default: 0.1)
+**How to ask SLATE:**
 
-**Momentum-Specific:**
-- `period`: Lookback period for momentum calculation
-- `threshold`: Minimum momentum to trigger entry
+```bash
+curl http://localhost:8788/health
+```
 
-**Mean Reversion-Specific:**
-- `period`: Period for Bollinger Bands
-- `std_dev`: Standard deviation multiplier
-- `entry_threshold`: Z-score for entry signal
-
-### Testing Strategies
-
-Once created, test your strategy with realistic backtesting:
+**Example answer:**
 
 ```json
-POST http://localhost:8788/api/strategies/{id}/backtest
 {
-  "start_date": "2024-01-01",
-  "end_date": "2024-04-01",
-  "initial_capital": 10000
+  "status": "healthy",
+  "mode": "paper_trading",
+  "discovery_running": true,
+  "active_strategies": 5,
+  "uptime_hours": 47.3
 }
 ```
 
-**Response includes:**
-- Total return (%)
-- Sharpe ratio
-- Maximum drawdown
-- Win rate (%)
-- Profit factor
-- Number of trades
-- Equity curve data
+### Q: "How many strategies has SLATE tested so far?"
+
+**How to ask SLATE:**
+
+```bash
+curl http://localhost:8788/api/discovery/realistic/statistics
+```
+
+**Example answer:**
+
+```json
+{
+  "total_tests": 1247,
+  "profitable_strategies": 312,
+  "best_return": 0.342,
+  "average_sharpe": 0.98,
+  "discovery_cycles_completed": 42
+}
+```
+
+**What this tells you:**
+- SLATE has tested 1,247 different strategies
+- 312 of them (25%) were profitable after fees
+- The best one made 34.2% return
+- The average Sharpe ratio is 0.98 (close to the 1.0 target)
+
+### Q: "Show me the top 10 strategies right now"
+
+**How to ask SLATE:**
+
+```bash
+curl "http://localhost:8788/api/discovery/realistic/top?limit=10&sort_by=total_return"
+```
+
+**Example answer:**
+
+```json
+[
+  {"rank": 1, "name": "ml_bollinger_1h", "return": 0.342},
+  {"rank": 2, "name": "momentum_20_4h", "return": 0.298},
+  {"rank": 3, "name": "regime_switch_1h", "return": 0.287},
+  ...
+]
+```
+
+### Q: "What's the current market regime?"
+
+**How to ask SLATE:**
+
+```bash
+curl http://localhost:8788/api/market/regime?symbol=BTCUSDT
+```
+
+**Example answer:**
+
+```json
+{
+  "regime": "trending_up",
+  "volatility": "medium",
+  "confidence": 0.82,
+  "recommended_strategies": ["momentum", "trend_following"],
+  "avoid_strategies": ["mean_reversion"]
+}
+```
+
+**What this tells you:**
+- Bitcoin is currently in an uptrend
+- Volatility is normal
+- Confidence in this assessment is 82%
+- Consider momentum and trend following strategies
+- Avoid mean reversion (it doesn't work well in trends)
 
 ---
 
-## 7. Discovery and Self-Evolution
+## 6. The Discovery System Explained
 
-SLATE's most powerful feature is its ability to autonomously discover and evolve trading strategies.
+### How SLATE Discovers Strategies
 
-### How Discovery Works
+The discovery system is SLATE's core innovation. Here's how it works in detail:
 
-The discovery system follows this continuous loop:
+### Step 1: Strategy Generation
 
-1. **Generate**: Create diverse strategies using different types and parameters
-2. **Test**: Run realistic backtests on historical data
-3. **Evaluate**: Score strategies by risk-adjusted returns
-4. **Select**: Keep top performers by strategy type
-5. **Evolve**: Create optimized variants of best strategies
-6. **Repeat**: Continue improving over time
+SLATE doesn't just test random ideas. It generates intelligent strategy variations:
 
-### Realistic Testing Assumptions
+**10+ Strategy Types:**
 
-SLATE uses brutally honest testing to avoid overfitting:
+1. **Momentum:** Bets that price movement will continue
+   - Example: If price went up last 14 hours, it keeps going up
 
-- **Maker Fee**: 0.02% (when providing liquidity)
-- **Taker Fee**: 0.05% (when taking liquidity)
-- **Slippage**: 5 basis points (0.05%)
-- **Fill Rate**: 95% (5% of orders don't fill)
-- **Position Sizing**: Maximum 10% of capital per trade
+2. **Mean Reversion:** Bets that price will return to average
+   - Example: If price is far from average, it will snap back
 
-### Starting Discovery
+3. **Breakout:** Bets that price will break through resistance
+   - Example: If price consolidates then moves up, it keeps going
 
-**Via Dashboard:**
-1. Navigate to Discovery Dashboard
-2. Click "Start Discovery"
-3. Set parameters (optional):
-   - Number of cycles: 100
-   - Workers: 3 (parallel testing)
-   - Symbols: BTCUSDT, ETHUSDT
-   - Timeframes: 15m, 1h, 4h
-4. Click "Start"
+4. **Trend Following:** Uses moving averages to follow trends
+   - Example: Buy when fast MA crosses above slow MA
 
-**Via API:**
-```json
-POST http://localhost:8788/api/realistic-discovery/start
-{
-  "cycles": 100,
-  "workers": 3,
-  "symbols": ["BTCUSDT", "ETHUSDT"],
-  "timeframes": ["15m", "1h", "4h"]
-}
+5. **Statistical Arbitrage:** Exploits price relationships
+   - Example: If BTC and ETH usually move together but diverge, bet they'll converge
+
+6. **Machine Learning:** Uses ML to find patterns
+   - Example: Neural network finds complex price patterns
+
+7. **Regime Switching:** Changes behavior based on market conditions
+   - Example: Use momentum in trending markets, mean reversion in ranging
+
+8. **Order Flow:** Trades based on order book imbalances
+   - Example: More buy orders than sell orders predicts price up
+
+9. **Microstructure:** Exploits short-term inefficiencies
+   - Example: Bid-ask bounce patterns
+
+10. **Multi-Timeframe:** Combines signals across timeframes
+    - Example: Only buy if 1h and 4h both say buy
+
+### Step 2: Realistic Backtesting
+
+Each generated strategy gets tested with realistic assumptions:
+
+**Trading Costs:**
+- Maker fee: 0.02% (you provide liquidity)
+- Taker fee: 0.05% (you take liquidity)
+- Slippage: 0.05% (price moves against you)
+- Fill rate: 95% (5% of orders don't execute)
+
+**Example Impact:**
+
+Without costs:
+```
+Entry: $50,000
+Exit: $51,000
+Profit: $1,000 (2.0%)
 ```
 
-### Stigmergic Coordination
+With realistic costs:
+```
+Entry: $50,000 (taker) → $50,025 (fee + slippage)
+Exit: $51,000 (taker) → $50,975.50 (fee - slippage)
+Actual profit: $950.50 (1.9%)
+```
 
-SLATE uses swarm intelligence to maintain strategy diversity:
+That's 5% less profit! And this compounds over many trades.
 
-- **Pheromone Trails**: Successful strategies leave "trails" for others to follow
-- **Negative Feedback**: Over-explored areas become less attractive
-- **Multi-Objective Optimization**: Balances return, risk, and novelty
-- **Collective Learning**: All strategies share knowledge through the database
+**This is why SLATE's realistic testing matters.** Many strategies look great until you subtract fees, then they become unprofitable.
 
-This ensures SLATE doesn't converge on a single strategy type but maintains a diverse portfolio.
+### Step 3: Multi-Path Testing
 
-### Self-Evolution Process
+SLATE goes beyond simple backtesting with bootstrap resampling:
 
-Strategies evolve through these mechanisms:
+**The Problem with Simple Backtesting:**
+You test a strategy on historical data from January to March. It shows 30% returns. But what if January-March was unusually favorable? Your strategy might fail in April.
 
-1. **Selection**: Top 10% of strategies by Sharpe ratio survive
-2. **Mutation**: Parameters are adjusted by ±10%
-3. **Crossover**: Successful features are combined
-4. **Regeneration**: New strategies are created based on patterns
+**The Multi-Path Solution:**
+1. Take the historical price data
+2. Randomly shuffle the daily returns (keeping price behavior realistic)
+3. Create 100+ new "alternate universe" price paths
+4. Test your strategy on all of them
+5. See if the strategy works in most universes
+
+**Good Strategy:**
+- Works in 80+ out of 100 paths
+- Consistent performance across paths
+- Robust to different market sequences
+
+**Bad Strategy (Lucky):**
+- Works in only 20-30 paths
+- Huge variance between paths
+- Probably just got lucky with one specific sequence
+
+### Step 4: Evaluation and Selection
+
+After testing, SLATE scores each strategy:
+
+**Primary Metrics:**
+- **Total Return:** Actual profit percentage
+- **Sharpe Ratio:** Return divided by risk (higher is better)
+- **Maximum Drawdown:** Worst peak-to-trough loss (lower is better)
+
+**Secondary Metrics:**
+- **Win Rate:** Percentage of profitable trades
+- **Profit Factor:** Total wins divided by total losses
+- **Calmar Ratio:** Return divided by max drawdown
+
+**Selection Criteria:**
+- Total return > 15% annually
+- Sharpe ratio > 1.0
+- Maximum drawdown < 30%
+- Works on 80%+ of price paths
+
+### Step 5: Evolution
+
+The best strategies become "parents" for the next generation:
+
+**Mutation:**
+- Take a good strategy (e.g., momentum with period 14)
+- Create variants with tweaked parameters (period 12, 13, 15, 16)
+- Test them all
+- Keep the ones that improve
+
+**Crossover:**
+- Take two good strategies with different strengths
+- Combine their best features
+- Test the combination
+- Keep it if it's better than either parent
+
+**Regeneration:**
+- Analyze patterns in successful strategies
+- Generate new strategies incorporating these patterns
+- Test and evolve
+
+Over many generations, SLATE "discovers" better and better strategies.
 
 ---
 
-## 8. 10 Examples for Finding Alpha
+## 7. How SLATE Evolves and Improves
 
-Here are 10 practical examples of how to use SLATE to discover profitable trading strategies:
+### The Self-Evolution Process
 
-### Example 1: Run Comprehensive Discovery on BTC
+SLATE gets smarter over time through continuous evolution. Here's how:
 
-**Goal**: Find the best performing strategy type for Bitcoin
+### Generation 1: Exploration
 
-**Steps:**
-1. Start the SLATE server
-2. Open Discovery Dashboard: http://localhost:8788/discovery-dashboard
-3. Click "Start Discovery" with these settings:
-   - Cycles: 200
-   - Symbol: BTCUSDT
-   - Timeframes: 15m, 1h, 4h
-   - Strategy Types: All
-4. Wait for completion (~30 minutes)
-5. Sort results by "Total Return"
-6. Select top 5 strategies for paper trading
+SLATE starts by casting a wide net:
 
-**What to look for:**
-- Strategies with >20% annual return
-- Sharpe ratio >1.5
-- Maximum drawdown <25%
-- Consistent performance across timeframes
+```
+Generate 100 strategies with random parameters
+Test them all
+Keep the top 10
+```
 
-### Example 2: Focus on USDT Profits (Not Sharpe)
+**Example results:**
+- Strategy #12 (momentum, period 14): 18% return
+- Strategy #45 (mean reversion, period 20): 12% return
+- Strategy #78 (trend following, 12/26): 15% return
 
-**Goal**: Find strategies that maximize absolute USDT profits
+### Generation 2: Focused Evolution
 
-**Configuration:**
+SLATE creates variants of the winners:
+
+```
+For each winner, create 10 variants with tweaked parameters
+Test all variants
+Keep the top 10
+```
+
+**Example mutations:**
+- Momentum 14 → Test 12, 13, 15, 16
+- Best result: Momentum 13 with 21% return
+
+**Generation 2 result:** 21% return (up from 18%)
+
+### Generation 3: Optimization
+
+SLATE refines further:
+
+```
+For each winner, create fine-tuned variants
+Test them all
+Keep the top 10
+```
+
+**Example fine-tuning:**
+- Momentum 13 → Test 12.5, 12.8, 13.2, 13.5
+- Best result: Momentum 13.2 with 23% return
+
+**Generation 3 result:** 23% return (up from 21%)
+
+### Generation 4+: Sophistication
+
+SLATE starts combining successful features:
+
+```
+Take two successful strategies
+Combine their best features
+Test the combination
+```
+
+**Example crossover:**
+- Momentum 13.2 + Trend Following 11/25
+- Combined: Only buy when both agree
+- Result: 19% return but much lower drawdown (8%)
+
+**Why this matters:**
+Lower drawdown means the strategy is safer. Even with lower return, it might be better because you can risk more money.
+
+### Stigmergic Coordination: Swarm Intelligence
+
+SLATE uses a technique inspired by nature called "stigmergy."
+
+**How ants do it:**
+1. An ant finds food and leaves a pheromone trail
+2. Other ants follow the trail
+3. As food depletes, the trail fades
+4. Ants explore new areas
+
+**How SLATE does it:**
+1. A strategy finds profit → leaves a "trail" in the knowledge base
+2. New strategies explore similar parameter space
+3. As the space becomes "crowded," SLATE reduces exploration there
+4. SLATE is pushed to explore new, diverse areas
+
+**The benefit:**
+Without stigmergy, SLATE might converge on one type of strategy (like only momentum). With stigmergy, SLATE maintains diversity:
+- Some momentum strategies
+- Some mean reversion strategies
+- Some trend following strategies
+- Some ML strategies
+
+This creates a portfolio, not just one strategy.
+
+### Continuous Learning
+
+SLATE never stops learning:
+
+1. **Every discovery cycle:**
+   - Generate new strategies
+   - Test them
+   - Update the knowledge base
+   - Learn what worked
+
+2. **Weekly:**
+   - Review top performers
+   - Archive old results
+   - Clean up database
+   - Generate fresh ideas
+
+3. **Monthly:**
+   - Analyze overall performance
+   - Adjust discovery parameters
+   - Refine evaluation criteria
+   - Report on progress
+
+### Tracking Progress
+
+You can monitor SLATE's evolution:
+
+```bash
+# Get discovery statistics
+curl http://localhost:8788/api/discovery/realistic/statistics
+```
+
+**Example output showing evolution:**
+
 ```json
-POST http://localhost:8788/api/realistic-discovery/start
 {
-  "optimization_target": "total_return",
-  "min_return": 0.15,
-  "max_drawdown": 0.30,
-  "cycles": 150,
-  "symbols": ["BTCUSDT"],
-  "timeframes": ["1h"]
+  "generation": 47,
+  "total_strategies_tested": 5234,
+  "best_all_time_return": 0.342,
+  "best_all_time_generation": 42,
+  "current_generation_best": 0.298,
+  "improvement_trend": "positive",
+  "diversity_score": 0.73
 }
+```
+
+**What this tells you:**
+- SLATE is on generation 47
+- Has tested 5,234 strategies total
+- Best strategy ever found was in generation 42 (34.2% return)
+- Current generation's best is 29.8%
+- Overall trend is improving
+- Strategy diversity is good (score 0.73 out of 1.0)
+
+---
+
+## 8. Finding Profitable Strategies: 10 Practical Examples
+
+Here are 10 detailed examples of how to use SLATE to find profitable trading strategies.
+
+### Example 1: The "Comprehensive Scan"
+
+**Goal:** Find the absolute best strategy for Bitcoin across all types
+
+**Step 1: Start a large discovery run**
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cycles": 200,
+    "workers": 3,
+    "symbols": ["BTCUSDT"],
+    "timeframes": ["15m", "1h", "4h"],
+    "strategy_types": "all"
+  }'
+```
+
+**Step 2: Wait for completion (~30-60 minutes)**
+
+**Step 3: Get the results sorted by profit**
+
+```bash
+curl "http://localhost:8788/api/discovery/realistic/top?limit=20&sort_by=total_return"
+```
+
+**Step 4: Analyze the top performers**
+
+Look for strategies with:
+- Total return > 20%
+- Sharpe ratio > 1.5
+- Max drawdown < 25%
+- At least 50 trades (statistical significance)
+
+**Step 5: Verify with multi-path results**
+
+Check that the strategy works on most of the 100+ price paths, not just the historical sequence.
+
+**Result:** You now have the top 5-10 Bitcoin strategies, ready for paper trading.
+
+### Example 2: The "Profit Hunter" (Focus on USDT, Not Sharpe)
+
+**Goal:** Find strategies that maximize absolute profit, even if they're riskier
+
+**Setup:**
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cycles": 150,
+    "optimization_target": "total_return",
+    "min_acceptable_return": 0.20,
+    "max_acceptable_drawdown": 0.40,
+    "symbols": ["BTCUSDT"],
+    "timeframes": ["1h"]
+  }'
 ```
 
 **Analysis:**
-After completion, query the database:
-```json
-GET http://localhost:8788/api/realistic-discovery/results/top?limit=20&sort_by=total_return
-```
 
-**Filter for:**
-- Total return >25%
-- Profit factor >2.0
-- Average win > average loss
-- At least 50 trades for statistical significance
+After completion, get results and filter for:
+- Total return > 25%
+- Profit factor > 2.0 (wins twice as big as losses)
+- Average win > average loss (positive expectancy)
+- At least 30 trades
 
-### Example 3: Discover Multi-Timeframe Strategies
+**Why this works:**
+Some traders prefer absolute returns over risk-adjusted returns. If you're willing to accept higher volatility, you can target higher returns.
 
-**Goal**: Find strategies that work across multiple timeframes
+### Example 3: The "Multi-Timeframe" Analysis
 
-**Process:**
-1. Run discovery on 15m timeframe (100 cycles)
-2. Run discovery on 1h timeframe (100 cycles)
-3. Run discovery on 4h timeframe (100 cycles)
-4. Compare top performers from each
-5. Look for strategy types that appear in all three
-
-**API Sequence:**
-```bash
-# Run on 15m
-curl -X POST "http://localhost:8788/api/realistic-discovery/start?timeframe=15m&cycles=100"
-
-# Wait for completion, then run on 1h
-curl -X POST "http://localhost:8788/api/realistic-discovery/start?timeframe=1h&cycles=100"
-
-# Wait for completion, then run on 4h
-curl -X POST "http://localhost:8788/api/realistic-discovery/start?timeframe=4h&cycles=100"
-```
-
-**Identify Robust Strategies:**
-- Same strategy type performs well on multiple timeframes
-- Similar parameter values across timeframes
-- Consistent risk-adjusted returns
-
-### Example 4: Low Volatility Regime Strategies
-
-**Goal**: Find strategies that work best during low volatility periods
-
-**Setup:**
-```json
-POST http://localhost:8788/api/realistic-discovery/start
-{
-  "volatility_filter": "low",
-  "atr_threshold": 0.02,
-  "cycles": 100,
-  "symbols": ["BTCUSDT", "ETHUSDT"],
-  "timeframes": ["1h"]
-}
-```
-
-**Expected Results:**
-- Mean reversion strategies should perform well
-- Look for tight Bollinger Band parameters
-- Short-term mean reversion (5-15 period)
-- High win rate (>60%) acceptable
-
-### Example 5: High Volatility Breakout Strategies
-
-**Goal**: Find strategies that capture large moves
-
-**Setup:**
-```json
-POST http://localhost:8788/api/realistic-discovery/start
-{
-  "volatility_filter": "high",
-  "atr_multiplier": 2.0,
-  "cycles": 100,
-  "symbols": ["BTCUSDT"],
-  "timeframes": ["15m", "1h"]
-}
-```
-
-**Focus On:**
-- Breakout strategies
-- Momentum strategies
-- Wider stop losses to accommodate volatility
-- Lower win rate acceptable if wins are large
-
-### Example 6: Portfolio Diversification Discovery
-
-**Goal**: Build a diverse portfolio of uncorrelated strategies
+**Goal:** Find strategies that work robustly across different timeframes
 
 **Process:**
-1. Run discovery with 500 cycles
-2. Get top 50 strategies by Sharpe ratio
-3. Calculate correlation matrix
-4. Select strategies with <0.3 correlation
 
-**API Approach:**
+**Run 1: 15-minute strategies**
+
 ```bash
-# Get top strategies
-curl "http://localhost:8788/api/realistic-discovery/results/top?limit=50" > top_strategies.json
-
-# Calculate correlation (this would be done in SLATE)
-# Select 5-10 uncorrelated strategies
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{"cycles": 100, "symbols": ["BTCUSDT"], "timeframes": ["15m"]}'
 ```
 
-**Ideal Portfolio:**
-- Mix of strategy types (momentum, mean reversion, trend)
+Wait for completion, then:
+
+**Run 2: 1-hour strategies**
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{"cycles": 100, "symbols": ["BTCUSDT"], "timeframes": ["1h"]}'
+```
+
+Wait for completion, then:
+
+**Run 3: 4-hour strategies**
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{"cycles": 100, "symbols": ["BTCUSDT"], "timeframes": ["4h"]}'
+```
+
+**Analysis:**
+
+Compare the top 10 strategies from each timeframe. Look for:
+- Same strategy type appearing in multiple timeframes
+- Similar parameter ranges across timeframes
+- Consistent performance metrics
+
+**Robust signals:**
+If momentum strategies work well on 15m, 1h, AND 4h, they're probably robust, not just a fluke of one specific timeframe.
+
+### Example 4: The "Low Volatility Specialist"
+
+**Goal:** Find strategies that work best when markets are calm
+
+**Theory:** Mean reversion strategies often work best in low-volatility, ranging markets
+
+**Setup:**
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cycles": 100,
+    "strategy_types": ["mean_reversion", "bollinger_bands"],
+    "volatility_filter": "low",
+    "atr_threshold": 0.02,
+    "symbols": ["BTCUSDT", "ETHUSDT"],
+    "timeframes": ["1h"]
+  }'
+```
+
+**What to look for:**
+- High win rate (> 60%)
+- Small, consistent profits
+- Tight Bollinger Band parameters
+- Short lookback periods (5-15)
+
+**Why this works:**
+In calm markets, prices oscillate around a mean. Mean reversion strategies capture these oscillations.
+
+### Example 5: The "Volatility Breakout" Hunter
+
+**Goal:** Find strategies that capture large explosive moves
+
+**Theory:** Breakout and momentum strategies shine in high volatility
+
+**Setup:**
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cycles": 100,
+    "strategy_types": ["breakout", "momentum", "trend_following"],
+    "volatility_filter": "high",
+    "atr_multiplier": 2.0,
+    "symbols": ["BTCUSDT"],
+    "timeframes": ["15m", "1h"]
+  }'
+```
+
+**What to look for:**
+- Lower win rate acceptable (40-50%)
+- Large average win size
+- Wide stop losses to accommodate volatility
+- High profit factor (> 2.5)
+
+**Why this works:**
+In volatile markets, you want to catch big moves. You'll have more losses but bigger wins.
+
+### Example 6: Building a Diversified Portfolio
+
+**Goal:** Find 5-10 uncorrelated strategies to reduce risk
+
+**Step 1: Run a large discovery**
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{"cycles": 500, "symbols": ["BTCUSDT"], "timeframes": ["1h"]}'
+```
+
+**Step 2: Get top 50 strategies**
+
+```bash
+curl "http://localhost:8788/api/discovery/realistic/top?limit=50&sort_by=sharpe_ratio" > top50.json
+```
+
+**Step 3: Calculate correlations**
+
+You'll need to compute the correlation matrix of returns. Low correlation (< 0.3) means strategies move independently.
+
+**Step 4: Select diverse strategies**
+
+Aim for:
+- 2-3 momentum strategies
+- 2-3 mean reversion strategies
+- 1-2 trend following strategies
+- 1 ML or regime switching strategy
 - Different timeframes
-- Different entry/exit logic
-- Low correlation to each other
+- Different parameter ranges
 
-### Example 7: Machine Learning Strategy Discovery
+**Result:** A portfolio that doesn't all fail at the same time.
 
-**Goal:** Let SLATE discover ML-based strategies
+### Example 7: The "Machine Learning" Deep Dive
+
+**Goal:** Let SLATE discover sophisticated ML-based strategies
 
 **Setup:**
-```json
-POST http://localhost:8788/api/realistic-discovery/start
-{
-  "strategy_types": ["machine_learning"],
-  "ml_features": ["returns", "rsi", "macd", "atr", "volume"],
-  "cycles": 100,
-  "symbols": ["BTCUSDT"],
-  "timeframes": ["1h"]
-}
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cycles": 100,
+    "strategy_types": ["machine_learning"],
+    "ml_features": ["returns", "rsi", "macd", "atr", "volume", "volatility"],
+    "ml_algorithms": ["random_forest", "gradient_boosting", "neural_network"],
+    "symbols": ["BTCUSDT"],
+    "timeframes": ["1h"]
+  }'
 ```
 
-**What to Expect:**
+**What to expect:**
 - Complex feature combinations
 - Non-linear relationships
-- May overfit - verify with walk-forward analysis
-- Look for consistent out-of-sample performance
+- Risk of overfitting
 
-### Example 8: Regime-Switching Discovery
+**Validation:**
+ML strategies can overfit (memorize historical data). Always:
+- Check out-of-sample performance
+- Verify with multi-path testing
+- Prefer simpler models if performance is similar
+- Monitor live paper trading performance closely
 
-**Goal:** Find strategies that adapt to market conditions
+### Example 8: The "Regime Switching" Specialist
+
+**Goal:** Find strategies that adapt to changing market conditions
+
+**Theory:** No single strategy works in all markets. Regime switching strategies change behavior based on market state.
 
 **Setup:**
-```json
-POST http://localhost:8788/api/realistic-discovery/start
-{
-  "strategy_types": ["regime_switching"],
-  "regimes": ["trending", "ranging", "volatile"],
-  "cycles": 150,
-  "symbols": ["BTCUSDT", "ETHUSDT"],
-  "timeframes": ["1h", "4h"]
-}
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cycles": 150,
+    "strategy_types": ["regime_switching"],
+    "regimes": ["trending_up", "trending_down", "ranging", "volatile"],
+    "symbols": ["BTCUSDT", "ETHUSDT"],
+    "timeframes": ["1h", "4h"]
+  }'
 ```
 
 **Evaluation:**
-- Check performance in each regime separately
-- Verify smooth regime transitions
-- Look for strategies that avoid large drawdowns during regime changes
+Check performance in each regime separately:
+- Does it make money in trending markets?
+- Does it avoid losses in ranging markets?
+- Does it handle volatility well?
+- Are regime transitions smooth?
+
+**Advantage:** Regime switching can provide more consistent returns across different market conditions.
 
 ### Example 9: Parameter Optimization
 
-**Goal:** Take a good strategy and optimize its parameters
+**Goal:** Take a decent strategy and optimize its parameters
 
-**Process:**
-1. Start with a known decent strategy (e.g., Moving Average Crossover)
-2. Run focused discovery on that strategy type
-3. Let SLATE vary parameters systematically
+**Step 1: Start with a known good base**
 
-**Example:**
-```json
-POST http://localhost:8788/api/realistic-discovery/start
-{
-  "base_strategy": "moving_average_crossover",
-  "parameter_ranges": {
-    "fast_period": [8, 12, 16, 20],
-    "slow_period": [20, 24, 26, 30],
-    "signal_period": [7, 9, 12]
-  },
-  "cycles": 200
-}
+Let's say you know that momentum strategies work for Bitcoin. Now find the optimal parameters.
+
+**Setup:**
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cycles": 200,
+    "base_strategy_type": "momentum",
+    "parameter_ranges": {
+      "period": [10, 12, 14, 16, 18, 20],
+      "threshold": [0.015, 0.02, 0.025, 0.03]
+    },
+    "symbols": ["BTCUSDT"],
+    "timeframes": ["1h"]
+  }'
 ```
 
 **Analysis:**
-- Plot parameter combinations vs returns
-- Look for robust parameter regions (not just one optimal point)
-- Avoid overfitting to specific values
+Plot parameter combinations vs returns. Look for:
+- Robust parameter regions (not just one optimal point)
+- Performance plateaus (multiple values work similarly well)
+- Avoid extreme parameter values
 
-### Example 10: Continuous Evolution Run
+**Caution:** Don't over-optimize. If period 13.217 is "best" but 13-15 all work similarly, use 14 (simpler). Over-optimization leads to fragile strategies.
 
-**Goal:** Let SLATE run overnight and discover strategies
+### Example 10: The "Overnight Discovery" Run
+
+**Goal:** Let SLATE run unsupervised and wake up to discovered strategies
 
 **Setup:**
-```json
-POST http://localhost:8788/api/realistic-discovery/start
-{
-  "cycles": 1000,
-  "workers": 5,
-  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
-  "timeframes": ["15m", "1h", "4h"],
-  "auto_save": true,
-  "save_interval": 50
-}
+
+```bash
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cycles": 1000,
+    "workers": 5,
+    "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    "timeframes": ["15m", "1h", "4h"],
+    "auto_save": true,
+    "save_interval": 50,
+    "continuous_evolution": true
+  }'
 ```
 
-**Next Morning:**
-1. Check Discovery Dashboard
-2. Export top strategies:
+**This will run for several hours, testing thousands of strategies.**
+
+**Next morning:**
+
+1. Check status:
    ```bash
-   curl "http://localhost:8788/api/realistic-discovery/export?format=json" > strategies.json
+   curl http://localhost:8788/api/discovery/realistic/status
    ```
-3. Review performance breakdown
-4. Select best 5-10 strategies
-5. Activate them for paper trading
 
-### Interpreting Discovery Results
+2. Get results:
+   ```bash
+   curl "http://localhost:8788/api/discovery/realistic/top?limit=50&sort_by=total_return" > morning_strategies.json
+   ```
 
-When analyzing discovery results, focus on:
+3. Export for analysis:
+   ```bash
+   curl -X POST http://localhost:8788/api/discovery/realistic/export \
+     -H "Content-Type: application/json" \
+     -d '{"format": "json", "include_trades": true}' > strategies_full.json
+   ```
 
-**Primary Metrics:**
-- **Total Return**: Actual USDT profit percentage
-- **Sharpe Ratio**: Risk-adjusted return (>1.5 is good)
-- **Maximum Drawdown**: Largest peak-to-trough decline (<30% is acceptable)
+4. Review and select:
+   - Filter for return > 20%
+   - Check Sharpe ratio > 1.0
+   - Verify max drawdown < 30%
+   - Select top 5-10 for paper trading
 
-**Secondary Metrics:**
-- **Win Rate**: Percentage of profitable trades
-- **Profit Factor**: Gross wins / gross losses (>2.0 is good)
-- **Calmar Ratio**: Return / max drawdown
+**Result:** Wake up to a portfolio of discovered, tested strategies ready for paper trading validation.
 
-**Red Flags:**
-- Very high returns with very few trades (luck)
-- Excellent backtest but poor walk-forward (overfitting)
-- Extreme parameter values (unstable)
+### Interpreting Results: What Matters
+
+When analyzing SLATE's discoveries, focus on:
+
+**Primary Metrics (Must-Have):**
+- **Total Return:** > 15% annually (after ALL fees)
+- **Sharpe Ratio:** > 1.0 (preferably > 1.5)
+- **Max Drawdown:** < 30% (lower is better)
+- **Multi-Path Success:** Works on > 80% of price paths
+
+**Secondary Metrics (Nice-to-Have):**
+- **Win Rate:** > 50% (but not critical if wins are large)
+- **Profit Factor:** > 2.0 (wins at least 2x losses)
+- **Calmar Ratio:** > 1.0 (return > max drawdown)
+
+**Red Flags (Avoid):**
+- Very high return (> 50%) with very few trades (< 20) - likely lucky
+- Excellent single backtest but poor multi-path results - overfit
+- Extreme parameter values - unstable and fragile
+- Returns that depend on one or two huge wins - not repeatable
+
+**Green Flags (Good Signs):**
+- Consistent performance across timeframes
+- Similar parameter values in related strategies
+- High multi-path success rate
+- Reasonable parameter ranges
+- Many trades (statistical significance)
+- Good performance in different market regimes
 
 ---
 
-## 9. API Reference
-
-SLATE provides a comprehensive REST API for all operations.
+## 9. API Quick Reference
 
 ### Base URL
+
+All API calls go to:
+
 ```
 http://localhost:8788
 ```
 
 ### Strategy Management
 
-#### Create Strategy
+**Create a Strategy**
 ```http
 POST /api/strategies
 Content-Type: application/json
@@ -799,34 +1271,26 @@ Content-Type: application/json
   "symbol": "BTCUSDT",
   "timeframe": "1h",
   "parameters": {
-    "period": 14
+    "period": 14,
+    "threshold": 0.02
   }
 }
 ```
 
-#### List All Strategies
+**List All Strategies**
 ```http
 GET /api/strategies
 ```
 
-#### Get Strategy Details
+**Get Strategy Details**
 ```http
-GET /api/strategies/{id}
+GET /api/strategies/{strategy_id}
 ```
 
-#### Activate Strategy
+**Backtest a Strategy**
 ```http
-POST /api/strategies/{id}/activate
-```
-
-#### Deactivate Strategy
-```http
-POST /api/strategies/{id}/deactivate
-```
-
-#### Backtest Strategy
-```http
-POST /api/strategies/{id}/backtest
+POST /api/strategies/{strategy_id}/backtest
+Content-Type: application/json
 
 {
   "start_date": "2024-01-01",
@@ -835,11 +1299,22 @@ POST /api/strategies/{id}/backtest
 }
 ```
 
+**Activate a Strategy (Start Paper Trading)**
+```http
+POST /api/strategies/{strategy_id}/activate
+```
+
+**Deactivate a Strategy**
+```http
+POST /api/strategies/{strategy_id}/deactivate
+```
+
 ### Discovery Operations
 
-#### Start Discovery
+**Start Discovery**
 ```http
-POST /api/realistic-discovery/start
+POST /api/discovery/realistic/start
+Content-Type: application/json
 
 {
   "cycles": 100,
@@ -849,36 +1324,48 @@ POST /api/realistic-discovery/start
 }
 ```
 
-#### Stop Discovery
+**Stop Discovery**
 ```http
-POST /api/realistic-discovery/stop
+POST /api/discovery/realistic/stop
 ```
 
-#### Get Discovery Status
+**Get Discovery Status**
 ```http
-GET /api/realistic-discovery/status
+GET /api/discovery/realistic/status
 ```
 
-#### Get Top Strategies
+**Get Top Strategies**
 ```http
-GET /api/realistic-discovery/results/top?limit=10&sort_by=total_return
+GET /api/discovery/realistic/top?limit=10&sort_by=total_return
 ```
 
-#### Get Discovery Statistics
+**Get Discovery Statistics**
 ```http
-GET /api/realistic-discovery/statistics
+GET /api/discovery/realistic/statistics
 ```
 
-#### Cleanup Database
+**Cleanup Database**
 ```http
-POST /api/realistic-discovery/cleanup
+POST /api/discovery/realistic/cleanup
+```
+
+**Export Results**
+```http
+POST /api/discovery/realistic/export
+Content-Type: application/json
+
+{
+  "format": "json",
+  "include_trades": true
+}
 ```
 
 ### Risk Management
 
-#### Calculate Position Size
+**Calculate Position Size**
 ```http
 POST /api/risk/position-size
+Content-Type: application/json
 
 {
   "capital": 10000,
@@ -887,9 +1374,10 @@ POST /api/risk/position-size
 }
 ```
 
-#### Kelly Criterion Calculation
+**Kelly Criterion**
 ```http
 POST /api/risk/kelly
+Content-Type: application/json
 
 {
   "win_rate": 0.55,
@@ -898,152 +1386,210 @@ POST /api/risk/kelly
 }
 ```
 
-### Cross-Language Compilation
+### System Information
 
-#### Python to HaasScript
-```http
-POST /api/export/haas-script
-
-{
-  "code": "def strategy():\n  return prices[0] > prices[1]"
-}
-```
-
-#### HaasScript to Python
-```http
-POST /api/import/haas-script
-
-{
-  "code": "price = IndexArray(prices, 1)"
-}
-```
-
-#### Python to Pine Script
-```http
-POST /api/export/pine-script
-
-{
-  "code": "def strategy():\n  return close > open"
-}
-```
-
-### Health & Monitoring
-
-#### Health Check
+**Health Check**
 ```http
 GET /health
 ```
 
-#### System Metrics
+**System Metrics**
 ```http
 GET /api/metrics
 ```
 
-#### Complete Health Summary
+**Full Health Summary**
 ```http
 GET /api/health/summary
 ```
 
 ---
 
-## 10. Troubleshooting
+## 10. Common Problems and Solutions
 
-### Common Issues and Solutions
+### Problem: "Port Already in Use"
 
-#### Issue 1: Port Already in Use
-
-**Error:** `Address already in use`
+**Error message:**
+```
+OSError: [Errno 48] Address already in use
+```
 
 **Solution:**
 ```bash
-# Find process using port 8788
+# Find what's using port 8788
 lsof -ti:8788
 
-# Kill the process
+# Kill that process
 kill -9 $(lsof -ti:8788)
 
-# Or use a different port
-SLATE_PORT=8789 python3 -m slate_core.server
+# Then restart SLATE
+python3 -m slate_core.autonomous_research.server
 ```
 
-#### Issue 2: Module Import Errors
+**Or use a different port:**
+```bash
+SLATE_PORT=8789 python3 -m slate_core.autonomous_research.server
+```
 
-**Error:** `ModuleNotFoundError: No module named 'xxx'`
+### Problem: "Module Not Found"
+
+**Error message:**
+```
+ModuleNotFoundError: No module named 'fastapi'
+```
 
 **Solution:**
 ```bash
-# Reinstall dependencies
-pip install -r requirements.txt --force-reinstall
+# Reinstall all dependencies
+pip install fastapi uvicorn numpy pandas scipy aiohttp ccxt pytest matplotlib
 
-# Or install specific module
-pip install xxx
+# Or if you have requirements.txt
+pip install -r requirements.txt
 ```
 
-#### Issue 3: Discovery Not Starting
+### Problem: Discovery Not Starting
 
-**Symptoms:** Discovery stays in "starting" state
+**Symptoms:** Discovery stays in "starting" state or fails immediately
 
-**Solution:**
-1. Check if historical data exists:
+**Possible causes:**
+
+1. **No historical data available**
    ```bash
+   # Check if data directory exists
    ls slate_core/palace_data/historical/
+
+   # If empty, SLATE will fetch data automatically
+   # This may take a few minutes on first run
    ```
 
-2. If empty, SLATE will fetch data automatically (may take a few minutes)
+2. **Database locked**
+   ```bash
+   # Remove lock files
+   rm -f slate_core/*.db-lock
+   rm -f slate_core/palace_data/*.db-lock
 
-3. Check server logs for errors
+   # Restart SLATE
+   ```
 
-#### Issue 4: Database Lock Errors
+3. **Not enough memory**
+   - Reduce number of workers
+   - Reduce cycles per run
+   - Close other applications
 
-**Error:** `database is locked`
+### Problem: Slow Performance
 
-**Solution:**
-```bash
-# Remove lock files
-rm -f slate_core/*.db-lock
-rm -f slate_core/palace_data/*.db-lock
+**Symptoms:** SLATE becomes sluggish, discovery takes too long
 
-# Restart SLATE
-python3 -m slate_core.server
-```
+**Solutions:**
 
-#### Issue 5: Memory Issues
+1. **Reduce discovery workers:**
+   ```json
+   {"workers": 2}  // instead of 5
+   ```
 
-**Symptoms:** SLATE becomes slow or crashes
+2. **Cleanup database:**
+   ```bash
+   curl -X POST http://localhost:8788/api/discovery/realistic/cleanup
+   ```
 
-**Solution:**
-1. Reduce number of discovery workers:
+3. **Check system resources:**
+   ```bash
+   # On Mac/Linux
+   top
+
+   # Look for:
+   # - Memory usage < 80%
+   # - CPU not at 100%
+   ```
+
+### Problem: No Profitable Strategies Found
+
+**Symptoms:** Discovery completes but shows 0% or negative returns
+
+**Possible causes:**
+
+1. **Market conditions:** Not all markets have profitable strategies
+   - Try different timeframes
+   - Try different symbols
+   - Try different date ranges
+
+2. **Too strict filters:** Relax criteria slightly
    ```json
    {
-     "workers": 2  // instead of 5
+     "min_return": 0.10,  // was 0.20
+     "max_drawdown": 0.40  // was 0.30
    }
    ```
 
-2. Cleanup database:
-   ```bash
-   curl -X POST http://localhost:8788/api/realistic-discovery/cleanup
+3. **Too few cycles:** Run more discovery cycles
+   ```json
+   {"cycles": 200}  // was 50
    ```
 
-3. Reduce historical data retention
+### Problem: Strategy Worked in Backtest, Fails in Paper Trading
+
+**This is normal and expected.** Here's why:
+
+- **Backtest** uses historical data (known, fixed)
+- **Paper trading** uses live data (unknown, changing)
+
+**Solutions:**
+
+1. **Verify with multi-path testing:** Did it work on 80%+ of paths?
+
+2. **Check for overfitting:** Extreme parameters often fail live
+
+3. **Monitor regime changes:** Market conditions might have shifted
+
+4. **Give it time:** Need at least 20+ trades to judge performance
+
+5. **Keep iterating:** Use paper trading results as feedback for discovery
 
 ### Getting Help
 
-If you encounter issues not covered here:
+If you encounter problems not covered here:
 
-1. **Check the logs:** SLATE logs all activities
-2. **Run tests:** `python3 slate_core/run_tests.py`
-3. **Check GitHub Issues:** https://github.com/Tilanthi/SLATE/issues
-4. **Review API docs:** http://localhost:8788/docs
+1. **Check the logs:**
+   ```bash
+   # SLATE logs all activity
+   # Logs are usually in the terminal where you started SLATE
+   ```
+
+2. **Run the test suite:**
+   ```bash
+   python3 slate_core/run_tests.py
+   ```
+   All tests passing means SLATE itself is working.
+
+3. **Check documentation:**
+   ```bash
+   # API docs available at
+   open http://localhost:8788/docs
+   ```
+
+4. **Search existing issues:**
+   https://github.com/Tilanthi/SLATE/issues
+
+5. **Report the issue:**
+   - Include the error message
+   - Describe what you were trying to do
+   - Include your system information (OS, Python version)
 
 ### Best Practices
 
-1. **Start Small:** Begin with short discovery runs (50-100 cycles)
-2. **Monitor Regularly:** Check dashboards every few hours
-3. **Clean Up Periodically:** Run database cleanup weekly
-4. **Diversify:** Don't rely on a single strategy
-5. **Validate:** Always verify results with walk-forward analysis
-6. **Paper Trade First:** Never skip paper trading validation
-7. **Keep Learning:** Review discovery logs to understand what works
+1. **Start small:** Run 50-100 cycle discoveries first to verify setup
+
+2. **Monitor regularly:** Check dashboards every few hours when running long discoveries
+
+3. **Clean up periodically:** Run database cleanup weekly
+
+4. **Diversify:** Never rely on a single strategy
+
+5. **Validate everything:** Always paper trade before considering real money (and remember SLATE never does real trading)
+
+6. **Keep learning:** Review discovery logs to understand what works and why
+
+7. **Be patient:** Good strategies take time to discover and validate
 
 ---
 
@@ -1051,52 +1597,85 @@ If you encounter issues not covered here:
 
 ### Glossary
 
-- **Alpha**: Returns above the market benchmark
-- **Drawdown**: Peak-to-trough decline in value
-- **Kelly Criterion**: Formula for optimal position sizing
-- **Sharpe Ratio**: Risk-adjusted return measure
-- **Slippage**: Difference between expected and actual execution price
-- **Stigmergy**: Indirect coordination through environment modification
-- **VaR (Value at Risk)**: Maximum expected loss over a time period
+**Alpha:** Profit above what would be expected from market movement alone
 
-### Quick Reference Cards
+**Drawdown:** The decline from a peak to a trough in your account value
 
-**Ports:**
-- Main Server: 8788
-- Dashboard: http://localhost:8788/dashboard
-- Discovery: http://localhost:8788/discovery-dashboard
-- API Docs: http://localhost:8788/docs
+**Kelly Criterion:** A formula for calculating the optimal position size based on win rate and reward/risk ratio
 
-**Commands:**
+**Maker/Taker Fees:** Trading fees. Makers provide liquidity (cheaper), takers take liquidity (more expensive)
+
+**Multi-Path Testing:** Testing a strategy on many alternative price paths to verify robustness
+
+**Paper Trading:** Simulating trades without real money
+
+**Sharpe Ratio:** A measure of risk-adjusted return. Higher is better. > 1.5 is good.
+
+**Slippage:** The difference between the expected price of a trade and the actual price
+
+**Stigmergy:** Indirect coordination between agents through modifications to the environment (like ants following pheromone trails)
+
+**Value at Risk (VaR):** The maximum loss expected over a given time period at a given confidence level
+
+### Quick Reference
+
+**Server Information:**
+- Default Port: 8788
+- Mode: Paper trading only (never real money)
+- Initial Capital: 10,000 USDT (configurable)
+
+**Default Trading Costs:**
+- Maker Fee: 0.02%
+- Taker Fee: 0.05%
+- Slippage: 0.05%
+- Fill Rate: 95%
+
+**Default Risk Limits:**
+- Max Position Size: 10% of capital per trade
+- Max Drawdown: 30%
+
+**Common Commands:**
+
 ```bash
 # Start SLATE
-python3 -m slate_core.server
+python3 -m slate_core.autonomous_research.server
 
 # Run tests
 python3 slate_core/run_tests.py
 
 # Start discovery
-curl -X POST http://localhost:8788/api/discovery/trigger
+curl -X POST http://localhost:8788/api/discovery/realistic/start \
+  -H "Content-Type: application/json" \
+  -d '{"cycles": 100, "symbols": ["BTCUSDT"], "timeframes": ["1h"]}'
 
 # Get top strategies
-curl http://localhost:8788/api/realistic-discovery/results/top
+curl "http://localhost:8788/api/discovery/realistic/top?limit=10"
+
+# Check status
+curl http://localhost:8788/health
 ```
 
-**Default Parameters:**
-- Initial Capital: 10,000 USDT
-- Max Position Size: 10% of capital
-- Maker Fee: 0.02%
-- Taker Fee: 0.05%
-- Slippage: 5 bps (0.05%)
+**Important URLs:**
+- Main Server: http://localhost:8788
+- Health Check: http://localhost:8788/health
+- API Documentation: http://localhost:8788/docs
+- Discovery Statistics: http://localhost:8788/api/discovery/realistic/statistics
 
 ---
 
-**Version:** 1.0.0  
-**Last Updated:** April 30, 2026  
-**Mode:** PAPER_TRADING ONLY
+**Version:** 2.0.0
+**Last Updated:** April 30, 2026
+**Mode:** PAPER TRADING ONLY - NEVER REAL MONEY
 
-**⚠️ IMPORTANT:** SLATE is for paper trading and simulation only. Never use SLATE for live trading without proper testing and risk management.
+**IMPORTANT:**
+SLATE is for research and education only. It never executes real trades. Any strategy discovered by SLATE should be thoroughly validated with extended paper trading before considering real-money implementation. Past performance does not guarantee future results.
 
 ---
 
-*For the latest updates and documentation, visit https://github.com/Tilanthi/SLATE*
+*For the latest updates, documentation, and source code, visit:*
+*https://github.com/Tilanthi/SLATE*
+
+*Questions or issues?*
+*https://github.com/Tilanthi/SLATE/issues*
+
+*Happy strategy hunting!*
