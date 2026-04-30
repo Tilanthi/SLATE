@@ -7,13 +7,17 @@ class SlateAPI {
         this.baseURL = config.baseURL || this.detectBaseURL();
         this.cache = new Map();
         this.cacheTimeout = config.cacheTimeout || 2000;
-        this.requestTimeout = config.requestTimeout || 10000;
-        this.maxRetries = config.maxRetries || 3;
-        this.retryDelay = config.retryDelay || 1000;
+        this.requestTimeout = config.requestTimeout || 30000;  // Increased to 30s
+        this.maxRetries = config.maxRetries || 5;  // Increased retries
+        this.retryDelay = config.retryDelay || 1500;  // Increased delay
     }
 
     detectBaseURL() {
-        // Use current origin to avoid IPv6/localhost issues
+        // Force use of 127.0.0.1 instead of localhost to avoid IPv6 issues
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '') {
+            return `http://127.0.0.1:${window.location.port}`;
+        }
         return window.location.origin;
     }
 
@@ -39,7 +43,11 @@ class SlateAPI {
 
                 const response = await fetch(`${this.baseURL}${endpoint}`, {
                     ...options,
-                    signal: controller.signal
+                    signal: controller.signal,
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
                 });
 
                 clearTimeout(timeoutId);
@@ -58,15 +66,15 @@ class SlateAPI {
                     });
                 }
 
-                console.log(`[API] Success: ${endpoint}`);
+                console.log(`[API] Success: ${endpoint} (attempt ${attempt + 1})`);
                 return data;
 
             } catch (error) {
                 lastError = error;
-                console.warn(`[API] Attempt ${attempt + 1} failed for ${endpoint}:`, error.message);
+                console.warn(`[API] Attempt ${attempt + 1}/${this.maxRetries} failed for ${endpoint}:`, error.message);
 
                 if (attempt < this.maxRetries - 1) {
-                    await this.delay(this.retryDelay * (attempt + 1));
+                    await this.delay(this.retryDelay * (attempt + 1) * 0.5);
                 }
             }
         }
