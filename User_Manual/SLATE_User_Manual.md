@@ -185,28 +185,42 @@ All tests passing means SLATE is ready to go!
 
 ### Starting SLATE
 
-Once installed, start SLATE with this command:
+**IMPORTANT:** The SLATE server now **automatically starts discovery** when launched. This is the default behavior.
+
+**Option 1: Start with the script (Recommended)**
 
 ```bash
-python3 -m slate_core.autonomous_research.server
+./start_slate.sh
 ```
 
-You'll see output indicating SLATE is running:
+**Option 2: Start directly with Python**
 
-```
-INFO:     Started server process
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8788
+```bash
+python3 -m slate_core.server
 ```
 
-SLATE is now running and ready to accept requests!
+When SLATE starts, you'll see:
 
-**Note:** Port 8788 is used to avoid conflicts with other trading systems (ASTRA uses 8787). You can change this with the SLATE_PORT environment variable if needed.
+```
+==========================================
+SLATE Server Starting
+==========================================
+Port: 8788
+Mode: Paper Trading Only
+Dashboard: http://localhost:8788
+API Docs: http://localhost:8788/docs
+==========================================
+INFO:     Auto-starting discovery cycle...
+INFO:     Running discovery cycle...
+```
+
+**Discovery runs automatically** in the background, continuously searching for profitable strategies.
+
+**Note:** Port 8788 is used for SLATE. The server will auto-start discovery cycles - you don't need to manually trigger them.
 
 ### Checking That SLATE Works
 
-Let's run a simple test to make sure everything is connected:
+Let's verify everything is connected:
 
 ```bash
 curl http://localhost:8788/health
@@ -215,10 +229,14 @@ curl http://localhost:8788/health
 You should get a response like:
 
 ```json
-{"status": "healthy", "mode": "paper_trading"}
+{
+  "status": "healthy",
+  "mode": "paper_trading",
+  "discovery_running": true
+}
 ```
 
-This confirms SLATE is running in safe paper trading mode.
+This confirms SLATE is running in safe paper trading mode with discovery active.
 
 ---
 
