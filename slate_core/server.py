@@ -247,6 +247,7 @@ async def get_top_strategies(limit: int = 10, sort_by: str = "total_profit_usdt"
                 edge_type,
                 parameters,
                 total_profit_usdt,
+                total_return_pct,
                 sharpe_ratio,
                 max_drawdown_pct,
                 win_rate,
@@ -268,12 +269,13 @@ async def get_top_strategies(limit: int = 10, sort_by: str = "total_profit_usdt"
                 "edge_type": row[0],
                 "parameters": row[1],
                 "total_profit_usdt": row[2],
-                "sharpe_ratio": row[3],
-                "max_drawdown_pct": row[4],
-                "win_rate": row[5],
-                "profit_factor": row[6],
-                "passed_validation": bool(row[7]),
-                "beat_market": bool(row[8])
+                "total_return_pct": row[3],  # This is the decimal percentage (0.0379 = 3.79%)
+                "sharpe_ratio": row[4],
+                "max_drawdown_pct": row[5],
+                "win_rate": row[6],
+                "profit_factor": row[7],
+                "passed_validation": bool(row[8]),
+                "beat_market": bool(row[9])
             })
 
         return {
@@ -311,10 +313,10 @@ async def get_discovery_statistics():
         cursor.execute("SELECT COUNT(*) FROM edge_discoveries WHERE beat_market = 1")
         beat_market = cursor.fetchone()[0]
 
-        # Average metrics
+        # Average metrics (use total_return_pct for average return, not total_profit_usdt)
         cursor.execute("""
             SELECT
-                AVG(total_profit_usdt),
+                AVG(total_return_pct),
                 AVG(sharpe_ratio),
                 AVG(max_drawdown_pct),
                 AVG(win_rate)
@@ -322,9 +324,9 @@ async def get_discovery_statistics():
         """)
         avg_metrics = cursor.fetchone()
 
-        # Best strategy
+        # Best strategy (use total_return_pct for percentage, not total_profit_usdt)
         cursor.execute("""
-            SELECT edge_type, total_profit_usdt, sharpe_ratio
+            SELECT edge_type, total_return_pct, total_profit_usdt, sharpe_ratio
             FROM edge_discoveries
             ORDER BY total_profit_usdt DESC
             LIMIT 1
@@ -336,9 +338,11 @@ async def get_discovery_statistics():
             "total_tests": total,
             "profitable_strategies": passed,
             "beat_market_count": beat_market,
-            "best_return": float(best[1]) if best else 0,
-            "best_sharpe": float(best[2]) if best else 0,
-            "average_return": float(avg_metrics[0]) if avg_metrics[0] else 0,
+            "best_return": float(best[1]) if best else 0,  # total_return_pct (already as decimal)
+            "best_return_pct": float(best[1] * 100) if best else 0,  # as percentage for display
+            "best_profit_usdt": float(best[2]) if best else 0,  # actual USDT profit
+            "best_sharpe": float(best[3]) if best else 0,
+            "average_return": float(avg_metrics[0]) if avg_metrics[0] else 0,  # avg of total_return_pct (decimal)
             "average_sharpe": float(avg_metrics[1]) if avg_metrics[1] else 0,
             "average_drawdown": float(avg_metrics[2]) if avg_metrics[2] else 0,
             "average_win_rate": float(avg_metrics[3]) if avg_metrics[3] else 0,
@@ -543,7 +547,8 @@ async def dashboard():
                 document.getElementById('status').textContent = stats.discovery_running ? 'Running' : 'Idle';
                 document.getElementById('total-tests').textContent = stats.total_tests || 0;
                 document.getElementById('profitable').textContent = stats.profitable_strategies || 0;
-                document.getElementById('best-return').textContent = stats.best_return ? (stats.best_return * 100).toFixed(1) + '%' : '-';
+                // best_return is now a decimal (0.0379), multiply by 100 for percentage
+                document.getElementById('best-return').textContent = stats.best_return !== undefined ? (stats.best_return * 100).toFixed(1) + '%' : '-';
 
                 // Get top strategies
                 const strategiesResp = await fetch('/api/discovery/top?limit=10');
@@ -554,10 +559,11 @@ async def dashboard():
                     list.innerHTML = data.strategies.map((s, i) => `
                         <div class="strategy-item">
                             <strong>#${i+1} ${s.edge_type}</strong><br>
-                            Return: ${(s.total_profit_usdt * 100).toFixed(2)}% |
+                            Return: ${(s.total_return_pct * 100).toFixed(2)}% |
+                            Profit: $${s.total_profit_usdt.toFixed(2)} |
                             Sharpe: ${s.sharpe_ratio.toFixed(2)} |
                             Win Rate: ${(s.win_rate * 100).toFixed(1)}% |
-                            Drawdown: ${s.max_drawdown_pct.toFixed(1)}%
+                            Drawdown: ${(s.max_drawdown_pct * 100).toFixed(1)}%
                         </div>
                     `).join('');
                 } else {

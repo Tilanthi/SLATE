@@ -1,34 +1,54 @@
 {
+  "b1c5f0321535": {
+    "id": "b1c5f0321535",
+    "type": "discovered_edge",
+    "properties": {
+      "edge_type": "market_microstructure",
+      "description": "Liquidity sweep detection and reversal (LONG or SHORT)",
+      "profit_usdt": 47.98819470057424,
+      "return_pct": 0.004798819470057424,
+      "drawdown_pct": 0.0036758043084879318,
+      "sharpe": 2.3946679821062187,
+      "beat_market": true,
+      "vs_buy_hold": 1584.8002032781305,
+      "mc_win_rate": 0.69,
+      "passed": true,
+      "start_price": 97.93,
+      "end_price": 82.88,
+      "volatility_regime": "unknown",
+      "timestamp": "2026-04-30T14:36:48.422842",
+      "cycle": 1
+    },
+    "relationships": {
+      "related_to": [],
+      "improves_on": [],
+      "similar_to": []
+    }
+  },
   "902685a1e6d3": {
     "id": "902685a1e6d3",
     "type": "discovered_edge",
     "properties": {
       "edge_type": "time_pattern",
       "description": "Asian session range fade (LONG or SHORT)",
-      "profit_usdt": 303.73854399564516,
-      "return_pct": 0.030373854399564516,
-      "drawdown_pct": 0.002375070984330822,
-      "sharpe": 4.5028747827942475,
+      "profit_usdt": 297.1752518588073,
+      "return_pct": 0.029717525185880733,
+      "drawdown_pct": 0.0032736547564910317,
+      "sharpe": 4.281789067629951,
       "beat_market": true,
-      "vs_buy_hold": 1840.5505525732015,
-      "mc_win_rate": 0.98,
+      "vs_buy_hold": 1833.9872604363636,
+      "mc_win_rate": 1.0,
       "passed": true,
       "start_price": 97.93,
       "end_price": 82.88,
       "volatility_regime": "unknown",
-      "timestamp": "2026-04-30T14:29:52.369613",
-      "cycle": 6
+      "timestamp": "2026-04-30T14:36:55.150378",
+      "cycle": 1
     },
     "relationships": {
-      "related_to": [
-        "902685a1e6d3",
-        "4c84c892761f"
-      ],
+      "related_to": [],
       "improves_on": [],
-      "similar_to": [
-        "902685a1e6d3",
-        "4c84c892761f"
-      ]
+      "similar_to": []
     }
   },
   "4c84c892761f": {
@@ -37,60 +57,26 @@
     "properties": {
       "edge_type": "time_pattern",
       "description": "London open volatility breakout (LONG or SHORT)",
-      "profit_usdt": 349.8828104368822,
-      "return_pct": 0.03498828104368822,
-      "drawdown_pct": 0.003060651887602013,
-      "sharpe": 5.298154041013028,
+      "profit_usdt": 409.1450929729326,
+      "return_pct": 0.04091450929729326,
+      "drawdown_pct": 0.003187487426573989,
+      "sharpe": 5.924462759100503,
       "beat_market": true,
-      "vs_buy_hold": 1886.6948190144385,
-      "mc_win_rate": 0.74,
+      "vs_buy_hold": 1945.957101550489,
+      "mc_win_rate": 0.8,
       "passed": true,
       "start_price": 97.93,
       "end_price": 82.88,
       "volatility_regime": "unknown",
-      "timestamp": "2026-04-30T14:29:58.507583",
-      "cycle": 6
+      "timestamp": "2026-04-30T14:37:01.201096",
+      "cycle": 1
     },
     "relationships": {
       "related_to": [
-        "902685a1e6d3",
-        "4c84c892761f"
+        "902685a1e6d3"
       ],
       "improves_on": [],
-      "similar_to": [
-        "902685a1e6d3",
-        "4c84c892761f"
-      ]
-    }
-  },
-  "b1c5f0321535": {
-    "id": "b1c5f0321535",
-    "type": "discovered_edge",
-    "properties": {
-      "edge_type": "market_microstructure",
-      "description": "Liquidity sweep detection and reversal (LONG or SHORT)",
-      "profit_usdt": 35.827713005994156,
-      "return_pct": 0.0035827713005994154,
-      "drawdown_pct": 0.0036570581607062195,
-      "sharpe": 1.727983444076082,
-      "beat_market": true,
-      "vs_buy_hold": 1572.6397215835505,
-      "mc_win_rate": 0.71,
-      "passed": true,
-      "start_price": 97.93,
-      "end_price": 82.88,
-      "volatility_regime": "unknown",
-      "timestamp": "2026-04-30T14:29:45.594705",
-      "cycle": 6
-    },
-    "relationships": {
-      "related_to": [
-        "b1c5f0321535"
-      ],
-      "improves_on": [],
-      "similar_to": [
-        "b1c5f0321535"
-      ]
+      "similar_to": []
     }
   }
 }
