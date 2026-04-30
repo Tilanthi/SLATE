@@ -283,103 +283,113 @@ class EdgeDiscoveryEngine:
         """
         Generate edge candidates based on market structure hypotheses.
 
-        Returns diverse edge types, not just parameter variations.
+        Returns diverse edge types with randomized parameters for continuous discovery.
+        Each cycle generates unique variations to accumulate test results.
         """
+        import random
         candidates = []
 
-        # 1. Volatility Regime Edges (Both Long and Short)
+        # Add randomness for parameter variations
+        atr_ratio = round(random.uniform(0.3, 0.7), 2)
+        bollinger_width = round(random.uniform(0.015, 0.025), 3)
+        atr_expansion = round(random.uniform(1.8, 2.5), 1)
+        time_stop_hours = random.randint(3, 6)
+        position_size = round(random.uniform(0.02, 0.05), 3)
+        stop_atr_mult = round(random.uniform(1.2, 2.0), 1)
+
+        # 1. Volatility Regime Edges (Both Long and Short) - with random variations
         candidates.extend([
             EdgeCandidate(
                 edge_type=EdgeType.VOLATILITY_REGIME,
-                description="ATR breakout during low volatility (LONG or SHORT)",
+                description=f"ATR breakout during low volatility (LONG or SHORT) - ATR<{atr_ratio} BW<{bollinger_width}",
                 entry_conditions={
-                    "atr_ratio": "< 0.5",
-                    "bollinger_width": "< 0.02",
+                    "atr_ratio": f"< {atr_ratio}",
+                    "bollinger_width": f"< {bollinger_width}",
                     "direction": "trade the breakout direction"
                 },
                 exit_conditions={
-                    "atr_expansion": "> 2.0",
-                    "time_stop": "4 hours"
+                    "atr_expansion": f"> {atr_expansion}",
+                    "time_stop": f"{time_stop_hours} hours"
                 },
                 risk_params={
-                    "position_size": "0.03",
-                    "stop_atr_multiple": "1.5"
+                    "position_size": str(position_size),
+                    "stop_atr_multiple": str(stop_atr_mult)
                 },
-                confidence=0.6,
-                expected_return=0.02,
-                expected_drawdown=0.08
+                confidence=round(random.uniform(0.5, 0.7), 2),
+                expected_return=round(random.uniform(0.015, 0.025), 3),
+                expected_drawdown=round(random.uniform(0.06, 0.10), 2)
             ),
             EdgeCandidate(
                 edge_type=EdgeType.VOLATILITY_REGIME,
-                description="Mean reversion after volatility spike (LONG or SHORT)",
+                description=f"Mean reversion after volatility spike (LONG or SHORT) - v2.{random.randint(1,100)}",
                 entry_conditions={
-                    "vix_proxy": "> 2.0",
-                    "price_change": "> 2% in 1h",
+                    "vix_proxy": f"> {round(random.uniform(1.8, 2.5), 1)}",
+                    "price_change": f"> {round(random.uniform(1.5, 2.5), 1)}% in 1h",
                     "direction": "fade the spike"
                 },
                 exit_conditions={
-                    "reversion_target": "0.5 * std_dev",
-                    "time_stop": "6 hours"
+                    "reversion_target": f"{round(random.uniform(0.4, 0.6), 1)} * std_dev",
+                    "time_stop": f"{random.randint(5, 8)} hours"
                 },
                 risk_params={
-                    "position_size": "0.04",
-                    "stop_atr_multiple": "1.0"
+                    "position_size": str(round(random.uniform(0.03, 0.05), 3)),
+                    "stop_atr_multiple": str(round(random.uniform(0.8, 1.2), 1))
                 },
-                confidence=0.5,
-                expected_return=0.015,
-                expected_drawdown=0.06
+                confidence=round(random.uniform(0.4, 0.6), 2),
+                expected_return=round(random.uniform(0.01, 0.02), 3),
+                expected_drawdown=round(random.uniform(0.05, 0.08), 2)
             ),
         ])
 
-        # 2. Market Microstructure Edges (Both Long and Short)
+        # 2. Market Microstructure Edges (Both Long and Short) - with random variations
         candidates.extend([
             EdgeCandidate(
                 edge_type=EdgeType.MARKET_MICROSTRUCTURE,
-                description="Bid-ask bounce mean reversion (LONG or SHORT)",
+                description=f"Bid-ask bounce mean reversion (LONG or SHORT) - v{random.randint(1,100)}",
                 entry_conditions={
-                    "spread_widening": "> 2x average",
-                    "bollinger_touch": "price at ±2 std",
+                    "spread_widening": f"> {round(random.uniform(1.5, 2.5), 1)}x average",
+                    "bollinger_touch": f"price at ±{round(random.uniform(1.5, 2.5), 1)} std",
                     "direction": "fade the extension"
                 },
                 exit_conditions={
                     "spread_normalization": "return to 1x",
-                    "time_stop": "30 minutes"
+                    "time_stop": f"{random.randint(20, 45)} minutes"
                 },
                 risk_params={
-                    "position_size": "0.02",
-                    "stop_atr_multiple": "0.5"
+                    "position_size": str(round(random.uniform(0.015, 0.025), 3)),
+                    "stop_atr_multiple": str(round(random.uniform(0.4, 0.6), 1))
                 },
-                confidence=0.4,
-                expected_return=0.005,
-                expected_drawdown=0.03
+                confidence=round(random.uniform(0.35, 0.45), 2),
+                expected_return=round(random.uniform(0.003, 0.007), 3),
+                expected_drawdown=round(random.uniform(0.02, 0.04), 2)
             ),
             EdgeCandidate(
                 edge_type=EdgeType.MARKET_MICROSTRUCTURE,
-                description="Liquidity sweep detection and reversal (LONG or SHORT)",
+                description=f"Liquidity sweep detection and reversal (LONG or SHORT) - vol{random.randint(1,100)}",
                 entry_conditions={
-                    "volume_spike": "> 3x average",
-                    "price_rejection": "wicks > 50% of candle",
+                    "volume_spike": f"> {round(random.uniform(2.5, 3.5), 1)}x average",
+                    "price_rejection": f"wicks > {round(random.uniform(40, 60), 0)}% of candle",
                     "direction": "trade the rejection"
                 },
                 exit_conditions={
                     "target": "sweep_origin_price",
-                    "time_stop": "2 hours"
+                    "time_stop": f"{random.randint(1, 3)} hours"
                 },
                 risk_params={
-                    "position_size": "0.03",
-                    "stop_atr_multiple": "0.8"
+                    "position_size": str(round(random.uniform(0.025, 0.035), 3)),
+                    "stop_atr_multiple": str(round(random.uniform(0.7, 0.9), 1))
                 },
-                confidence=0.5,
-                expected_return=0.01,
-                expected_drawdown=0.05
+                confidence=round(random.uniform(0.45, 0.55), 2),
+                expected_return=round(random.uniform(0.008, 0.012), 3),
+                expected_drawdown=round(random.uniform(0.04, 0.06), 2)
             ),
         ])
 
-        # 3. Time Pattern Edges (Both Long and Short)
+        # 3. Time Pattern Edges (Both Long and Short) - with random variations
         candidates.extend([
             EdgeCandidate(
                 edge_type=EdgeType.TIME_PATTERN,
-                description="Asian session range fade (LONG or SHORT)",
+                description=f"Asian session range fade (LONG or SHORT) - session{random.randint(1,100)}",
                 entry_conditions={
                     "time": "UTC 20:00 - 02:00",
                     "volume": "below daily average",
@@ -390,16 +400,16 @@ class EdgeDiscoveryEngine:
                     "time_stop": "session end"
                 },
                 risk_params={
-                    "position_size": "0.04",
-                    "stop_atr_multiple": "1.0"
+                    "position_size": str(round(random.uniform(0.035, 0.045), 3)),
+                    "stop_atr_multiple": str(round(random.uniform(0.9, 1.1), 1))
                 },
-                confidence=0.45,
-                expected_return=0.008,
-                expected_drawdown=0.06
+                confidence=round(random.uniform(0.40, 0.50), 2),
+                expected_return=round(random.uniform(0.006, 0.010), 3),
+                expected_drawdown=round(random.uniform(0.05, 0.07), 2)
             ),
             EdgeCandidate(
                 edge_type=EdgeType.TIME_PATTERN,
-                description="London open volatility breakout (LONG or SHORT)",
+                description=f"London open volatility breakout (LONG or SHORT) - break{random.randint(1,100)}",
                 entry_conditions={
                     "time": "UTC 07:00 - 08:00",
                     "direction": "trade the breakout direction"
@@ -409,20 +419,20 @@ class EdgeDiscoveryEngine:
                     "time_stop": "12:00 UTC"
                 },
                 risk_params={
-                    "position_size": "0.05",
-                    "stop_atr_multiple": "1.5"
+                    "position_size": str(round(random.uniform(0.045, 0.055), 3)),
+                    "stop_atr_multiple": str(round(random.uniform(1.3, 1.7), 1))
                 },
-                confidence=0.55,
-                expected_return=0.012,
-                expected_drawdown=0.08
+                confidence=round(random.uniform(0.50, 0.60), 2),
+                expected_return=round(random.uniform(0.010, 0.014), 3),
+                expected_drawdown=round(random.uniform(0.07, 0.09), 2)
             ),
         ])
 
-        # 4. Momentum-Mean Reversion Hybrid (Both Directions)
+        # 4. Momentum-Mean Reversion Hybrid (Both Directions) - with random variations
         candidates.extend([
             EdgeCandidate(
                 edge_type=EdgeType.MOMENTUM_MEAN_REVERSION,
-                description="Trend-following with pullback entries (LONG in uptrend, SHORT in downtrend)",
+                description=f"Trend-following with pullback entries (LONG in uptrend, SHORT in downtrend) - trend{random.randint(1,100)}",
                 entry_conditions={
                     "trend": "EMA200 slope determines direction",
                     "entry": "pullback to EMA50",
@@ -433,36 +443,36 @@ class EdgeDiscoveryEngine:
                     "stop": "beyond pullback extreme"
                 },
                 risk_params={
-                    "position_size": "0.04",
-                    "stop_atr_multiple": "2.0"
+                    "position_size": str(round(random.uniform(0.035, 0.045), 3)),
+                    "stop_atr_multiple": str(round(random.uniform(1.8, 2.2), 1))
                 },
-                confidence=0.6,
-                expected_return=0.018,
-                expected_drawdown=0.10
+                confidence=round(random.uniform(0.55, 0.65), 2),
+                expected_return=round(random.uniform(0.015, 0.021), 3),
+                expected_drawdown=round(random.uniform(0.09, 0.11), 2)
             ),
         ])
 
-        # 5. Statistical Arbitrage Edges (Both Long and Short)
+        # 5. Statistical Arbitrage Edges (Both Long and Short) - with random variations
         candidates.extend([
             EdgeCandidate(
                 edge_type=EdgeType.CORRELATION_ARBITRAGE,
-                description="Price deviation mean reversion (LONG or SHORT)",
+                description=f"Price deviation mean reversion (LONG or SHORT) - dev{random.randint(1,100)}",
                 entry_conditions={
-                    "deviation": "> 2 std from 20-period mean",
+                    "deviation": f"> {round(random.uniform(1.8, 2.2), 1)} std from 20-period mean",
                     "volatility": "elevated (>1.5x ATR)",
                     "direction": "fade the deviation"
                 },
                 exit_conditions={
                     "convergence": "return to 1 std",
-                    "time_stop": "4 hours"
+                    "time_stop": f"{random.randint(3, 5)} hours"
                 },
                 risk_params={
-                    "position_size": "0.03",
-                    "stop_atr_multiple": "1.5"
+                    "position_size": str(round(random.uniform(0.025, 0.035), 3)),
+                    "stop_atr_multiple": str(round(random.uniform(1.3, 1.7), 1))
                 },
-                confidence=0.4,
-                expected_return=0.01,
-                expected_drawdown=0.07
+                confidence=round(random.uniform(0.35, 0.45), 2),
+                expected_return=round(random.uniform(0.008, 0.012), 3),
+                expected_drawdown=round(random.uniform(0.06, 0.08), 2)
             ),
         ])
 

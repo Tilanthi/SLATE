@@ -478,13 +478,13 @@ async def auto_start_discovery():
                 results = await engine.run_discovery_cycle()
                 logger.info(f"Discovery cycle complete: {results}")
 
-                # Wait before next cycle (continuous discovery)
-                logger.info("Waiting 60 seconds before next cycle...")
-                await asyncio.sleep(60)
+                # Wait before next cycle (continuous discovery) - SHORT WAIT for continuous testing
+                logger.info("Waiting 5 seconds before next cycle...")
+                await asyncio.sleep(5)
 
             except Exception as e:
                 logger.error(f"Discovery cycle error: {e}", exc_info=True)
-                await asyncio.sleep(60)  # Wait before retry
+                await asyncio.sleep(5)  # Wait before retry
 
     except Exception as e:
         logger.error(f"Auto-start error: {e}", exc_info=True)
