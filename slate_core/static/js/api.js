@@ -134,6 +134,29 @@ class SlateAPI {
             throw error;
         }
     }
+
+    // Natural Language Strategy Generation
+    async generateNLStrategy(description, provider = 'mock', apiKey = null) {
+        return this.fetch('/api/discovery/nl/generate', {
+            method: 'POST',
+            body: JSON.stringify({
+                description,
+                provider,
+                api_key: apiKey
+            })
+        });
+    }
+
+    async testNLStrategy(description, provider = 'mock', apiKey = null) {
+        return this.fetch('/api/discovery/nl/test', {
+            method: 'POST',
+            body: JSON.stringify({
+                description,
+                provider,
+                api_key: apiKey
+            })
+        });
+    }
 }
 
 // Create singleton instance

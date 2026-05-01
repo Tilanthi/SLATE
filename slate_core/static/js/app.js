@@ -351,6 +351,121 @@ class SlateDashboard {
         console.error('[Dashboard]', message);
         this.showMessage('Error: ' + message);
     }
+
+    // Natural Language Strategy Generation
+
+    async generateNLStrategy() {
+        const description = document.getElementById('nl-description').value.trim();
+        if (!description) {
+            this.showNLResult('Please enter a strategy description', true);
+            return;
+        }
+
+        this.showNLResult('Generating strategy from description...', false, true);
+
+        try {
+            const response = await fetch('/api/discovery/nl/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ description })
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                const strategy = data.strategy;
+                this.showNLResult(`
+                    <h4>✅ Strategy Generated Successfully</h4>
+                    <p><strong>Type:</strong> ${strategy.edge_type}</p>
+                    <p><strong>Description:</strong> ${strategy.description}</p>
+                    <p><strong>Confidence:</strong> ${(strategy.confidence * 100).toFixed(1)}%</p>
+                    <p><strong>Expected Return:</strong> ${this.utils.formatPercentage(strategy.expected_return)}</p>
+                    <details>
+                        <summary style="cursor: pointer; color: #3498db;">View Strategy Details</summary>
+                        <pre>${JSON.stringify(strategy, null, 2)}</pre>
+                    </details>
+                    <p style="margin-top: 15px;">
+                        <button onclick="app.testNLStrategy()" style="padding: 10px 20px; background: #9b59b6; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            ▶ Test This Strategy
+                        </button>
+                    </p>
+                `);
+            } else {
+                this.showNLResult(`❌ Failed to generate strategy: ${data.message}`, true);
+            }
+        } catch (error) {
+            console.error('[NL Strategy] Error:', error);
+            this.showNLResult(`❌ Error: ${error.message}`, true);
+        }
+    }
+
+    async testNLStrategy() {
+        const description = document.getElementById('nl-description').value.trim();
+        if (!description) {
+            this.showNLResult('Please enter a strategy description', true);
+            return;
+        }
+
+        this.showNLResult('Generating and testing strategy...', false, true);
+
+        try {
+            const response = await fetch('/api/discovery/nl/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ description })
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                const results = data.results;
+                const passed = results.passed_validation;
+                const beatMarket = results.beat_market;
+
+                this.showNLResult(`
+                    <h4>✅ Strategy Tested Successfully</h4>
+                    <p><strong>Strategy:</strong> ${data.strategy.description}</p>
+                    <div style="margin-top: 15px;">
+                        <h5>Results:</h5>
+                        <p><strong>Profit:</strong> ${this.utils.formatCurrency(results.total_profit_usdt)} (${this.utils.formatPercentage(results.total_return_pct)})</p>
+                        <p><strong>Sharpe Ratio:</strong> ${results.sharpe_ratio.toFixed(2)}</p>
+                        <p><strong>Win Rate:</strong> ${this.utils.formatPercentage(results.win_rate)}</p>
+                        <p><strong>Max Drawdown:</strong> ${this.utils.formatPercentage(results.max_drawdown_pct)}</p>
+                        <p><strong>Total Trades:</strong> ${results.total_trades}</p>
+                        <p><strong>Beat Market:</strong> ${beatMarket ? '✅ Yes' : '❌ No'}</p>
+                        <p><strong>Validation:</strong> ${passed ? '✅ Passed' : '❌ Failed'}</p>
+                    </div>
+                    <p style="margin-top: 15px;">
+                        <em>The strategy has been saved to the database. Refresh the data to see it in the strategies list.</em>
+                    </p>
+                `);
+
+                // Refresh data to show the new strategy
+                setTimeout(() => this.refreshData(), 2000);
+            } else {
+                this.showNLResult(`❌ Failed to test strategy: ${data.message}`, true);
+            }
+        } catch (error) {
+            console.error('[NL Strategy] Error:', error);
+            this.showNLResult(`❌ Error: ${error.message}`, true);
+        }
+    }
+
+    showNLResult(html, isError = false, isLoading = false) {
+        const resultDiv = document.getElementById('nl-result');
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'nl-result' + (isError ? ' error' : '');
+
+        if (isLoading) {
+            resultDiv.innerHTML = '<p style="text-align: center;">⏳ Processing...</p>';
+        } else {
+            resultDiv.innerHTML = html;
+        }
+    }
 }
 
 // Initialize dashboard when DOM is ready

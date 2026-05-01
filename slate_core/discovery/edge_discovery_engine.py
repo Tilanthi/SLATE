@@ -2173,6 +2173,69 @@ class EdgeDiscoveryEngine:
             expected_drawdown=round(p['pos_size'] * 1.1, 2)
         )
 
+    def generate_nl_strategy(self, description: str, provider: str = "mock", api_key: Optional[str] = None) -> Optional[EdgeCandidate]:
+        """
+        Generate an EdgeCandidate from natural language description.
+
+        Args:
+            description: Natural language strategy description (e.g., "Test a mean reversion strategy when RSI is below 30")
+            provider: LLM provider ("openai", "anthropic", "ollama", "mock")
+            api_key: API key for the provider (if required)
+
+        Returns:
+            EdgeCandidate or None if generation fails
+
+        Example:
+            >>> candidate = engine.generate_nl_strategy("Test a breakout strategy when volume is high")
+            >>> result = engine.simulate_edge_backtest(df, candidate, config)
+        """
+        try:
+            from .nl_strategy_generator import create_nl_generator, NLStrategyRequest
+
+            # Create generator
+            generator = create_nl_generator(provider=provider, api_key=api_key)
+
+            # Create request
+            request = NLStrategyRequest(description=description)
+
+            # Generate strategy
+            result = generator.generate_strategy(request)
+
+            if not result.success:
+                logger.error(f"Failed to generate strategy from description: {result.error}")
+                return None
+
+            # Convert to EdgeCandidate
+            try:
+                edge_type = EdgeType(result.edge_type.lower())
+            except ValueError:
+                # Default to momentum if unknown type
+                edge_type = EdgeType.MOMENTUM_MEAN_REVERSION
+
+            candidate = EdgeCandidate(
+                edge_type=edge_type,
+                description=result.description,
+                entry_conditions=result.entry_conditions,
+                exit_conditions=result.exit_conditions,
+                risk_params=result.risk_params,
+                confidence=result.confidence,
+                expected_return=result.expected_return,
+                expected_drawdown=result.expected_drawdown
+            )
+
+            logger.info(f"Generated NL strategy: {result.description}")
+            logger.info(f"  Type: {result.edge_type}")
+            logger.info(f"  Explanation: {result.explanation}")
+
+            return candidate
+
+        except ImportError as e:
+            logger.error(f"Natural language generator not available: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error generating NL strategy: {e}")
+            return None
+
     async def run_discovery_cycle(self) -> Dict[str, Any]:
         """
         Run a complete discovery cycle with REAL data only.

@@ -75,6 +75,36 @@
             </div>
         </div>
 
+        <!-- Natural Language Strategy Generator -->
+        <div class="control-panel nl-strategy-panel">
+            <h2>🤖 Natural Language Strategy Generator</h2>
+            <p class="nl-description">Describe a trading strategy in plain English and SLATE will convert it to a testable strategy.</p>
+
+            <div class="nl-input-group">
+                <textarea id="nl-description" placeholder="Example: Test a mean reversion strategy when RSI is below 30" rows="3"></textarea>
+                <div class="nl-buttons">
+                    <button class="nl-btn" onclick="app.generateNLStrategy()">
+                        <span>⚡</span> Generate Strategy
+                    </button>
+                    <button class="nl-btn test-btn" onclick="app.testNLStrategy()">
+                        <span>▶</span> Generate & Test
+                    </button>
+                </div>
+            </div>
+
+            <div id="nl-result" class="nl-result" style="display: none;"></div>
+
+            <div class="nl-examples">
+                <strong>Example descriptions:</strong>
+                <ul>
+                    <li>"Test a mean reversion strategy when RSI is below 30"</li>
+                    <li>"Create a momentum strategy with EMA 12/26 crossover"</li>
+                    <li>"Test a breakout strategy when volume is high"</li>
+                    <li>"Create a volatility squeeze play strategy"</li>
+                </ul>
+            </div>
+        </div>
+
         <!-- Charts Section -->
         <div class="charts-section">
             <div class="chart-card">

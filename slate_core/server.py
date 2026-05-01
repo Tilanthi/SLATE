@@ -367,6 +367,152 @@ async def get_discovery_statistics():
 
 
 # ============================================================================
+# API Routes - Natural Language Strategy Generation
+# ============================================================================
+
+@app.post("/api/discovery/nl/generate")
+async def generate_nl_strategy(request: dict):
+    """
+    Generate a trading strategy from natural language description.
+
+    Body:
+        description: Natural language strategy description
+        provider: LLM provider (optional, default: "mock")
+        api_key: API key for provider (optional)
+
+    Example:
+        POST /api/discovery/nl/generate
+        {
+            "description": "Test a mean reversion strategy when RSI is below 30"
+        }
+    """
+    try:
+        description = request.get("description", "")
+        provider = request.get("provider", "mock")
+        api_key = request.get("api_key", None)
+
+        if not description:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "description is required"}
+            )
+
+        from slate_core.discovery.edge_discovery_engine import EdgeDiscoveryEngine
+
+        engine = EdgeDiscoveryEngine()
+        candidate = engine.generate_nl_strategy(description, provider=provider, api_key=api_key)
+
+        if candidate is None:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Failed to generate strategy"}
+            )
+
+        return {
+            "status": "success",
+            "strategy": {
+                "edge_type": candidate.edge_type.value,
+                "description": candidate.description,
+                "entry_conditions": candidate.entry_conditions,
+                "exit_conditions": candidate.exit_conditions,
+                "risk_params": candidate.risk_params,
+                "confidence": candidate.confidence,
+                "expected_return": candidate.expected_return,
+                "expected_drawdown": candidate.expected_drawdown
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating NL strategy: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+@app.post("/api/discovery/nl/test")
+async def test_nl_strategy(request: dict):
+    """
+    Generate and immediately test a strategy from natural language description.
+
+    Body:
+        description: Natural language strategy description
+        provider: LLM provider (optional, default: "mock")
+        api_key: API key for provider (optional)
+
+    Example:
+        POST /api/discovery/nl/test
+        {
+            "description": "Test a breakout strategy when volume is high"
+        }
+    """
+    try:
+        description = request.get("description", "")
+        provider = request.get("provider", "mock")
+        api_key = request.get("api_key", None)
+
+        if not description:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "description is required"}
+            )
+
+        from slate_core.discovery.edge_discovery_engine import EdgeDiscoveryEngine
+
+        # Generate strategy
+        engine = EdgeDiscoveryEngine()
+        candidate = engine.generate_nl_strategy(description, provider=provider, api_key=api_key)
+
+        if candidate is None:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Failed to generate strategy"}
+            )
+
+        # Fetch data and backtest
+        df = await engine.fetch_solusdt_data(days=90)
+        if df is None:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Failed to fetch market data"}
+            )
+
+        # Run backtest
+        result = engine.simulate_edge_backtest(df, candidate, engine.config)
+
+        # Save to database
+        engine.save_discovery(result)
+
+        return {
+            "status": "success",
+            "strategy": {
+                "edge_type": result.edge_type,
+                "description": result.edge_description
+            },
+            "results": {
+                "total_profit_usdt": result.total_profit_usdt,
+                "total_return_pct": result.total_return_pct,
+                "sharpe_ratio": result.sharpe_ratio,
+                "max_drawdown_pct": result.max_drawdown_pct,
+                "win_rate": result.win_rate,
+                "profit_factor": result.profit_factor,
+                "total_trades": result.total_trades,
+                "beat_market": result.beat_market,
+                "passed_validation": result.passed_validation
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error testing NL strategy: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+# ============================================================================
 # Web Dashboard
 # ============================================================================
 
