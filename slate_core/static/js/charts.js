@@ -309,6 +309,170 @@ class SlateCharts {
         console.log(`[Charts] Created performance metrics chart`);
     }
 
+    // Create benchmark comparison chart
+    createBenchmarkComparison(topPerformers, worstPerformers, canvasId) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        if (this.charts.has(canvasId)) {
+            this.charts.get(canvasId).destroy();
+        }
+
+        // Combine top and worst performers for comparison
+        const allPerformers = [...topPerformers, ...worstPerformers].slice(0, 10);
+        const labels = allPerformers.map(p => p.edge_type.substring(0, 20));
+        const strategyProfits = allPerformers.map(p => p.total_profit_usdt);
+        const buyHoldProfits = allPerformers.map(p => p.buy_hold_profit_usdt);
+
+        const chart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Strategy Profit',
+                        data: strategyProfits,
+                        backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                        borderColor: '#3498db',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Buy & Hold Profit',
+                        data: buyHoldProfits,
+                        backgroundColor: 'rgba(149, 165, 166, 0.7)',
+                        borderColor: '#95a5a6',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                ...this.getCommonOptions(),
+                plugins: {
+                    ...this.getCommonOptions().plugins,
+                    title: {
+                        display: true,
+                        text: 'Strategy vs Buy & Hold Comparison',
+                        color: this.colors.text,
+                        font: { size: 16 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                if (context.datasetIndex === 0) {
+                                    const excess = allPerformers[context.dataIndex].excess_return_usdt;
+                                    return `Excess vs Market: ${excess >= 0 ? '+' : ''}${excess.toFixed(2)} USDT`;
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    ...this.getCommonOptions().scales,
+                    x: {
+                        ...this.getCommonOptions().scales.x,
+                        ticks: {
+                            ...this.getCommonOptions().scales.x.ticks,
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                }
+            }
+        });
+
+        this.charts.set(canvasId, chart);
+        console.log(`[Charts] Created benchmark comparison chart`);
+    }
+
+    // Create portfolio allocation chart
+    createPortfolioChart(allocations, canvasId) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        if (this.charts.has(canvasId)) {
+            this.charts.get(canvasId).destroy();
+        }
+
+        // Filter allocations with at least 1% weight for cleaner display
+        const significantAllocations = allocations.filter(a => a.weight_pct >= 1);
+        const otherTotal = allocations.filter(a => a.weight_pct < 1).reduce((sum, a) => sum + a.weight_pct, 0);
+
+        const chartData = [...significantAllocations];
+        if (otherTotal > 0) {
+            chartData.push({
+                edge_type: 'Other',
+                weight_pct: otherTotal
+            });
+        }
+
+        const labels = chartData.map(a => a.edge_type.substring(0, 20));
+        const data = chartData.map(a => a.weight_pct);
+
+        // Generate colors
+        const backgroundColors = [
+            '#3498db', '#27ae60', '#e74c3c', '#f39c12', '#9b59b6',
+            '#1abc9c', '#34495e', '#16a085', '#27ae60', '#2980b9',
+            '#8e44ad', '#2c3e50', '#f1c40f', '#e67e22', '#ecf0f1'
+        ];
+
+        const chart = new Chart(canvas, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Portfolio Weight (%)',
+                    data: data,
+                    backgroundColor: backgroundColors.slice(0, data.length),
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: this.colors.text,
+                            font: { size: 11 },
+                            padding: 10,
+                            generateLabels: function(chart) {
+                                const data = chart.data;
+                                return data.labels.map((label, i) => ({
+                                    text: `${label}: ${data.datasets[0].data[i].toFixed(1)}%`,
+                                    fillStyle: data.datasets[0].backgroundColor[i],
+                                    hidden: false,
+                                    index: i
+                                }));
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Portfolio Allocation by Strategy',
+                        color: this.colors.text,
+                        font: { size: 16 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = (value / total * 100).toFixed(1);
+                                return `${label}: ${value.toFixed(1)}% (${percentage}% of portfolio)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        this.charts.set(canvasId, chart);
+        console.log(`[Charts] Created portfolio allocation chart`);
+    }
+
     // Update all charts with new data
     updateCharts(strategies) {
         if (strategies && strategies.length > 0) {

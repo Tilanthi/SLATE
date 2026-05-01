@@ -157,6 +157,19 @@ class SlateAPI {
             })
         });
     }
+
+    async getBenchmarkComparison() {
+        return this.fetch('/api/discovery/benchmark');
+    }
+
+    async getStrategyCorrelation() {
+        return this.fetch('/api/discovery/correlation');
+    }
+
+    async optimizePortfolio(method = 'mean_variance') {
+        const params = new URLSearchParams({ method });
+        return this.fetch(`/api/discovery/portfolio/optimize?${params}`);
+    }
 }
 
 // Create singleton instance

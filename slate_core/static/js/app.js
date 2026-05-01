@@ -52,6 +52,15 @@ class SlateDashboard {
         // Load initial data
         await this.refreshData();
 
+        // Load benchmark data
+        await this.refreshBenchmarkData();
+
+        // Load correlation data
+        await this.refreshCorrelationData();
+
+        // Load portfolio optimization
+        await this.optimizePortfolio();
+
         // Setup auto-refresh
         this.setupAutoRefresh();
 
@@ -464,6 +473,428 @@ class SlateDashboard {
             resultDiv.innerHTML = '<p style="text-align: center;">⏳ Processing...</p>';
         } else {
             resultDiv.innerHTML = html;
+        }
+    }
+
+    // Benchmark Comparison Methods
+
+    async refreshBenchmarkData() {
+        console.log('[Dashboard] Refreshing benchmark data...');
+
+        try {
+            const benchmarkData = await this.api.getBenchmarkComparison();
+
+            if (benchmarkData.status === 'no_data') {
+                this.showBenchmarkPlaceholder();
+                return;
+            }
+
+            if (benchmarkData.status === 'error') {
+                console.error('[Dashboard] Benchmark error:', benchmarkData.error);
+                this.showBenchmarkError(benchmarkData.error);
+                return;
+            }
+
+            // Update benchmark summary cards
+            this.updateBenchmarkSummary(benchmarkData.summary);
+
+            // Update benchmark chart
+            this.charts.createBenchmarkComparison(
+                benchmarkData.top_performers,
+                benchmarkData.worst_performers,
+                'benchmarkChart'
+            );
+
+            // Update top and worst performers lists
+            this.updateBenchmarkPerformers(benchmarkData.top_performers, benchmarkData.worst_performers);
+
+            // Hide loading message
+            const statusElement = document.getElementById('benchmark-status');
+            if (statusElement) {
+                statusElement.style.display = 'none';
+            }
+
+            console.log('[Dashboard] Benchmark data refreshed successfully');
+
+        } catch (error) {
+            console.error('[Dashboard] Error loading benchmark data:', error);
+            this.showBenchmarkError(error.message);
+        }
+    }
+
+    updateBenchmarkSummary(summary) {
+        // Beat market rate
+        const beatMarketRate = document.getElementById('beat-market-rate');
+        const beatMarketCount = document.getElementById('beat-market-count');
+        if (beatMarketRate) {
+            const rate = (summary.beat_market_percentage * 100).toFixed(1);
+            beatMarketRate.textContent = `${rate}%`;
+            beatMarketRate.className = 'benchmark-value ' + (summary.beat_market_percentage >= 0.5 ? 'positive' : 'negative');
+        }
+        if (beatMarketCount) {
+            beatMarketCount.textContent = `${summary.beat_market_count}/${summary.total_strategies} strategies`;
+        }
+
+        // Cumulative excess return
+        const cumulativeExcess = document.getElementById('cumulative-excess');
+        if (cumulativeExcess) {
+            const excess = summary.cumulative_excess_usdt;
+            cumulativeExcess.textContent = this.utils.formatCurrency(excess);
+            cumulativeExcess.className = 'benchmark-value ' + (excess >= 0 ? 'positive' : 'negative');
+        }
+
+        // Information Ratio
+        const infoRatio = document.getElementById('information-ratio');
+        if (infoRatio) {
+            const ir = summary.information_ratio.toFixed(2);
+            infoRatio.textContent = ir;
+            infoRatio.className = 'benchmark-value ' + (summary.information_ratio >= 1 ? 'positive' : 'negative');
+        }
+
+        // Average excess return
+        const avgExcess = document.getElementById('avg-excess-return');
+        if (avgExcess) {
+            const avg = summary.average_excess_return_usdt;
+            avgExcess.textContent = this.utils.formatCurrency(avg);
+            avgExcess.className = 'benchmark-value ' + (avg >= 0 ? 'positive' : 'negative');
+        }
+    }
+
+    updateBenchmarkPerformers(topPerformers, worstPerformers) {
+        const topList = document.getElementById('top-performers-list');
+        const worstList = document.getElementById('worst-performers-list');
+
+        if (topList) {
+            topList.innerHTML = topPerformers.map(p => this.createPerformerItem(p, 'positive')).join('');
+        }
+
+        if (worstList) {
+            worstList.innerHTML = worstPerformers.map(p => this.createPerformerItem(p, 'negative')).join('');
+        }
+    }
+
+    createPerformerItem(performer, type) {
+        const excessClass = performer.excess_return_usdt >= 0 ? 'excess' : 'excess negative';
+        const excessSign = performer.excess_return_usdt >= 0 ? '+' : '';
+
+        return `
+            <div class="performer-item ${type}">
+                <div class="performer-name">${performer.edge_type}</div>
+                <div class="performer-metrics">
+                    <div class="performer-metric">Profit: <span>${this.utils.formatCurrency(performer.total_profit_usdt)}</span></div>
+                    <div class="performer-metric">Buy & Hold: <span>${this.utils.formatCurrency(performer.buy_hold_profit_usdt)}</span></div>
+                    <div class="performer-metric ${excessClass}">Excess: <span>${excessSign}${this.utils.formatCurrency(performer.excess_return_usdt)}</span></div>
+                    ${performer.sharpe_ratio ? `<div class="performer-metric">Sharpe: <span>${performer.sharpe_ratio.toFixed(2)}</span></div>` : ''}
+                    ${performer.win_rate ? `<div class="performer-metric">Win Rate: <span>${this.utils.formatPercentage(performer.win_rate)}</span></div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    showBenchmarkPlaceholder() {
+        const statusElement = document.getElementById('benchmark-status');
+        if (statusElement) {
+            statusElement.textContent = 'No benchmark data available yet. Run discovery to generate benchmark comparisons.';
+            statusElement.className = 'text-center';
+            statusElement.style.display = 'block';
+        }
+    }
+
+    showBenchmarkError(message) {
+        const statusElement = document.getElementById('benchmark-status');
+        if (statusElement) {
+            statusElement.textContent = `Error loading benchmark data: ${message}`;
+            statusElement.className = 'error';
+            statusElement.style.display = 'block';
+        }
+    }
+
+    // Correlation Analysis Methods
+
+    async refreshCorrelationData() {
+        console.log('[Dashboard] Refreshing correlation data...');
+
+        try {
+            const correlationData = await this.api.getStrategyCorrelation();
+
+            if (correlationData.status === 'insufficient_data') {
+                this.showCorrelationPlaceholder(correlationData.message);
+                return;
+            }
+
+            if (correlationData.status === 'error') {
+                console.error('[Dashboard] Correlation error:', correlationData.error);
+                this.showCorrelationError(correlationData.error);
+                return;
+            }
+
+            // Update correlation summary
+            this.updateCorrelationSummary(correlationData.summary);
+
+            // Update correlation matrix
+            this.updateCorrelationMatrix(correlationData.matrix);
+
+            // Update recommendations
+            this.updateCorrelationRecommendations(correlationData.recommendations);
+
+            // Hide loading message
+            const statusElement = document.getElementById('correlation-status');
+            if (statusElement) {
+                statusElement.style.display = 'none';
+            }
+
+            console.log('[Dashboard] Correlation data refreshed successfully');
+
+        } catch (error) {
+            console.error('[Dashboard] Error loading correlation data:', error);
+            this.showCorrelationError(error.message);
+        }
+    }
+
+    updateCorrelationSummary(summary) {
+        const totalTypes = document.getElementById('total-types');
+        const highCorrPairs = document.getElementById('high-corr-pairs');
+        const lowCorrPairs = document.getElementById('low-corr-pairs');
+
+        if (totalTypes) totalTypes.textContent = summary.total_types;
+        if (highCorrPairs) highCorrPairs.textContent = summary.high_correlation_pairs;
+        if (lowCorrPairs) lowCorrPairs.textContent = summary.low_correlation_pairs;
+    }
+
+    updateCorrelationMatrix(matrixData) {
+        const matrixContainer = document.getElementById('correlation-matrix');
+        if (!matrixContainer) return;
+
+        const types = matrixData.types;
+        const correlations = matrixData.correlations;
+
+        // Create grid with header row
+        let html = '<div class="correlation-cell header">Strategy Type</div>';
+        types.forEach(type => {
+            html += `<div class="correlation-cell header">${type.substring(0, 15)}</div>`;
+        });
+
+        // Create data rows
+        types.forEach((type, i) => {
+            html += `<div class="correlation-cell header">${type.substring(0, 15)}</div>`;
+            correlations[i].forEach((corr, j) => {
+                const value = corr.toFixed(2);
+                let cellClass = '';
+
+                if (i === j) {
+                    cellClass = 'diagonal';
+                } else if (corr < 0.2) {
+                    cellClass = 'corr-very-low';
+                } else if (corr < 0.4) {
+                    cellClass = 'corr-low';
+                } else if (corr < 0.6) {
+                    cellClass = 'corr-medium-low';
+                } else if (corr < 0.7) {
+                    cellClass = 'corr-medium';
+                } else if (corr < 0.8) {
+                    cellClass = 'corr-medium-high';
+                } else if (corr < 0.9) {
+                    cellClass = 'corr-high';
+                } else {
+                    cellClass = 'corr-very-high';
+                }
+
+                html += `
+                    <div class="correlation-cell ${cellClass}">
+                        <div class="correlation-value-text">${value}</div>
+                    </div>
+                `;
+            });
+        });
+
+        matrixContainer.innerHTML = html;
+    }
+
+    updateCorrelationRecommendations(recommendations) {
+        const redundantList = document.getElementById('redundant-strategies-list');
+        const opportunitiesList = document.getElementById('diversification-opportunities-list');
+
+        if (redundantList) {
+            if (recommendations.redundant_strategies.length === 0) {
+                redundantList.innerHTML = '<p style="color: var(--text-secondary);">No highly correlated strategies found.</p>';
+            } else {
+                redundantList.innerHTML = recommendations.redundant_strategies.map(pair =>
+                    this.createCorrelationPairItem(pair, 'redundant')
+                ).join('');
+            }
+        }
+
+        if (opportunitiesList) {
+            if (recommendations.diversification_opportunities.length === 0) {
+                opportunitiesList.innerHTML = '<p style="color: var(--text-secondary);">No low correlation pairs found yet.</p>';
+            } else {
+                opportunitiesList.innerHTML = recommendations.diversification_opportunities.map(pair =>
+                    this.createCorrelationPairItem(pair, 'diversification')
+                ).join('');
+            }
+        }
+    }
+
+    createCorrelationPairItem(pair, type) {
+        const badgeClass = pair.correlation > 0.8 ? 'badge-high' : pair.correlation > 0.5 ? 'badge-medium' : 'badge-low';
+        const itemClass = type === 'diversification' ? 'diversification' : '';
+
+        return `
+            <div class="correlation-pair-item ${itemClass}">
+                <div class="correlation-pair-name">${pair.type1} ↔ ${pair.type2}</div>
+                <div class="correlation-pair-metric">
+                    <span>Correlation: <strong>${pair.correlation.toFixed(2)}</strong></span>
+                    <span class="correlation-badge ${badgeClass}">${pair.diversification_benefit} Benefit</span>
+                </div>
+            </div>
+        `;
+    }
+
+    showCorrelationPlaceholder(message) {
+        const statusElement = document.getElementById('correlation-status');
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.className = 'text-center';
+            statusElement.style.display = 'block';
+        }
+    }
+
+    showCorrelationError(message) {
+        const statusElement = document.getElementById('correlation-status');
+        if (statusElement) {
+            statusElement.textContent = `Error loading correlation data: ${message}`;
+            statusElement.className = 'error';
+            statusElement.style.display = 'block';
+        }
+    }
+
+    // Portfolio Optimization Methods
+
+    async optimizePortfolio(method = 'mean_variance') {
+        console.log(`[Dashboard] Optimizing portfolio with method: ${method}...`);
+
+        try {
+            const portfolioData = await this.api.optimizePortfolio(method);
+
+            if (portfolioData.status === 'insufficient_strategies') {
+                this.showPortfolioPlaceholder(portfolioData.message);
+                return;
+            }
+
+            if (portfolioData.status === 'error') {
+                console.error('[Dashboard] Portfolio optimization error:', portfolioData.error);
+                this.showPortfolioError(portfolioData.error);
+                return;
+            }
+
+            // Update portfolio summary
+            this.updatePortfolioSummary(portfolioData.portfolio);
+
+            // Update portfolio allocations
+            this.updatePortfolioAllocations(portfolioData.allocations, portfolioData.portfolio.initial_capital);
+
+            // Update portfolio chart
+            this.charts.createPortfolioChart(portfolioData.allocations, 'portfolioChart');
+
+            // Update portfolio metrics
+            this.updatePortfolioMetrics(portfolioData.metrics, portfolioData.portfolio);
+
+            // Hide loading message
+            const statusElement = document.getElementById('portfolio-status');
+            if (statusElement) {
+                statusElement.style.display = 'none';
+            }
+
+            console.log('[Dashboard] Portfolio optimization completed successfully');
+
+        } catch (error) {
+            console.error('[Dashboard] Error optimizing portfolio:', error);
+            this.showPortfolioError(error.message);
+        }
+    }
+
+    updatePortfolioSummary(portfolio) {
+        const returnEl = document.getElementById('portfolio-return');
+        const profitEl = document.getElementById('portfolio-profit');
+        const sharpeEl = document.getElementById('portfolio-sharpe');
+        const divRatioEl = document.getElementById('diversification-ratio');
+
+        if (returnEl) {
+            returnEl.textContent = this.utils.formatPercentage(portfolio.expected_return_pct / 100);
+            returnEl.className = 'portfolio-value ' + (portfolio.expected_return_pct >= 0 ? 'positive' : 'negative');
+        }
+
+        if (profitEl) {
+            profitEl.textContent = this.utils.formatCurrency(portfolio.expected_profit_usdt);
+            profitEl.className = 'portfolio-value ' + (portfolio.expected_profit_usdt >= 0 ? 'positive' : 'negative');
+        }
+
+        if (sharpeEl) {
+            sharpeEl.textContent = portfolio.portfolio_sharpe.toFixed(2);
+            sharpeEl.className = 'portfolio-value ' + (portfolio.portfolio_sharpe >= 1 ? 'positive' : 'negative');
+        }
+
+        if (divRatioEl) {
+            divRatioEl.textContent = portfolio.diversification_ratio.toFixed(2);
+            divRatioEl.className = 'portfolio-value ' + (portfolio.diversification_ratio >= 1 ? 'positive' : 'negative');
+        }
+    }
+
+    updatePortfolioAllocations(allocations, initialCapital) {
+        const listElement = document.getElementById('portfolio-allocations-list');
+        if (!listElement) return;
+
+        listElement.innerHTML = allocations.map(alloc => {
+            const weightPct = alloc.weight_pct;
+            return `
+                <div class="allocation-item">
+                    <div class="allocation-info">
+                        <div class="allocation-name">${alloc.edge_type}</div>
+                        <div class="allocation-details">
+                            ${weightPct.toFixed(1)}% | ${this.utils.formatCurrency(alloc.allocated_usdt)} |
+                            Exp. Return: ${alloc.expected_return_pct.toFixed(1)}%
+                        </div>
+                    </div>
+                    <div class="allocation-bar-container">
+                        <div class="allocation-bar" style="width: ${weightPct}%">
+                            ${weightPct >= 10 ? weightPct.toFixed(1) + '%' : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    updatePortfolioMetrics(metrics, portfolio) {
+        const totalStrategies = document.getElementById('total-strategies');
+        const effectiveStrategies = document.getElementById('effective-strategies');
+        const topAllocation = document.getElementById('top-allocation');
+        const portfolioDrawdown = document.getElementById('portfolio-drawdown');
+
+        if (totalStrategies) totalStrategies.textContent = metrics.total_strategies;
+        if (effectiveStrategies) effectiveStrategies.textContent = metrics.effective_strategies;
+        if (topAllocation) topAllocation.textContent = metrics.top_allocation.toFixed(1) + '%';
+        if (portfolioDrawdown) {
+            portfolioDrawdown.textContent = this.utils.formatPercentage(portfolio.portfolio_drawdown_pct / 100);
+            portfolioDrawdown.className = 'metric-value ' + (portfolio.portfolio_drawdown_pct <= 20 ? 'positive' : 'negative');
+        }
+    }
+
+    showPortfolioPlaceholder(message) {
+        const statusElement = document.getElementById('portfolio-status');
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.className = 'text-center';
+            statusElement.style.display = 'block';
+        }
+    }
+
+    showPortfolioError(message) {
+        const statusElement = document.getElementById('portfolio-status');
+        if (statusElement) {
+            statusElement.textContent = `Error optimizing portfolio: ${message}`;
+            statusElement.className = 'error';
+            statusElement.style.display = 'block';
         }
     }
 }

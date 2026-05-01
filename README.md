@@ -69,6 +69,57 @@ SLATE now includes a powerful natural language to strategy conversion feature in
 4. Click "Generate & Test" to immediately backtest the strategy
 5. Results are automatically saved to the database
 
+### Benchmark Comparison Panel
+
+SLATE automatically compares all strategies against a buy-and-hold baseline to provide meaningful performance context.
+
+**Features:**
+- **Beat Market Rate**: Percentage of strategies that outperform buy-and-hold
+- **Cumulative Excess Return**: Total profit over buy-and-hold baseline
+- **Information Ratio**: Risk-adjusted excess return (excess return / tracking error)
+- **Strategy vs Buy & Hold Chart**: Visual comparison of top and worst performers
+
+**API Endpoint:**
+```bash
+GET /api/discovery/benchmark
+```
+
+### Strategy Correlation Analysis
+
+Advanced correlation analysis helps identify diversification opportunities and redundant strategies.
+
+**Features:**
+- **Correlation Matrix**: Heatmap showing correlations between strategy types
+- **Redundancy Detection**: Identifies highly correlated strategies (>0.8) that may be redundant
+- **Diversification Opportunities**: Highlights low-correlation pairs (<0.3) for optimal diversification
+- **Multi-Metric Correlation**: Uses returns, Sharpe ratio, and win rate for comprehensive analysis
+
+**API Endpoint:**
+```bash
+GET /api/discovery/correlation
+```
+
+### Portfolio Optimization Engine
+
+Combine multiple strategies optimally using modern portfolio theory.
+
+**Optimization Methods:**
+- **Mean-Variance (Markowitz)**: Traditional mean-variance optimization
+- **Risk Parity**: Equal risk contribution across strategies
+- **Maximize Sharpe Ratio**: Weight strategies by their Sharpe ratios
+- **Equal Weight**: Simple equal-weighted portfolio
+
+**Features:**
+- **Optimal Allocations**: Calculates optimal weight distribution across strategies
+- **Portfolio Metrics**: Expected return, profit, Sharpe ratio, drawdown
+- **Diversification Ratio**: Measures effective diversification benefit
+- **Visual Allocation Chart**: Pie chart showing portfolio composition
+
+**API Endpoint:**
+```bash
+GET /api/discovery/portfolio/optimize?method=mean_variance
+```
+
 **Example descriptions:**
 - "Test a mean reversion strategy when RSI is below 30"
 - "Create a momentum strategy with EMA 12/26 crossover"
@@ -78,8 +129,15 @@ SLATE now includes a powerful natural language to strategy conversion feature in
 
 **Supported LLM providers:**
 - **OpenAI**: GPT-4o-mini for advanced strategy generation
-- **Anthropic**: Claude 3 Haiku for fast, accurate conversion
+- **Anthropic**: Claude 3.5 Haiku for fast, accurate conversion
+- **Google**: Gemini 2.0 Flash Exp for multimodal understanding
+- **xAI**: Grok Beta for alternative perspectives
+- **DeepSeek**: DeepSeek Chat for cost-effective generation
+- **Qwen**: Alibaba Qwen Turbo for Chinese language optimization
+- **GLM**: Zhipu GLM-4 Flash for enterprise solutions
+- **OpenRouter**: Access to 100+ models via single API
 - **Ollama**: Local models for privacy-conscious users
+- **Azure OpenAI**: Enterprise-grade OpenAI deployment
 - **Mock**: Rule-based fallback (default, no API key required)
 
 **API Endpoints:**
@@ -88,7 +146,7 @@ SLATE now includes a powerful natural language to strategy conversion feature in
 POST /api/discovery/nl/generate
 {
   "description": "Test a mean reversion strategy when RSI is below 30",
-  "provider": "mock"  # or "openai", "anthropic", "ollama"
+  "provider": "openai"  # or "anthropic", "google", "xai", "deepseek", etc.
 }
 
 # Generate and immediately test strategy
@@ -96,6 +154,91 @@ POST /api/discovery/nl/test
 {
   "description": "Test a breakout strategy when volume is high"
 }
+```
+
+### Checkpoint & Recovery System
+
+SLATE now includes a robust checkpoint/recovery system inspired by TradingAgents:
+
+**Features:**
+- **Automatic State Saving**: Saves progress after each strategy tested
+- **Crash Recovery**: Resume from last checkpoint if interrupted
+- **SQLite Storage**: Per-cycle checkpoint databases at `~/.slate/cache/checkpoints/`
+- **Progress Tracking**: Monitor incomplete cycles and resume points
+
+**API Endpoints:**
+```bash
+# Get checkpoint status
+GET /api/discovery/checkpoint/status
+
+# Resume from specific checkpoint
+POST /api/discovery/checkpoint/resume
+{
+  "cycle_id": "uuid-of-cycle-to-resume"
+}
+
+# Clear specific checkpoint or all
+POST /api/discovery/checkpoint/clear
+{
+  "cycle_id": "optional-uuid-or-omit-for-all"
+}
+```
+
+**Usage:**
+```python
+from slate_core.discovery.edge_discovery_engine import EdgeDiscoveryEngine
+
+# Enable checkpointing
+engine = EdgeDiscoveryEngine(checkpoint_enabled=True)
+
+# Run with checkpoint support
+result = await engine.run_discovery_cycle_with_checkpoint()
+
+# Resume from crashed cycle
+result = await engine.run_discovery_cycle_with_checkpoint(
+    resume_cycle_id="previous-cycle-id"
+)
+```
+
+### Reflection Memory System
+
+SLATE learns from past discoveries using a markdown-based reflection memory:
+
+**Features:**
+- **Persistent Logging**: Each cycle logged to `~/.slate/memory/discovery_memory.md`
+- **Automatic Reflection**: Generates lessons learned from performance
+- **Cross-Cycle Learning**: Past insights inform future cycles
+- **Pattern Recognition**: Identifies what works/doesn't work
+
+**API Endpoints:**
+```bash
+# Get full reflection memory
+GET /api/memory/reflection
+
+# Get recent lessons
+GET /api/memory/lessons?limit=10
+
+# Get context for new cycle
+GET /api/memory/context
+
+# Clear reflection memory
+POST /api/memory/clear
+```
+
+**Usage:**
+```python
+from slate_core.discovery.edge_discovery_engine import EdgeDiscoveryEngine
+
+# Enable reflection memory (default: enabled)
+engine = EdgeDiscoveryEngine(reflection_enabled=True)
+
+# Run discovery - automatically logs to memory
+result = await engine.run_discovery_cycle()
+
+# Get context for next cycle
+from slate_core.discovery.reflection_memory import get_reflection_memory
+memory = get_reflection_memory()
+context = memory.get_context_for_new_cycle()
 ```
 
 ### API Documentation
@@ -106,6 +249,12 @@ POST /api/discovery/nl/test
 - **Top Strategies**: `/api/discovery/top?limit=10&sort_by=total_profit_usdt`
 - **NL Strategy Generate**: `/api/discovery/nl/generate`
 - **NL Strategy Test**: `/api/discovery/nl/test`
+- **Benchmark Comparison**: `/api/discovery/benchmark`
+- **Strategy Correlation**: `/api/discovery/correlation`
+- **Portfolio Optimization**: `/api/discovery/portfolio/optimize?method=mean_variance`
+- **Checkpoint Status**: `/api/discovery/checkpoint/status`
+- **Checkpoint Resume**: `/api/discovery/checkpoint/resume`
+- **Reflection Memory**: `/api/memory/reflection`
 
 ## 🧩 Strategy Types
 

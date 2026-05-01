@@ -366,6 +366,465 @@ async def get_discovery_statistics():
         }
 
 
+@app.get("/api/discovery/benchmark")
+async def get_benchmark_comparison():
+    """
+    Get benchmark comparison statistics.
+
+    Compares strategy performance against buy-and-hold baseline.
+    Includes Information Ratio calculation and market beating statistics.
+    """
+    try:
+        import sqlite3
+
+        db_path = "slate_core/slate_realistic_discoveries.db"
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Get all benchmark data
+        cursor.execute("""
+            SELECT
+                edge_type,
+                edge_description,
+                total_profit_usdt,
+                total_return_pct,
+                buy_hold_profit_usdt,
+                buy_hold_return_pct,
+                vs_buy_hold_usdt,
+                beat_market,
+                sharpe_ratio,
+                max_drawdown_pct,
+                win_rate,
+                timestamp
+            FROM edge_discoveries
+            ORDER BY timestamp DESC
+        """)
+        rows = cursor.fetchall()
+
+        if not rows:
+            conn.close()
+            return {
+                "status": "no_data",
+                "message": "No benchmark data available yet"
+            }
+
+        # Calculate aggregate statistics
+        total_strategies = len(rows)
+        beat_market_count = sum(1 for r in rows if r[8])  # beat_market column
+        beat_market_pct = beat_market_count / total_strategies if total_strategies > 0 else 0
+
+        # Calculate excess returns and tracking error for Information Ratio
+        excess_returns = [r[6] for r in rows]  # vs_buy_hold_usdt
+        strategy_returns = [r[3] for r in rows]  # total_return_pct
+        buy_hold_returns = [r[5] for r in rows]  # buy_hold_return_pct
+
+        # Calculate tracking error (std dev of excess returns)
+        if len(excess_returns) > 1:
+            import numpy as np
+            avg_excess_return = np.mean(excess_returns)
+            tracking_error = np.std(excess_returns)
+
+            # Information Ratio = Average Excess Return / Tracking Error
+            information_ratio = avg_excess_return / tracking_error if tracking_error > 0 else 0
+        else:
+            avg_excess_return = excess_returns[0] if excess_returns else 0
+            tracking_error = 0
+            information_ratio = 0
+
+        # Get top performers vs market
+        top_vs_market = sorted(rows, key=lambda x: x[6], reverse=True)[:10]
+
+        # Get worst vs market
+        worst_vs_market = sorted(rows, key=lambda x: x[6])[:5]
+
+        # Calculate cumulative performance
+        total_strategy_profit = sum(r[2] for r in rows)  # total_profit_usdt
+        total_buy_hold_profit = sum(r[4] for r in rows)  # buy_hold_profit_usdt
+        cumulative_excess = total_strategy_profit - total_buy_hold_profit
+
+        conn.close()
+
+        return {
+            "status": "success",
+            "summary": {
+                "total_strategies": total_strategies,
+                "beat_market_count": beat_market_count,
+                "beat_market_percentage": beat_market_pct,
+                "total_strategy_profit_usdt": total_strategy_profit,
+                "total_buy_hold_profit_usdt": total_buy_hold_profit,
+                "cumulative_excess_usdt": cumulative_excess,
+                "average_excess_return_usdt": avg_excess_return,
+                "tracking_error_usdt": tracking_error,
+                "information_ratio": information_ratio
+            },
+            "top_performers": [
+                {
+                    "edge_type": r[0],
+                    "description": r[1],
+                    "total_profit_usdt": r[2],
+                    "buy_hold_profit_usdt": r[4],
+                    "excess_return_usdt": r[6],
+                    "beat_market": r[8],
+                    "sharpe_ratio": r[9],
+                    "win_rate": r[11]
+                }
+                for r in top_vs_market
+            ],
+            "worst_performers": [
+                {
+                    "edge_type": r[0],
+                    "description": r[1],
+                    "total_profit_usdt": r[2],
+                    "buy_hold_profit_usdt": r[4],
+                    "excess_return_usdt": r[6],
+                    "beat_market": r[8]
+                }
+                for r in worst_vs_market
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting benchmark comparison: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/api/discovery/correlation")
+async def get_strategy_correlation():
+    """
+    Get correlation matrix analysis between strategies.
+
+    Calculates Pearson correlation coefficients between strategy types
+    to identify diversification opportunities and redundant strategies.
+    """
+    try:
+        import sqlite3
+        import numpy as np
+
+        db_path = "slate_core/slate_realistic_discoveries.db"
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Get all strategies with their metrics
+        cursor.execute("""
+            SELECT
+                edge_type,
+                edge_description,
+                total_profit_usdt,
+                total_return_pct,
+                sharpe_ratio,
+                max_drawdown_pct,
+                win_rate,
+                profit_factor,
+                beat_market
+            FROM edge_discoveries
+            WHERE total_trades > 0
+            ORDER BY edge_type
+        """)
+        rows = cursor.fetchall()
+
+        if len(rows) < 2:
+            conn.close()
+            return {
+                "status": "insufficient_data",
+                "message": "Need at least 2 strategies for correlation analysis"
+            }
+
+        # Group strategies by edge type
+        type_metrics = {}
+        for row in rows:
+            edge_type = row[0]
+            if edge_type not in type_metrics:
+                type_metrics[edge_type] = {
+                    'profits': [],
+                    'returns': [],
+                    'sharpe': [],
+                    'drawdowns': [],
+                    'win_rates': []
+                }
+            type_metrics[edge_type]['profits'].append(row[2])
+            type_metrics[edge_type]['returns'].append(row[3])
+            type_metrics[edge_type]['sharpe'].append(row[4])
+            type_metrics[edge_type]['drawdowns'].append(row[5])
+            type_metrics[edge_type]['win_rates'].append(row[6])
+
+        # Calculate average metrics for each edge type (to handle different sample sizes)
+        edge_type_stats = {}
+        for edge_type, metrics in type_metrics.items():
+            edge_type_stats[edge_type] = {
+                'avg_return': np.mean(metrics['returns']) if metrics['returns'] else 0,
+                'avg_sharpe': np.mean(metrics['sharpe']) if metrics['sharpe'] else 0,
+                'avg_win_rate': np.mean(metrics['win_rates']) if metrics['win_rates'] else 0,
+                'avg_drawdown': np.mean(metrics['drawdowns']) if metrics['drawdowns'] else 0,
+                'count': len(metrics['returns'])
+            }
+
+        # Calculate correlation matrix using average metrics
+        edge_types = list(edge_type_stats.keys())
+        correlation_matrix = []
+        type_pairs = []
+
+        for i, type1 in enumerate(edge_types):
+            row_data = []
+            for j, type2 in enumerate(edge_types):
+                if i == j:
+                    correlation = 1.0
+                else:
+                    # Calculate correlation based on average metrics
+                    stats1 = edge_type_stats[type1]
+                    stats2 = edge_type_stats[type2]
+
+                    # Use multiple metrics for correlation
+                    # Compare similarity in profile across metrics
+                    metrics1 = np.array([
+                        stats1['avg_return'],
+                        stats1['avg_sharpe'],
+                        stats1['avg_win_rate'],
+                        -stats1['avg_drawdown']  # Negative because lower drawdown is better
+                    ])
+                    metrics2 = np.array([
+                        stats2['avg_return'],
+                        stats2['avg_sharpe'],
+                        stats2['avg_win_rate'],
+                        -stats2['avg_drawdown']
+                    ])
+
+                    # Normalize to 0-1 range for fair comparison
+                    all_metrics = np.array([metrics1, metrics2])
+                    min_vals = all_metrics.min(axis=0)
+                    max_vals = all_metrics.max(axis=0)
+                    range_vals = max_vals - min_vals
+
+                    # Avoid division by zero
+                    range_vals = np.where(range_vals == 0, 1, range_vals)
+
+                    norm1 = (metrics1 - min_vals) / range_vals
+                    norm2 = (metrics2 - min_vals) / range_vals
+
+                    # Calculate correlation
+                    correlation = float(np.corrcoef(norm1, norm2)[0, 1])
+                    if np.isnan(correlation):
+                        correlation = 0.0
+
+                    # Store pair data for detailed analysis
+                    if i < j:
+                        type_pairs.append({
+                            'type1': type1,
+                            'type2': type2,
+                            'correlation': abs(correlation),
+                            'diversification_benefit': 'High' if abs(correlation) < 0.3 else 'Medium' if abs(correlation) < 0.7 else 'Low'
+                        })
+
+                row_data.append(correlation)
+            correlation_matrix.append(row_data)
+
+        # Find highly correlated pairs (potential redundancy)
+        redundant_pairs = [p for p in type_pairs if p['correlation'] > 0.8]
+
+        # Find low correlation pairs (good diversification)
+        diversified_pairs = [p for p in type_pairs if p['correlation'] < 0.3]
+
+        conn.close()
+
+        return {
+            "status": "success",
+            "matrix": {
+                "types": edge_types,
+                "correlations": correlation_matrix
+            },
+            "summary": {
+                "total_types": len(edge_types),
+                "high_correlation_pairs": len([p for p in type_pairs if p['correlation'] > 0.7]),
+                "low_correlation_pairs": len([p for p in type_pairs if p['correlation'] < 0.3])
+            },
+            "recommendations": {
+                "redundant_strategies": redundant_pairs[:5],
+                "diversification_opportunities": diversified_pairs[:5]
+            },
+            "detailed_pairs": type_pairs,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error calculating strategy correlation: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/api/discovery/portfolio/optimize")
+async def optimize_portfolio(method: str = "mean_variance"):
+    """
+    Perform portfolio optimization on discovered strategies.
+
+    Supports multiple optimization methods:
+    - mean_variance: Traditional Markowitz mean-variance optimization
+    - risk_parity: Equal risk contribution portfolio
+    - equal_weight: Simple equal-weighted portfolio
+    - sharpe_ratio: Maximize Sharpe ratio
+
+    Args:
+        method: Optimization method to use
+
+    Returns:
+        Optimized portfolio weights and metrics
+    """
+    try:
+        import sqlite3
+        import numpy as np
+
+        db_path = "slate_core/slate_realistic_discoveries.db"
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Get top performing strategies (passed validation, with real trades)
+        cursor.execute("""
+            SELECT
+                edge_type,
+                edge_description,
+                total_profit_usdt,
+                total_return_pct,
+                sharpe_ratio,
+                max_drawdown_pct,
+                win_rate,
+                profit_factor,
+                beat_market,
+                total_trades
+            FROM edge_discoveries
+            WHERE passed_validation = 1 AND total_trades >= 10
+            ORDER BY total_profit_usdt DESC
+            LIMIT 20
+        """)
+        rows = cursor.fetchall()
+
+        if len(rows) < 2:
+            conn.close()
+            return {
+                "status": "insufficient_strategies",
+                "message": f"Need at least 2 validated strategies for optimization, found {len(rows)}"
+            }
+
+        # Extract strategy data
+        strategies = []
+        for row in rows:
+            strategies.append({
+                "edge_type": row[0],
+                "edge_description": row[1],
+                "total_profit_usdt": row[2],
+                "total_return_pct": row[3],
+                "sharpe_ratio": row[4],
+                "max_drawdown_pct": row[5],
+                "win_rate": row[6],
+                "profit_factor": row[7],
+                "beat_market": row[8],
+                "total_trades": row[9]
+            })
+
+        # Calculate returns and risk for optimization
+        returns = np.array([s["total_return_pct"] for s in strategies])
+        sharpe_ratios = np.array([s["sharpe_ratio"] for s in strategies])
+        drawdowns = np.array([abs(s["max_drawdown_pct"]) for s in strategies])
+
+        # Normalize metrics for weight calculation
+        n_strategies = len(strategies)
+
+        if method == "equal_weight":
+            # Simple equal weight portfolio
+            weights = np.ones(n_strategies) / n_strategies
+
+        elif method == "mean_variance":
+            # Mean-variance optimization (simplified)
+            # Use Sharpe ratio as expected return, drawdown as risk
+            expected_returns = sharpe_ratios
+            risk_matrix = np.diag(drawdowns)
+
+            # Calculate inverse variance weights
+            inv_var = 1.0 / (drawdowns + 1e-6)  # Add small epsilon to avoid division by zero
+            weights = inv_var / np.sum(inv_var)
+
+        elif method == "risk_parity":
+            # Risk parity: equalize risk contribution
+            # Use inverse of drawdown squared as proxy for risk
+            inv_risk_sq = 1.0 / (drawdowns ** 2 + 1e-6)
+            weights = inv_risk_sq / np.sum(inv_risk_sq)
+
+        elif method == "sharpe_ratio":
+            # Maximize Sharpe ratio by weighting proportional to Sharpe
+            # Only use positive Sharpe ratios
+            positive_sharpe = np.maximum(sharpe_ratios, 0)
+            if np.sum(positive_sharpe) > 0:
+                weights = positive_sharpe / np.sum(positive_sharpe)
+            else:
+                weights = np.ones(n_strategies) / n_strategies
+        else:
+            # Default to equal weight
+            weights = np.ones(n_strategies) / n_strategies
+
+        # Normalize weights to sum to 1
+        weights = weights / np.sum(weights)
+
+        # Calculate portfolio metrics
+        portfolio_return = np.sum(returns * weights)
+        portfolio_sharpe = np.sum(sharpe_ratios * weights)
+        portfolio_drawdown = np.sum(drawdowns * weights)  # Simplified
+
+        # Calculate diversification ratio
+        weighted_avg_risk = np.sum(drawdowns * weights)
+        portfolio_risk = np.sqrt(np.sum(weights[:, None] * weights[None, :] * np.outer(drawdowns, drawdowns)))
+        diversification_ratio = weighted_avg_risk / (portfolio_risk + 1e-6)
+
+        # Calculate expected profit
+        initial_capital = 10000.0
+        portfolio_profit_usdt = initial_capital * portfolio_return
+
+        # Prepare results
+        portfolio_allocations = []
+        for i, strategy in enumerate(strategies):
+            portfolio_allocations.append({
+                "edge_type": strategy["edge_type"],
+                "weight": float(weights[i]),
+                "weight_pct": float(weights[i] * 100),
+                "allocated_usdt": float(initial_capital * weights[i]),
+                "expected_return_pct": float(strategy["total_return_pct"] * 100),
+                "sharpe_ratio": float(strategy["sharpe_ratio"]),
+                "max_drawdown_pct": float(strategy["max_drawdown_pct"] * 100)
+            })
+
+        # Sort by weight
+        portfolio_allocations.sort(key=lambda x: x["weight"], reverse=True)
+
+        conn.close()
+
+        return {
+            "status": "success",
+            "method": method,
+            "portfolio": {
+                "total_strategies": n_strategies,
+                "initial_capital": initial_capital,
+                "expected_return_pct": float(portfolio_return * 100),
+                "expected_profit_usdt": float(portfolio_profit_usdt),
+                "portfolio_sharpe": float(portfolio_sharpe),
+                "portfolio_drawdown_pct": float(portfolio_drawdown * 100),
+                "diversification_ratio": float(diversification_ratio)
+            },
+            "allocations": portfolio_allocations,
+            "metrics": {
+                "top_allocation": portfolio_allocations[0]["weight_pct"] if portfolio_allocations else 0,
+                "allocation_count": len([a for a in portfolio_allocations if a["weight_pct"] > 5]),
+                "effective_strategies": len([a for a in portfolio_allocations if a["weight_pct"] > 1])
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error optimizing portfolio: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
 # ============================================================================
 # API Routes - Natural Language Strategy Generation
 # ============================================================================
@@ -506,6 +965,208 @@ async def test_nl_strategy(request: dict):
 
     except Exception as e:
         logger.error(f"Error testing NL strategy: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+# ============================================================================
+# Checkpoint & Recovery APIs
+# ============================================================================
+
+@app.get("/api/discovery/checkpoint/status")
+async def get_checkpoint_status():
+    """Get checkpoint status and incomplete cycles."""
+    try:
+        from slate_core.discovery.checkpoint_manager import get_checkpoint_manager
+
+        checkpoint_mgr = get_checkpoint_manager()
+        incomplete_cycles = checkpoint_mgr.get_incomplete_cycles()
+
+        return {
+            "status": "success",
+            "checkpoint_enabled": True,
+            "incomplete_cycles": incomplete_cycles,
+            "cache_directory": str(checkpoint_mgr.cache_dir),
+            "total_incomplete": len(incomplete_cycles)
+        }
+    except Exception as e:
+        logger.error(f"Error getting checkpoint status: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+@app.post("/api/discovery/checkpoint/resume")
+async def resume_from_checkpoint(request: dict):
+    """Resume discovery from a specific checkpoint."""
+    try:
+        cycle_id = request.get("cycle_id")
+        if not cycle_id:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "cycle_id required"}
+            )
+
+        from slate_core.discovery.checkpoint_manager import get_checkpoint_manager
+        from slate_core.discovery.edge_discovery_engine import EdgeDiscoveryEngine
+
+        checkpoint_mgr = get_checkpoint_manager()
+
+        if not checkpoint_mgr.can_resume(cycle_id):
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "Cycle cannot be resumed"}
+            )
+
+        # Create engine with checkpoint enabled
+        engine = EdgeDiscoveryEngine(checkpoint_enabled=True)
+
+        # Resume the cycle
+        result = await engine.run_discovery_cycle_with_checkpoint(resume_cycle_id=cycle_id)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error resuming from checkpoint: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+@app.post("/api/discovery/checkpoint/clear")
+async def clear_checkpoints(request: dict):
+    """Clear checkpoints."""
+    try:
+        cycle_id = request.get("cycle_id")
+        from slate_core.discovery.checkpoint_manager import get_checkpoint_manager
+
+        checkpoint_mgr = get_checkpoint_manager()
+
+        if cycle_id:
+            success = checkpoint_mgr.clear_checkpoint(cycle_id)
+            message = f"Checkpoint {cycle_id} cleared" if success else "Checkpoint not found"
+        else:
+            count = checkpoint_mgr.clear_all_checkpoints()
+            message = f"Cleared {count} checkpoint databases"
+
+        return {
+            "status": "success",
+            "message": message
+        }
+
+    except Exception as e:
+        logger.error(f"Error clearing checkpoints: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+# ============================================================================
+# Reflection Memory APIs
+# ============================================================================
+
+@app.get("/api/memory/reflection")
+async def get_reflection_memory():
+    """Get reflection memory content."""
+    try:
+        from slate_core.discovery.reflection_memory import get_reflection_memory
+        from pathlib import Path
+
+        memory_mgr = get_reflection_memory()
+
+        if not memory_mgr.memory_path.exists():
+            return {
+                "status": "success",
+                "memory_exists": False,
+                "content": None
+            }
+
+        content = memory_mgr.memory_path.read_text()
+
+        return {
+            "status": "success",
+            "memory_exists": True,
+            "content": content,
+            "memory_path": str(memory_mgr.memory_path),
+            "last_modified": datetime.fromtimestamp(
+                memory_mgr.memory_path.stat().st_mtime
+            ).isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting reflection memory: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+@app.get("/api/memory/lessons")
+async def get_recent_lessons(limit: int = 10):
+    """Get recent lessons from reflection memory."""
+    try:
+        from slate_core.discovery.reflection_memory import get_reflection_memory
+
+        memory_mgr = get_reflection_memory()
+        lessons = memory_mgr.get_recent_lessons(limit=limit)
+
+        return {
+            "status": "success",
+            "lessons": lessons,
+            "count": len(lessons)
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting recent lessons: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+@app.get("/api/memory/context")
+async def get_discovery_context():
+    """Get contextual information for a new discovery cycle."""
+    try:
+        from slate_core.discovery.reflection_memory import get_reflection_memory
+
+        memory_mgr = get_reflection_memory()
+        context = memory_mgr.get_context_for_new_cycle()
+
+        return {
+            "status": "success",
+            "context": context
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting discovery context: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+@app.post("/api/memory/clear")
+async def clear_reflection_memory():
+    """Clear all reflection memory."""
+    try:
+        from slate_core.discovery.reflection_memory import get_reflection_memory
+
+        memory_mgr = get_reflection_memory()
+        memory_mgr.clear_memory()
+
+        return {
+            "status": "success",
+            "message": "Reflection memory cleared"
+        }
+
+    except Exception as e:
+        logger.error(f"Error clearing reflection memory: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}

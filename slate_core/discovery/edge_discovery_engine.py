@@ -42,6 +42,22 @@ except ImportError:
     PERSISTENT_MEMORY_AVAILABLE = False
     logger.warning("Persistent memory not available - discoveries will not be stored in knowledge graph")
 
+# Import checkpoint manager
+try:
+    from .checkpoint_manager import get_checkpoint_manager
+    CHECKPOINT_AVAILABLE = True
+except ImportError:
+    CHECKPOINT_AVAILABLE = False
+    logger.warning("Checkpoint manager not available - crash recovery disabled")
+
+# Import reflection memory
+try:
+    from .reflection_memory import get_reflection_memory
+    REFLECTION_MEMORY_AVAILABLE = True
+except ImportError:
+    REFLECTION_MEMORY_AVAILABLE = False
+    logger.warning("Reflection memory not available - cross-cycle learning disabled")
+
 logger = logging.getLogger(__name__)
 
 
@@ -172,10 +188,14 @@ class EdgeDiscoveryEngine:
     5. Ranks by PnL, not just Sharpe
     """
 
-    def __init__(self, db_path: str = "slate_core/slate_realistic_discoveries.db"):
+    def __init__(self, db_path: str = "slate_core/slate_realistic_discoveries.db",
+                 checkpoint_enabled: bool = False,
+                 reflection_enabled: bool = True):
         self.db_path = db_path
         self.config = EdgeBacktestConfig()
         self.discovered_edges: List[EdgeBacktestResult] = []
+        self.checkpoint_enabled = checkpoint_enabled
+        self.reflection_enabled = reflection_enabled
 
         # Initialize persistent memory for cross-cycle learning
         if PERSISTENT_MEMORY_AVAILABLE:
@@ -184,6 +204,20 @@ class EdgeDiscoveryEngine:
         else:
             self.memory = None
             logger.warning("Persistent memory unavailable - using database only")
+
+        # Initialize checkpoint manager for crash recovery
+        if CHECKPOINT_AVAILABLE and checkpoint_enabled:
+            self.checkpoint_manager = get_checkpoint_manager()
+            logger.info("Checkpoint manager enabled - crash recovery available")
+        else:
+            self.checkpoint_manager = None
+
+        # Initialize reflection memory for cross-cycle learning
+        if REFLECTION_MEMORY_AVAILABLE and reflection_enabled:
+            self.reflection_memory = get_reflection_memory()
+            logger.info("Reflection memory enabled - cross-cycle learning available")
+        else:
+            self.reflection_memory = None
 
         # Initialize database
         self._init_db()
@@ -2236,6 +2270,208 @@ class EdgeDiscoveryEngine:
             logger.error(f"Error generating NL strategy: {e}")
             return None
 
+    async def run_discovery_cycle_with_checkpoint(
+        self,
+        resume_cycle_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Run discovery cycle with checkpoint support for crash recovery.
+
+        Inspired by TradingAgents' checkpoint resume system, this method:
+        - Saves state after each candidate tested
+        - Can resume from last checkpoint if interrupted
+        - Provides progress tracking and error recovery
+
+        Args:
+            resume_cycle_id: Optional cycle ID to resume from
+
+        Returns:
+            Discovery results with cycle information
+        """
+        if not self.checkpoint_manager:
+            logger.warning("Checkpoint manager not enabled - using standard discovery cycle")
+            return await self.run_discovery_cycle()
+
+        # Handle resume or start new cycle
+        if resume_cycle_id:
+            if not self.checkpoint_manager.can_resume(resume_cycle_id):
+                logger.error(f"Cannot resume cycle {resume_cycle_id} - not found or already complete")
+                return {"status": "failed", "reason": "cannot_resume"}
+
+            resume_state = self.checkpoint_manager.get_resume_state(resume_cycle_id)
+            logger.info(f"Resuming from step {resume_state['resume_from_index']} for cycle {resume_cycle_id}")
+
+            cycle_id = resume_cycle_id
+            start_index = resume_state['resume_from_index']
+            completed_results = resume_state['completed_results']
+        else:
+            # Start new cycle
+            candidates = self.generate_edge_candidates()
+            cycle_id = self.checkpoint_manager.start_cycle(len(candidates))
+            start_index = 0
+            completed_results = []
+            logger.info(f"Starting new discovery cycle {cycle_id} with {len(candidates)} candidates")
+
+        try:
+            # Fetch data
+            try:
+                df = await self.fetch_solusdt_data(days=90)
+            except RuntimeError as e:
+                logger.error(f"Cannot fetch real data: {e}")
+                return {"status": "failed", "reason": "cannot_fetch_real_data", "error": str(e)}
+
+            if df is None or len(df) < 1000:
+                logger.error("Insufficient real data for discovery")
+                return {"status": "failed", "reason": "insufficient_real_data"}
+
+            logger.info(f"Loaded {len(df)} REAL candles for backtesting")
+            logger.info(f"Period: {df.index[0]} to {df.index[-1]}")
+
+            # Get candidates (new or resume)
+            if resume_cycle_id:
+                candidates = self.generate_edge_candidates()
+            else:
+                candidates = self.generate_edge_candidates()
+
+            # Test candidates starting from checkpoint
+            results = []
+            for i in range(start_index, len(candidates)):
+                candidate = candidates[i]
+                logger.info(f"Testing edge {i+1}/{len(candidates)}: {candidate.description}")
+
+                try:
+                    # Single path backtest
+                    result = self.simulate_edge_backtest(df, candidate, self.config)
+
+                    # Monte Carlo validation if base result is promising
+                    if result.total_profit_usdt > 0 and result.max_drawdown_pct < 0.25:
+                        mc_mean, mc_std, mc_5th, mc_win = self.run_monte_carlo_validation(
+                            df, candidate, self.config
+                        )
+                        result.monte_carlo_mean_profit_usdt = mc_mean
+                        result.monte_carlo_std_profit_usdt = mc_std
+                        result.monte_carlo_5th_percentile_usdt = mc_5th
+                        result.monte_carlo_win_rate = mc_win
+
+                    # Save result to database
+                    self.save_discovery(result)
+
+                    # Save checkpoint
+                    result_data = {
+                        "description": result.edge_description,
+                        "profit_usdt": result.total_profit_usdt,
+                        "return_pct": result.total_return_pct,
+                        "beat_market": result.beat_market
+                    }
+
+                    self.checkpoint_manager.save_candidate_result(
+                        candidate_index=i,
+                        edge_type=candidate.edge_type.value,
+                        description=candidate.description,
+                        status='success',
+                        result_data=result_data
+                    )
+
+                    self.checkpoint_manager.save_checkpoint(
+                        stage='backtesting',
+                        tested_index=i,
+                        result=result_data
+                    )
+
+                    results.append(result)
+
+                except Exception as e:
+                    logger.error(f"Error testing edge {candidate.description}: {e}")
+
+                    # Save error checkpoint
+                    self.checkpoint_manager.save_candidate_result(
+                        candidate_index=i,
+                        edge_type=candidate.edge_type.value,
+                        description=candidate.description,
+                        status='error',
+                        error_message=str(e)
+                    )
+
+                    self.checkpoint_manager.save_checkpoint(
+                        stage='backtesting',
+                        tested_index=i,
+                        error=str(e)
+                    )
+
+            # Combine completed and new results
+            all_results = completed_results + results
+
+            # Convert EdgeBacktestResult objects to dicts for sorting and filtering
+            formatted_results = []
+            for r in all_results:
+                if isinstance(r, dict):
+                    formatted_results.append(r)
+                else:
+                    # EdgeBacktestResult object
+                    formatted_results.append({
+                        'total_profit_usdt': float(r.total_profit_usdt),
+                        'total_return_pct': float(r.total_return_pct),
+                        'beat_market': bool(r.beat_market),
+                        'sharpe_ratio': float(r.sharpe_ratio),
+                        'max_drawdown_pct': float(r.max_drawdown_pct),
+                        'win_rate': float(r.win_rate),
+                        'description': r.edge_description,
+                        'passed_validation': bool(r.passed_validation)
+                    })
+
+            # Rank results by USDT profit
+            passed = [r for r in formatted_results if r.get('passed_validation', True)]
+            passed.sort(key=lambda x: x.get('total_profit_usdt', 0), reverse=True)
+
+            # Mark cycle as complete
+            self.checkpoint_manager.mark_complete(cycle_id)
+
+            # Log to reflection memory if enabled
+            if self.reflection_memory:
+                try:
+                    market_conditions = {
+                        'regime': 'unknown',
+                        'volatility': 'unknown'
+                    }
+
+                    self.reflection_memory.log_discovery_cycle(
+                        cycle_id=cycle_id,
+                        results=formatted_results,
+                        top_performers=passed[:5],
+                        market_conditions=market_conditions
+                    )
+
+                    logger.info("Discovery cycle logged to reflection memory")
+                except Exception as e:
+                    logger.warning(f"Failed to log to reflection memory: {e}")
+
+            logger.info(f"Discovery cycle {cycle_id} complete: {len(passed)}/{len(all_results)} edges passed")
+
+            return {
+                "status": "success",
+                "cycle_id": cycle_id,
+                "total_candidates": len(candidates),
+                "passed_validation": len(passed),
+                "resumed": resume_cycle_id is not None,
+                "top_edges": [
+                    {
+                        "description": r.get("edge_description", r.get("description", "")),
+                        "profit_usdt": r.get("total_profit_usdt", 0),
+                        "return_pct": r.get("total_return_pct", 0),
+                        "drawdown_pct": r.get("max_drawdown_pct", 0),
+                        "beat_market": r.get("beat_market", False),
+                        "vs_buy_hold_usdt": r.get("vs_buy_hold_usdt", 0),
+                        "sharpe": r.get("sharpe_ratio", 0),
+                        "mc_win_rate": r.get("monte_carlo_win_rate", 0)
+                    }
+                    for r in passed[:5]
+                ]
+            }
+
+        except Exception as e:
+            logger.error(f"Discovery cycle failed: {e}")
+            return {"status": "failed", "reason": "cycle_error", "error": str(e)}
+
     async def run_discovery_cycle(self) -> Dict[str, Any]:
         """
         Run a complete discovery cycle with REAL data only.
@@ -2297,6 +2533,41 @@ class EdgeDiscoveryEngine:
         passed = [r for r in results if r.passed_validation]
         passed.sort(key=lambda x: x.total_profit_usdt, reverse=True)
 
+        # Log to reflection memory if enabled
+        if self.reflection_memory:
+            try:
+                import uuid
+                cycle_id = str(uuid.uuid4())
+                market_conditions = {
+                    'regime': 'unknown',
+                    'volatility': 'unknown'
+                }
+
+                # Convert results to format expected by reflection memory
+                formatted_results = []
+                for r in results:
+                    formatted_results.append({
+                        'total_profit_usdt': float(r.total_profit_usdt),
+                        'total_return_pct': float(r.total_return_pct),
+                        'beat_market': bool(r.beat_market),
+                        'sharpe_ratio': float(r.sharpe_ratio),
+                        'max_drawdown_pct': float(r.max_drawdown_pct),
+                        'win_rate': float(r.win_rate),
+                        'description': r.edge_description,
+                        'passed_validation': bool(r.passed_validation)
+                    })
+
+                self.reflection_memory.log_discovery_cycle(
+                    cycle_id=cycle_id,
+                    results=formatted_results,
+                    top_performers=passed[:5],
+                    market_conditions=market_conditions
+                )
+
+                logger.info("Discovery cycle logged to reflection memory")
+            except Exception as e:
+                logger.warning(f"Failed to log to reflection memory: {e}")
+
         logger.info(f"Discovery cycle complete: {len(passed)}/{len(results)} edges passed validation")
 
         return {
@@ -2311,26 +2582,6 @@ class EdgeDiscoveryEngine:
                     "drawdown_pct": r.max_drawdown_pct,
                     "beat_market": r.beat_market,
                     "vs_buy_hold_usdt": r.vs_buy_hold_usdt,
-                    "sharpe": r.sharpe_ratio,
-                    "mc_win_rate": r.monte_carlo_win_rate
-                }
-                for r in passed[:5]
-            ]
-        }
-        passed = [r for r in results if r.passed_validation]
-        passed.sort(key=lambda x: x.total_return, reverse=True)
-
-        logger.info(f"Discovery cycle complete: {len(passed)}/{len(results)} edges passed validation")
-
-        return {
-            "status": "success",
-            "total_candidates": len(candidates),
-            "passed_validation": len(passed),
-            "top_edges": [
-                {
-                    "description": r.edge_description,
-                    "return": r.total_return,
-                    "drawdown": r.max_drawdown,
                     "sharpe": r.sharpe_ratio,
                     "mc_win_rate": r.monte_carlo_win_rate
                 }

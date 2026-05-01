@@ -203,6 +203,178 @@
             <a href="/api/discovery/statistics" target="_blank">📊 Statistics JSON</a>
             <a href="/test" target="_blank">🔧 Diagnostic Tool</a>
         </div>
+
+        <!-- Benchmark Comparison Panel -->
+        <div class="benchmark-section">
+            <h2>📈 Benchmark Comparison</h2>
+            <p class="benchmark-description">Strategy performance compared to Buy & Hold baseline</p>
+            <p id="benchmark-status" class="loading">Loading benchmark data...</p>
+
+            <!-- Benchmark Summary Cards -->
+            <div class="benchmark-summary">
+                <div class="benchmark-card">
+                    <h4>Beat Market Rate</h4>
+                    <div class="benchmark-value" id="beat-market-rate">-</div>
+                    <div class="benchmark-sub" id="beat-market-count">-</div>
+                </div>
+                <div class="benchmark-card">
+                    <h4>Cumulative Excess Return</h4>
+                    <div class="benchmark-value" id="cumulative-excess">-</div>
+                    <div class="benchmark-sub">vs Buy & Hold</div>
+                </div>
+                <div class="benchmark-card">
+                    <h4>Information Ratio</h4>
+                    <div class="benchmark-value" id="information-ratio">-</div>
+                    <div class="benchmark-sub">Risk-adjusted excess</div>
+                </div>
+                <div class="benchmark-card">
+                    <h4>Avg Excess Return</h4>
+                    <div class="benchmark-value" id="avg-excess-return">-</div>
+                    <div class="benchmark-sub">Per strategy</div>
+                </div>
+            </div>
+
+            <!-- Benchmark Comparison Chart -->
+            <div class="benchmark-chart-container">
+                <canvas id="benchmarkChart"></canvas>
+            </div>
+
+            <!-- Top vs Worst Performers -->
+            <div class="benchmark-performers">
+                <div class="performer-section">
+                    <h3>🏆 Top vs Market</h3>
+                    <div id="top-performers-list"></div>
+                </div>
+                <div class="performer-section">
+                    <h3>📉 Worst vs Market</h3>
+                    <div id="worst-performers-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategy Correlation Analysis Panel -->
+        <div class="correlation-section">
+            <h2>🔗 Strategy Correlation Analysis</h2>
+            <p class="correlation-description">Identify diversification opportunities and redundant strategies</p>
+            <p id="correlation-status" class="loading">Loading correlation data...</p>
+
+            <!-- Correlation Summary -->
+            <div class="correlation-summary">
+                <div class="correlation-card">
+                    <h4>Total Strategy Types</h4>
+                    <div class="correlation-value" id="total-types">-</div>
+                </div>
+                <div class="correlation-card">
+                    <h4>High Correlation Pairs</h4>
+                    <div class="correlation-value" id="high-corr-pairs">-</div>
+                    <div class="correlation-sub">Potential redundancy</div>
+                </div>
+                <div class="correlation-card">
+                    <h4>Low Correlation Pairs</h4>
+                    <div class="correlation-value" id="low-corr-pairs">-</div>
+                    <div class="correlation-sub">Good diversification</div>
+                </div>
+            </div>
+
+            <!-- Correlation Matrix -->
+            <div class="correlation-matrix-container">
+                <h3>Correlation Matrix</h3>
+                <div id="correlation-matrix"></div>
+            </div>
+
+            <!-- Recommendations -->
+            <div class="correlation-recommendations">
+                <div class="recommendation-section">
+                    <h3>⚠️ Potentially Redundant Strategies</h3>
+                    <p class="recommendation-desc">These strategy types show high correlation (>0.8) and may be redundant</p>
+                    <div id="redundant-strategies-list"></div>
+                </div>
+                <div class="recommendation-section">
+                    <h3>💡 Diversification Opportunities</h3>
+                    <p class="recommendation-desc">These strategy types show low correlation (<0.3) and provide good diversification</p>
+                    <div id="diversification-opportunities-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portfolio Optimization Panel -->
+        <div class="portfolio-section">
+            <h2>🎯 Portfolio Optimization</h2>
+            <p class="portfolio-description">Combine multiple strategies optimally using modern portfolio theory</p>
+            <p id="portfolio-status" class="loading">Loading portfolio optimization...</p>
+
+            <!-- Optimization Controls -->
+            <div class="optimization-controls">
+                <label for="optimization-method">Optimization Method:</label>
+                <select id="optimization-method" onchange="app.optimizePortfolio(this.value)">
+                    <option value="mean_variance">Mean-Variance (Markowitz)</option>
+                    <option value="risk_parity">Risk Parity</option>
+                    <option value="sharpe_ratio">Maximize Sharpe Ratio</option>
+                    <option value="equal_weight">Equal Weight</option>
+                </select>
+                <button class="optimize-btn" onclick="app.optimizePortfolio()">
+                    <span>🔄</span> Re-optimize
+                </button>
+            </div>
+
+            <!-- Portfolio Summary -->
+            <div class="portfolio-summary">
+                <div class="portfolio-card">
+                    <h4>Expected Return</h4>
+                    <div class="portfolio-value" id="portfolio-return">-</div>
+                    <div class="portfolio-sub">Annualized return</div>
+                </div>
+                <div class="portfolio-card">
+                    <h4>Expected Profit</h4>
+                    <div class="portfolio-value" id="portfolio-profit">-</div>
+                    <div class="portfolio-sub">On $10,000 capital</div>
+                </div>
+                <div class="portfolio-card">
+                    <h4>Portfolio Sharpe</h4>
+                    <div class="portfolio-value" id="portfolio-sharpe">-</div>
+                    <div class="portfolio-sub">Risk-adjusted return</div>
+                </div>
+                <div class="portfolio-card">
+                    <h4>Diversification Ratio</h4>
+                    <div class="portfolio-value" id="diversification-ratio">-</div>
+                    <div class="portfolio-sub">Higher is better</div>
+                </div>
+            </div>
+
+            <!-- Portfolio Allocations -->
+            <div class="portfolio-allocations-container">
+                <h3>Optimal Strategy Allocations</h3>
+                <div id="portfolio-allocations-list"></div>
+            </div>
+
+            <!-- Portfolio Chart -->
+            <div class="portfolio-chart-container">
+                <canvas id="portfolioChart"></canvas>
+            </div>
+
+            <!-- Portfolio Metrics -->
+            <div class="portfolio-metrics">
+                <h3>Portfolio Analysis</h3>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <span class="metric-label">Total Strategies:</span>
+                        <span class="metric-value" id="total-strategies">-</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Effective Strategies (>1%):</span>
+                        <span class="metric-value" id="effective-strategies">-</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Top Allocation:</span>
+                        <span class="metric-value" id="top-allocation">-</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Expected Max Drawdown:</span>
+                        <span class="metric-value" id="portfolio-drawdown">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- JavaScript Modules -->

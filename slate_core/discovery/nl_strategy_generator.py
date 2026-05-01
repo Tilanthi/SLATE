@@ -23,10 +23,25 @@ logger = logging.getLogger(__name__)
 
 
 class LLMProvider(Enum):
-    """Supported LLM providers."""
+    """Supported LLM providers.
+
+    Inspired by TradingAgents' multi-provider architecture with support for:
+    - Major cloud providers (OpenAI, Google, Anthropic)
+    - Chinese models (DeepSeek, Qwen, GLM)
+    - Aggregator services (OpenRouter)
+    - Local models (Ollama)
+    - Enterprise (Azure OpenAI)
+    """
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    GOOGLE = "google"
+    XAI = "xai"  # xAI (Grok)
+    DEEPSEEK = "deepseek"
+    QWEN = "qwen"  # Alibaba DashScope
+    GLM = "glm"  # Zhipu AI
+    OPENROUTER = "openrouter"
     OLLAMA = "ollama"
+    AZURE = "azure"  # Azure OpenAI
     MOCK = "mock"  # For testing without API calls
 
 
@@ -66,16 +81,47 @@ class NLStrategyGenerator:
 
     def __init__(self, provider: LLMProvider = LLMProvider.MOCK, api_key: Optional[str] = None):
         self.provider = provider
-        self.api_key = api_key or os.getenv(f"{provider.value.upper()}_API_KEY")
+
+        # Map providers to their environment variable names
+        env_key_map = {
+            LLMProvider.OPENAI: "OPENAI_API_KEY",
+            LLMProvider.ANTHROPIC: "ANTHROPIC_API_KEY",
+            LLMProvider.GOOGLE: "GOOGLE_API_KEY",
+            LLMProvider.XAI: "XAI_API_KEY",
+            LLMProvider.DEEPSEEK: "DEEPSEEK_API_KEY",
+            LLMProvider.QWEN: "DASHSCOPE_API_KEY",  # Alibaba DashScope
+            LLMProvider.GLM: "ZHIPU_API_KEY",  # Zhipu AI
+            LLMProvider.OPENROUTER: "OPENROUTER_API_KEY",
+            LLMProvider.OLLAMA: None,  # No API key needed for local
+            LLMProvider.AZURE: "AZURE_API_KEY",
+            LLMProvider.MOCK: None
+        }
+
+        env_var = env_key_map.get(provider)
+        self.api_key = api_key or (os.getenv(env_var) if env_var else None)
         self._init_client()
 
     def _init_client(self):
-        """Initialize LLM client based on provider."""
+        """Initialize LLM client based on provider.
+
+        Supports multiple providers inspired by TradingAgents architecture:
+        - OpenAI (GPT models)
+        - Anthropic (Claude models)
+        - Google (Gemini models)
+        - xAI (Grok models)
+        - DeepSeek (Chinese LLM)
+        - Qwen (Alibaba DashScope)
+        - GLM (Zhipu AI)
+        - OpenRouter (Aggregator)
+        - Ollama (Local models)
+        - Azure OpenAI (Enterprise)
+        """
         if self.provider == LLMProvider.OPENAI:
             try:
                 import openai
                 self.client = openai.OpenAI(api_key=self.api_key)
-                logger.info("OpenAI client initialized")
+                self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+                logger.info(f"OpenAI client initialized with model {self.model}")
             except ImportError:
                 logger.warning("OpenAI not installed, falling back to MOCK")
                 self.provider = LLMProvider.MOCK
@@ -85,9 +131,86 @@ class NLStrategyGenerator:
             try:
                 import anthropic
                 self.client = anthropic.Anthropic(api_key=self.api_key)
-                logger.info("Anthropic client initialized")
+                self.model = os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
+                logger.info(f"Anthropic client initialized with model {self.model}")
             except ImportError:
                 logger.warning("Anthropic not installed, falling back to MOCK")
+                self.provider = LLMProvider.MOCK
+                self.client = None
+
+        elif self.provider == LLMProvider.GOOGLE:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=self.api_key)
+                self.client = genai
+                self.model = os.getenv("GOOGLE_MODEL", "gemini-2.0-flash-exp")
+                logger.info(f"Google client initialized with model {self.model}")
+            except ImportError:
+                logger.warning("Google AI not installed, falling back to MOCK")
+                self.provider = LLMProvider.MOCK
+                self.client = None
+
+        elif self.provider == LLMProvider.XAI:
+            try:
+                import openai
+                self.client = openai.OpenAI(
+                    base_url="https://api.x.ai/v1",
+                    api_key=self.api_key
+                )
+                self.model = os.getenv("XAI_MODEL", "grok-beta")
+                logger.info(f"xAI client initialized with model {self.model}")
+            except ImportError:
+                logger.warning("xAI not available, falling back to MOCK")
+                self.provider = LLMProvider.MOCK
+                self.client = None
+
+        elif self.provider == LLMProvider.DEEPSEEK:
+            try:
+                import openai
+                self.client = openai.OpenAI(
+                    base_url="https://api.deepseek.com",
+                    api_key=self.api_key
+                )
+                self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+                logger.info(f"DeepSeek client initialized with model {self.model}")
+            except ImportError:
+                logger.warning("DeepSeek not available, falling back to MOCK")
+                self.provider = LLMProvider.MOCK
+                self.client = None
+
+        elif self.provider == LLMProvider.QWEN:
+            try:
+                import dashscope
+                self.client = dashscope
+                self.model = os.getenv("QWEN_MODEL", "qwen-turbo")
+                logger.info(f"Qwen (DashScope) client initialized with model {self.model}")
+            except ImportError:
+                logger.warning("DashScope not installed, falling back to MOCK")
+                self.provider = LLMProvider.MOCK
+                self.client = None
+
+        elif self.provider == LLMProvider.GLM:
+            try:
+                import zhipuai
+                self.client = zhipuai.ZhipuAI(api_key=self.api_key)
+                self.model = os.getenv("GLM_MODEL", "glm-4-flash")
+                logger.info(f"GLM (ZhipuAI) client initialized with model {self.model}")
+            except ImportError:
+                logger.warning("ZhipuAI not installed, falling back to MOCK")
+                self.provider = LLMProvider.MOCK
+                self.client = None
+
+        elif self.provider == LLMProvider.OPENROUTER:
+            try:
+                import openai
+                self.client = openai.OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=self.api_key
+                )
+                self.model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-haiku")
+                logger.info(f"OpenRouter client initialized with model {self.model}")
+            except ImportError:
+                logger.warning("OpenRouter not available, falling back to MOCK")
                 self.provider = LLMProvider.MOCK
                 self.client = None
 
@@ -96,9 +219,25 @@ class NLStrategyGenerator:
                 import requests
                 self.client = requests
                 self.ollama_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-                logger.info(f"Ollama client initialized at {self.ollama_base}")
+                self.model = os.getenv("OLLAMA_MODEL", "llama3.2")
+                logger.info(f"Ollama client initialized at {self.ollama_base} with model {self.model}")
             except ImportError:
                 logger.warning("Requests not installed for Ollama")
+                self.client = None
+
+        elif self.provider == LLMProvider.AZURE:
+            try:
+                import openai
+                self.client = openai.AzureOpenAI(
+                    api_key=self.api_key,
+                    api_version=os.getenv("AZURE_API_VERSION", "2024-02-01"),
+                    azure_endpoint=os.getenv("AZURE_ENDPOINT")
+                )
+                self.model = os.getenv("AZURE_DEPLOYMENT", "gpt-4o-mini")
+                logger.info(f"Azure OpenAI client initialized with deployment {self.model}")
+            except ImportError:
+                logger.warning("Azure OpenAI not installed, falling back to MOCK")
+                self.provider = LLMProvider.MOCK
                 self.client = None
 
         else:
@@ -385,7 +524,12 @@ class NLStrategyGenerator:
         )
 
     def _llm_generate_strategy(self, request: NLStrategyRequest) -> NLStrategyResult:
-        """Use LLM to generate strategy from natural language."""
+        """
+        Use LLM to generate strategy from natural language.
+
+        Supports multiple providers with unified interface:
+        - OpenAI, Anthropic, Google, xAI, DeepSeek, Qwen, GLM, OpenRouter, Ollama, Azure
+        """
         system_prompt = """You are an expert quantitative trading strategist. Convert user descriptions into structured trading strategies.
 
 Always respond with valid JSON in this exact format:
@@ -403,30 +547,96 @@ Always respond with valid JSON in this exact format:
 
 Supported edge_types: MOMENTUM_MEAN_REVERSION, VOLATILITY_REGIME, MARKET_MICROSTRUCTURE, TIME_PATTERN, CORRELATION_ARBITRAGE, ORDER_FLOW_IMBALANCE, LIQUIDITY_PREMIUM"""
 
+        user_message = f"Convert this strategy: {request.description}"
+
         try:
-            if self.provider == LLMProvider.OPENAI:
+            # OpenAI-compatible APIs (OpenAI, xAI, DeepSeek, OpenRouter, Azure)
+            if self.provider in [LLMProvider.OPENAI, LLMProvider.XAI,
+                                 LLMProvider.DEEPSEEK, LLMProvider.OPENROUTER,
+                                 LLMProvider.AZURE]:
                 response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=self.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"Convert this strategy: {request.description}"}
+                        {"role": "user", "content": user_message}
                     ],
                     temperature=0.3
                 )
                 content = response.choices[0].message.content
 
+            # Anthropic (Claude)
             elif self.provider == LLMProvider.ANTHROPIC:
                 response = self.client.messages.create(
-                    model="claude-3-haiku-20240307",
+                    model=self.model,
                     max_tokens=1024,
                     system=system_prompt,
                     messages=[
-                        {"role": "user", "content": f"Convert this strategy: {request.description}"}
+                        {"role": "user", "content": user_message}
                     ]
                 )
                 content = response.content[0].text
 
+            # Google (Gemini)
+            elif self.provider == LLMProvider.GOOGLE:
+                model = self.client.GenerativeModel(self.model)
+                response = model.generate_content(
+                    f"{system_prompt}\n\nUser: {user_message}",
+                    generation_config=self.client.types.GenerationConfig(
+                        temperature=0.3,
+                        max_output_tokens=1024,
+                    )
+                )
+                content = response.text
+
+            # Qwen (Alibaba DashScope)
+            elif self.provider == LLMProvider.QWEN:
+                response = self.client.Generation.call(
+                    model=self.model,
+                    messages=[
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': user_message}
+                    ],
+                    result_format='message',
+                    temperature=0.3
+                )
+                content = response.output.choices[0].message.content
+
+            # GLM (ZhipuAI)
+            elif self.provider == LLMProvider.GLM:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message}
+                    ],
+                    temperature=0.3
+                )
+                content = response.choices[0].message.content
+
+            # Ollama (Local models)
+            elif self.provider == LLMProvider.OLLAMA:
+                response = self.client.post(
+                    f"{self.ollama_base}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": f"{system_prompt}\n\nUser: {user_message}",
+                        "stream": False,
+                        "options": {"temperature": 0.3}
+                    },
+                    timeout=30
+                )
+                content = response.json().get("response", "")
+
+            else:
+                return NLStrategyResult(success=False, error=f"Unsupported provider: {self.provider}")
+
             # Parse JSON response
+            # Handle potential markdown code blocks
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
             data = json.loads(content)
 
             return NLStrategyResult(

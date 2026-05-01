@@ -27,7 +27,7 @@ class SLATEManualPDF(FPDF):
     def header(self):
         # Page header
         self.set_font(self.title_font, 'B', 8)
-        self.cell(0, 5, 'SLATE User Manual v2.0', 0, 0, 'L')
+        self.cell(0, 5, 'SLATE User Manual v2.1', 0, 0, 'L')
         self.cell(0, 5, f'Page {self.page_no()}', 0, 0, 'R')
         self.ln(5)
 
@@ -97,10 +97,58 @@ def clean_text(text):
         '≠': '!=',
         '×': 'x',
         '•': '*',
+        '┌': '+',
+        '┐': '+',
+        '└': '+',
+        '┘': '+',
+        '│': '|',
+        '─': '-',
+        '├': '+',
+        '┤': '+',
+        '┬': '+',
+        '┴': '+',
+        '┼': '+',
+        '✔': '[OK]',
+        '⚠': '[!]',
+        '🚀': '[Rocket]',
+        '🧪': '[Test]',
+        '📊': '[Chart]',
+        '💰': '[Money]',
+        '🎯': '[Target]',
+        '📈': '[Up]',
+        '🔄': '[Refresh]',
+        '🗄️': '[DB]',
+        '🔧': '[Tool]',
+        '🛠️': '[Tools]',
+        '⚡': '[Bolt]',
+        '✨': '[Star]',
+        '📱': '[Mobile]',
+        '🤖': '[Robot]',
+        '🧠': '[Brain]',
+        '🔍': '[Search]',
+        '📝': '[Note]',
+        '📄': '[Page]',
+        '🆕': '[New]',
+        '🌐': '[Globe]',
+        '🔗': '[Link]',
+        '💡': '[Idea]',
+        '🎓': '[Cap]',
+        '🚨': '[Alert]',
+        '📚': '[Book]',
+        '🏗️': '[Build]',
+        '🎬': '[Film]',
+        '🤝': '[Handshake]',
+        '📦': '[Box]',
+        '📞': '[Phone]',
+        '🙏': '[Pray]',
+        '🔒': '[Lock]',
+        '📂': '[Folder]',
+        '🌟': '[Star]',
     }
     for old, new in replacements.items():
         text = text.replace(old, new)
-    return text
+    # Remove any remaining Unicode characters outside ASCII range
+    return text.encode('ascii', 'ignore').decode('ascii')
 
 def create_pdf():
     pdf = SLATEManualPDF()
@@ -117,8 +165,8 @@ def create_pdf():
     pdf.cell(0, 10, 'Strategy Learning & Autonomous Trading Engine', 0, 1, 'C')
     pdf.ln(30)
     pdf.set_font('Helvetica', '', 12)
-    pdf.cell(0, 8, 'Version 2.0.0', 0, 1, 'C')
-    pdf.cell(0, 8, 'April 30, 2026', 0, 1, 'C')
+    pdf.cell(0, 8, 'Version 2.1.0', 0, 1, 'C')
+    pdf.cell(0, 8, 'May 1, 2026', 0, 1, 'C')
     pdf.ln(20)
     pdf.set_font('Helvetica', 'B', 14)
     pdf.set_text_color(192, 57, 43)
@@ -289,9 +337,10 @@ def create_pdf():
     pdf.set_font('Courier', '', 9)
 
     commands = [
-        'python3 -m slate_core.autonomous_research.server',
+        'python3 -m slate_core.server',
         'curl http://localhost:8788/health',
-        'curl -X POST http://localhost:8788/api/discovery/realistic/start',
+        'curl -X POST http://localhost:8788/api/discovery/start',
+        'curl "http://localhost:8788/api/discovery/top?limit=10"',
     ]
 
     for cmd in commands:

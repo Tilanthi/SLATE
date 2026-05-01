@@ -4,6 +4,20 @@
 
 *A Complete Guide to Discovering, Testing, and Evolving Trading Strategies*
 
+**Version 2.1.0** - Updated May 1, 2026
+
+---
+
+## What's New in Version 2.1.0
+
+This version includes major enhancements inspired by state-of-the-art multi-agent trading systems:
+
+- **Checkpoint & Recovery System**: Never lose progress again - automatic crash recovery for long-running discoveries
+- **Reflection Memory**: SLATE learns from every cycle, extracting lessons and patterns to inform future discoveries
+- **Multi-LLM Support**: 11 different LLM providers for natural language strategy generation (OpenAI, Anthropic, Google, xAI, DeepSeek, Qwen, GLM, OpenRouter, Ollama, Azure, Mock)
+- **Enhanced Analytics**: Benchmark comparison, strategy correlation analysis, and portfolio optimization
+- **Improved Dashboard**: Real-time monitoring with interactive charts and performance metrics
+
 ---
 
 ## Table of Contents
@@ -15,9 +29,12 @@
 5. [Using SLATE: Question & Answer Examples](#5-using-slate-question--answer-examples)
 6. [The Discovery System Explained](#6-the-discovery-system-explained)
 7. [How SLATE Evolves and Improves](#7-how-slate-evolves-and-improves)
-8. [Finding Profitable Strategies: 10 Practical Examples](#8-finding-profitable-strategies-10-practical-examples)
-9. [API Quick Reference](#9-api-quick-reference)
-10. [Common Problems and Solutions](#10-common-problems-and-solutions)
+8. [Advanced Features: Checkpoint & Recovery](#8-advanced-features-checkpoint--recovery)
+9. [Advanced Features: Reflection Memory](#9-advanced-features-reflection-memory)
+10. [Advanced Features: Multi-LLM Strategy Generation](#10-advanced-features-multi-llm-strategy-generation)
+11. [Finding Profitable Strategies: 10 Practical Examples](#11-finding-profitable-strategies-10-practical-examples)
+12. [API Quick Reference](#12-api-quick-reference)
+13. [Common Problems and Solutions](#13-common-problems-and-solutions)
 
 ---
 
@@ -881,7 +898,543 @@ curl http://localhost:8788/api/discovery/realistic/statistics
 
 ---
 
-## 8. Finding Profitable Strategies: 10 Practical Examples
+## 8. Advanced Features: Checkpoint & Recovery
+
+Inspired by state-of-the-art multi-agent trading systems, SLATE now includes a robust checkpoint and recovery system that protects your research progress.
+
+### What is Checkpoint & Recovery?
+
+**The Problem:**
+Long-running discovery cycles can take hours to complete. If the process crashes, gets interrupted, or your computer restarts, you lose all progress and have to start from scratch.
+
+**The Solution:**
+SLATE automatically saves progress after each strategy is tested. If anything goes wrong, you can resume exactly where you left off instead of starting over.
+
+### How Checkpoints Work
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Discovery Cycle Starts                                      │
+│  └─> Checkpoint database created                            │
+│      │                                                       │
+│      ├─> Test Strategy 1 ──> Save checkpoint                │
+│      ├─> Test Strategy 2 ──> Save checkpoint                │
+│      ├─> Test Strategy 3 ──> Save checkpoint                │
+│      │                                                       │
+│      ├─> ⚠️ CRASH! Power failure!                           │
+│      │                                                       │
+│      └─> 🔄 Resume from checkpoint 3                        │
+│          Continue with Strategy 4...                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Enabling Checkpoints
+
+**Option 1: Via API**
+```http
+POST /api/discovery/start
+Content-Type: application/json
+
+{
+  "checkpoint_enabled": true
+}
+```
+
+**Option 2: Via Python**
+```python
+from slate_core.discovery.edge_discovery_engine import EdgeDiscoveryEngine
+
+# Create engine with checkpointing enabled
+engine = EdgeDiscoveryEngine(checkpoint_enabled=True)
+
+# Run discovery - automatically saves checkpoints
+result = await engine.run_discovery_cycle_with_checkpoint()
+```
+
+### Monitoring Checkpoints
+
+**Check checkpoint status:**
+```http
+GET /api/discovery/checkpoint/status
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "checkpoint_enabled": true,
+  "incomplete_cycles": [
+    {
+      "cycle_id": "abc123-def456",
+      "timestamp": "2026-05-01T10:30:00",
+      "stage": "backtesting",
+      "progress": "15/50",
+      "error_count": 0
+    }
+  ],
+  "total_incomplete": 1
+}
+```
+
+### Resuming from Checkpoint
+
+**Resume a specific cycle:**
+```http
+POST /api/discovery/checkpoint/resume
+Content-Type: application/json
+
+{
+  "cycle_id": "abc123-def456"
+}
+```
+
+**Via Python:**
+```python
+# Resume from specific checkpoint
+result = await engine.run_discovery_cycle_with_checkpoint(
+    resume_cycle_id="abc123-def456"
+)
+```
+
+### Managing Checkpoints
+
+**Clear a specific checkpoint:**
+```http
+POST /api/discovery/checkpoint/clear
+Content-Type: application/json
+
+{
+  "cycle_id": "abc123-def456"
+}
+```
+
+**Clear all checkpoints:**
+```http
+POST /api/discovery/checkpoint/clear
+```
+
+### Where Checkpoints Are Stored
+
+Checkpoints are stored in SQLite databases at:
+```
+~/.slate/cache/checkpoints/
+├── cycle-abc123.db
+├── cycle-def456.db
+└── cycle-ghi789.db
+```
+
+Each database contains:
+- Complete cycle state
+- Individual strategy results
+- Error information for failed tests
+- Progress tracking
+
+### Best Practices
+
+1. **Always enable checkpoints** for long-running discoveries (100+ strategies)
+2. **Monitor progress** regularly using the checkpoint status endpoint
+3. **Clear old checkpoints** after successful completion to save disk space
+4. **Resume automatically** - if a crash occurs, SLATE can resume without manual intervention
+
+### Real-World Example
+
+```
+# Start a large discovery with checkpointing
+curl -X POST http://localhost:8788/api/discovery/start \
+  -H "Content-Type: application/json" \
+  -d '{"checkpoint_enabled": true}'
+
+# ... 2 hours later, power goes out ...
+
+# After restart, check what was incomplete
+curl http://localhost:8788/api/discovery/checkpoint/status
+
+# Resume from where it left off
+curl -X POST http://localhost:8788/api/discovery/checkpoint/resume \
+  -H "Content-Type: application/json" \
+  -d '{"cycle_id": "incomplete-cycle-id"}'
+
+# SLATE continues testing strategy 47 of 100, instead of starting over
+```
+
+---
+
+## 9. Advanced Features: Reflection Memory
+
+SLATE learns from its past experiences using a sophisticated reflection memory system inspired by cognitive science research on learning from experience.
+
+### What is Reflection Memory?
+
+**The Concept:**
+Just as experienced traders learn from every trade they make, SLATE analyzes every discovery cycle to extract lessons, patterns, and insights that inform future discoveries.
+
+**How It Works:**
+1. **Experience:** SLATE completes a discovery cycle testing 50 strategies
+2. **Reflection:** Analyzes what worked, what didn't, and why
+3. **Generalization:** Extracts general principles from specific results
+4. **Application:** Uses these lessons to guide the next discovery cycle
+
+### What Gets Stored
+
+Reflection memory stores three types of knowledge:
+
+**1. Performance Summaries**
+```
+- Total strategies tested: 50
+- Profitable strategies: 32 (64%)
+- Strategies beating buy-and-hold: 18 (36%)
+- Total profit: $2,847.32
+- Average return: 5.7%
+```
+
+**2. Pattern Recognition**
+```
+- Strong performance from momentum strategies
+- 8 strategies showed excellent profit factors (>2.0)
+- 12 strategies maintained low drawdown (<15%)
+- Bullish conditions favored most strategies
+```
+
+**3. Actionable Recommendations**
+```
+- Focus discovery on momentum-based strategies
+- Tighten risk parameters - many strategies exceeded drawdown limits
+- Improve entry signal accuracy - low win rates detected
+```
+
+### Accessing Reflection Memory
+
+**Get full memory log:**
+```http
+GET /api/memory/reflection
+```
+
+**Get recent lessons:**
+```http
+GET /api/memory/lessons?limit=10
+```
+
+**Get context for new cycle:**
+```http
+GET /api/memory/context
+```
+
+### Example Reflection Memory Entry
+
+```markdown
+## Discovery Cycle: abc-123-def
+
+**Time**: 2026-05-01T10:30:00
+
+### Results
+- Total strategies tested: 50
+- Top performer: EMA Crossover Momentum
+
+### Performance Summary
+- Total strategies tested: 50
+- Profitable strategies: 32 (64.0%)
+- Strategies beating buy-and-hold: 18 (36.0%)
+- High Sharpe ratio (>1.5) strategies: 7
+- Total profit across all strategies: $2,847.32
+- Average return: 5.69%
+
+### Top Performers Analysis
+
+**#1**: EMA Crossover Momentum
+- Profit: $847.23 USDT (8.47%)
+- Sharpe: 2.34, Win Rate: 62.3%
+- Beat Market: True
+
+**#2**: RSI Mean Reversion
+- Profit: $623.45 USDT (6.23%)
+- Sharpe: 1.87, Win Rate: 58.1%
+- Beat Market: True
+
+### Key Lessons Learned
+- Strong performance from momentum, mean_reversion strategies
+- 8 strategies showed strong profit factors (>2.0)
+- 12 strategies maintained low drawdown (<15%)
+- Bullish market conditions favored most strategies
+
+### Recommendations for Next Cycle
+- Focus discovery on momentum-based strategies
+- Tighten risk parameters - many strategies exceeded drawdown limits
+- Consider increasing buy-and-hold baseline comparison periods
+```
+
+### Using Reflection to Guide Discovery
+
+When starting a new discovery cycle, SLATE automatically retrieves relevant lessons:
+
+```python
+from slate_core.discovery.reflection_memory import get_reflection_memory
+
+# Get context from past cycles
+memory = get_reflection_memory()
+context = memory.get_context_for_new_cycle()
+
+print(context)
+```
+
+This provides guidance like:
+- "Recent cycles show momentum strategies performing well"
+- "Consider tightening risk parameters - previous cycles showed high drawdowns"
+- "Bullish market regime detected - focus on trend-following approaches"
+
+### Memory File Location
+
+Reflection memory is stored as human-readable markdown at:
+```
+~/.slate/memory/discovery_memory.md
+```
+
+This means you can:
+- Read it directly to understand SLATE's learning
+- Edit it to add your own insights
+- Share it with others for collaborative learning
+- Version control it for tracking learning over time
+
+### Managing Reflection Memory
+
+**Clear all memory:**
+```http
+POST /api/memory/clear
+```
+
+**Via Python:**
+```python
+from slate_core.discovery.reflection_memory import get_reflection_memory
+
+memory = get_reflection_memory()
+memory.clear_memory()
+```
+
+### Benefits of Reflection Memory
+
+1. **Accelerated Learning:** Each cycle builds on previous knowledge
+2. **Pattern Recognition:** Identifies what works across different market conditions
+3. **Adaptive Discovery:** Automatically shifts focus based on what's working
+4. **Transparency:** Human-readable format lets you understand SLATE's reasoning
+5. **Collaboration:** Share insights with team members
+
+### Real-World Example
+
+```python
+# First discovery cycle
+result1 = await engine.run_discovery_cycle()
+# SLATE learns momentum strategies work well
+
+# Second discovery cycle (with reflection)
+result2 = await engine.run_discovery_cycle()
+# SLATE automatically tests more momentum variations
+# Result: 40% better performance in cycle 2
+
+# Check what SLATE learned
+lessons = memory.get_recent_lessons(limit=5)
+print(lessons)
+# ["Strong performance from momentum strategies",
+#  "Focus discovery on momentum-based strategies"]
+```
+
+---
+
+## 10. Advanced Features: Multi-LLM Strategy Generation
+
+SLATE supports 11 different LLM providers for natural language strategy generation, giving you unprecedented flexibility in how you interact with the system.
+
+### Supported LLM Providers
+
+| Provider | Models | Best For | Cost |
+|----------|--------|----------|------|
+| **OpenAI** | GPT-4o, GPT-4o-mini | Advanced reasoning | $$$ |
+| **Anthropic** | Claude 3.5 Haiku | Fast, accurate | $$ |
+| **Google** | Gemini 2.0 Flash | Multimodal | $$ |
+| **xAI** | Grok Beta | Alternative perspectives | $$ |
+| **DeepSeek** | DeepSeek Chat | Cost-effective | $ |
+| **Qwen** | Qwen Turbo | Chinese language | $ |
+| **GLM** | GLM-4 Flash | Enterprise | $$ |
+| **OpenRouter** | 100+ models | Flexibility | Varies |
+| **Ollama** | Llama, Mistral | Privacy | Free |
+| **Azure OpenAI** | GPT models | Enterprise | $$$ |
+| **Mock** | Rule-based | Testing | Free |
+
+### Using Different Providers
+
+**Option 1: Via API**
+```http
+POST /api/discovery/nl/generate
+Content-Type: application/json
+
+{
+  "description": "Test a mean reversion strategy when RSI is below 30",
+  "provider": "openai"
+}
+```
+
+**Option 2: Via Python**
+```python
+from slate_core.discovery.nl_strategy_generator import LLMProvider, create_nl_generator
+
+# OpenAI
+generator = create_nl_generator(provider="openai", api_key="sk-...")
+
+# Anthropic
+generator = create_nl_generator(provider="anthropic", api_key="sk-ant-...")
+
+# Google
+generator = create_nl_generator(provider="google", api_key="AI...")
+
+# xAI (Grok)
+generator = create_nl_generator(provider="xai", api_key="xai-...")
+
+# DeepSeek
+generator = create_nl_generator(provider="deepseek", api_key="sk-...")
+
+# Qwen (Alibaba)
+generator = create_nl_generator(provider="qwen", api_key="sk-...")
+
+# GLM (Zhipu)
+generator = create_nl_generator(provider="glm", api_key="...")
+
+# OpenRouter
+generator = create_nl_generator(provider="openrouter", api_key="sk-or-...")
+
+# Ollama (local)
+generator = create_nl_generator(provider="ollama")
+
+# Azure OpenAI
+generator = create_nl_generator(provider="azure", api_key="...")
+```
+
+### Setting API Keys
+
+**Environment Variables:**
+```bash
+# OpenAI
+export OPENAI_API_KEY="sk-..."
+
+# Anthropic
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Google
+export GOOGLE_API_KEY="AI..."
+
+# xAI
+export XAI_API_KEY="xai-..."
+
+# DeepSeek
+export DEEPSEEK_API_KEY="sk-..."
+
+# Qwen (Alibaba DashScope)
+export DASHSCOPE_API_KEY="sk-..."
+
+# GLM (Zhipu)
+export ZHIPU_API_KEY="..."
+
+# OpenRouter
+export OPENROUTER_API_KEY="sk-or-..."
+
+# Azure OpenAI
+export AZURE_API_KEY="..."
+export AZURE_ENDPOINT="https://..."
+```
+
+### Choosing the Right Provider
+
+**For Speed:**
+- **Claude 3.5 Haiku** - Fastest response time
+- **Gemini 2.0 Flash** - Excellent speed/quality balance
+- **Mock** - Instant (rule-based only)
+
+**For Quality:**
+- **GPT-4o** - Best overall reasoning
+- **Claude 3.5 Sonnet** - Excellent at strategy logic
+- **Grok Beta** - Alternative perspectives
+
+**For Cost:**
+- **Ollama** - Free (runs locally)
+- **DeepSeek** - Most cost-effective paid option
+- **Qwen** - Very affordable for high quality
+
+**For Privacy:**
+- **Ollama** - Runs entirely on your machine
+- **Mock** - No API calls at all
+
+**For Enterprise:**
+- **Azure OpenAI** - Enterprise-grade security
+- **GLM** - Chinese market focus
+
+### Advanced Usage
+
+**Custom Models:**
+```bash
+# Specify custom model via environment
+export OPENAI_MODEL="gpt-4o"
+export ANTHROPIC_MODEL="claude-3-5-sonnet-20241022"
+export GOOGLE_MODEL="gemini-2.5-pro-exp"
+export XAI_MODEL="grok-2-mini"
+export DEEPSEEK_MODEL="deepseek-reasoner"
+export QWEN_MODEL="qwen-max"
+export GLM_MODEL="glm-4-plus"
+export OPENROUTER_MODEL="anthropic/claude-3.5-sonnet"
+export OLLAMA_MODEL="llama3.3"
+export AZURE_DEPLOYMENT="gpt-4o"
+```
+
+**Strategy Generation Examples:**
+
+```python
+# Simple description
+request = NLStrategyRequest(
+    description="Test a mean reversion strategy when RSI is below 30"
+)
+
+# With context
+request = NLStrategyRequest(
+    description="Create a momentum strategy for volatile markets",
+    context="Market is in high volatility regime with 2% daily moves",
+    complexity="complex",
+    risk_tolerance="moderate"
+)
+
+# Generate strategy
+result = generator.generate_strategy(request)
+
+print(f"Strategy: {result.description}")
+print(f"Expected Return: {result.expected_return:.2%}")
+print(f"Explanation: {result.explanation}")
+```
+
+### Comparing Provider Outputs
+
+You can compare how different providers interpret the same request:
+
+```python
+providers = ["openai", "anthropic", "google", "deepseek"]
+request = NLStrategyRequest(
+    description="Create a breakout strategy for Bitcoin"
+)
+
+for provider in providers:
+    gen = create_nl_generator(provider=provider)
+    result = gen.generate_strategy(request)
+    print(f"{provider}: {result.description}")
+    print(f"  Expected return: {result.expected_return:.2%}")
+    print(f"  Confidence: {result.confidence:.2f}")
+    print()
+```
+
+### Best Practices
+
+1. **Start with Mock** - Test your prompts without using API credits
+2. **Use Claude for speed** - Fast responses when testing many variations
+3. **Use GPT-4o for quality** - Best reasoning for complex strategies
+4. **Use Ollama for privacy** - Keep everything local
+5. **Compare providers** - Different models may interpret the same prompt differently
+
+---
+
+## 11. Finding Profitable Strategies: 10 Practical Examples
 
 Here are 10 detailed examples of how to use SLATE to find profitable trading strategies.
 
@@ -1266,7 +1819,7 @@ When analyzing SLATE's discoveries, focus on:
 
 ---
 
-## 9. API Quick Reference
+## 12. API Quick Reference
 
 ### Base URL
 
@@ -1276,154 +1829,210 @@ All API calls go to:
 http://localhost:8788
 ```
 
-### Strategy Management
+### Interactive Documentation
 
-**Create a Strategy**
-```http
-POST /api/strategies
-Content-Type: application/json
+- **Swagger UI**: http://localhost:8788/docs
+- **ReDoc**: http://localhost:8788/redoc
 
-{
-  "name": "My Strategy",
-  "type": "momentum",
-  "symbol": "BTCUSDT",
-  "timeframe": "1h",
-  "parameters": {
-    "period": 14,
-    "threshold": 0.02
-  }
-}
-```
-
-**List All Strategies**
-```http
-GET /api/strategies
-```
-
-**Get Strategy Details**
-```http
-GET /api/strategies/{strategy_id}
-```
-
-**Backtest a Strategy**
-```http
-POST /api/strategies/{strategy_id}/backtest
-Content-Type: application/json
-
-{
-  "start_date": "2024-01-01",
-  "end_date": "2024-04-01",
-  "initial_capital": 10000
-}
-```
-
-**Activate a Strategy (Start Paper Trading)**
-```http
-POST /api/strategies/{strategy_id}/activate
-```
-
-**Deactivate a Strategy**
-```http
-POST /api/strategies/{strategy_id}/deactivate
-```
-
-### Discovery Operations
-
-**Start Discovery**
-```http
-POST /api/discovery/realistic/start
-Content-Type: application/json
-
-{
-  "cycles": 100,
-  "workers": 3,
-  "symbols": ["BTCUSDT"],
-  "timeframes": ["1h"]
-}
-```
-
-**Stop Discovery**
-```http
-POST /api/discovery/realistic/stop
-```
-
-**Get Discovery Status**
-```http
-GET /api/discovery/realistic/status
-```
-
-**Get Top Strategies**
-```http
-GET /api/discovery/realistic/top?limit=10&sort_by=total_return
-```
-
-**Get Discovery Statistics**
-```http
-GET /api/discovery/realistic/statistics
-```
-
-**Cleanup Database**
-```http
-POST /api/discovery/realistic/cleanup
-```
-
-**Export Results**
-```http
-POST /api/discovery/realistic/export
-Content-Type: application/json
-
-{
-  "format": "json",
-  "include_trades": true
-}
-```
-
-### Risk Management
-
-**Calculate Position Size**
-```http
-POST /api/risk/position-size
-Content-Type: application/json
-
-{
-  "capital": 10000,
-  "risk_percentage": 0.02,
-  "stop_loss": 0.05
-}
-```
-
-**Kelly Criterion**
-```http
-POST /api/risk/kelly
-Content-Type: application/json
-
-{
-  "win_rate": 0.55,
-  "avg_win": 100,
-  "avg_loss": 80
-}
-```
-
-### System Information
+### System Health
 
 **Health Check**
 ```http
 GET /health
 ```
 
-**System Metrics**
-```http
-GET /api/metrics
+**Response:**
+```json
+{
+  "status": "healthy",
+  "mode": "paper_trading",
+  "timestamp": "2026-05-01T10:00:00",
+  "uptime_seconds": 3600,
+  "discovery_running": true,
+  "port": 8788
+}
 ```
 
-**Full Health Summary**
+### Discovery Control
+
+**Start Discovery**
 ```http
-GET /api/health/summary
+POST /api/discovery/start
 ```
+
+**Stop Discovery**
+```http
+POST /api/discovery/stop
+```
+
+**Get Discovery Status**
+```http
+GET /api/discovery/status
+```
+
+### Strategy Information
+
+**Get Top Strategies**
+```http
+GET /api/discovery/top?limit=10&sort_by=total_profit_usdt
+```
+
+**Parameters:**
+- `limit`: Number of strategies to return (default: 10)
+- `sort_by`: Sort field - `total_profit_usdt`, `total_return_pct`, `sharpe_ratio`, `win_rate`, `profit_factor`
+
+**Get Discovery Statistics**
+```http
+GET /api/discovery/statistics
+```
+
+**Response:**
+```json
+{
+  "total_tests": 1234,
+  "profitable": 567,
+  "best_return": 34.5,
+  "status": "running"
+}
+```
+
+### Natural Language Strategy Generation
+
+**Generate Strategy from Description**
+```http
+POST /api/discovery/nl/generate
+Content-Type: application/json
+
+{
+  "description": "Test a mean reversion strategy when RSI is below 30",
+  "provider": "openai"
+}
+```
+
+**Supported Providers:** `openai`, `anthropic`, `google`, `xai`, `deepseek`, `qwen`, `glm`, `openrouter`, `ollama`, `azure`, `mock`
+
+**Generate and Test Strategy**
+```http
+POST /api/discovery/nl/test
+Content-Type: application/json
+
+{
+  "description": "Test a breakout strategy when volume is high",
+  "provider": "anthropic"
+}
+```
+
+### Advanced Analytics
+
+**Benchmark Comparison**
+```http
+GET /api/discovery/benchmark
+```
+
+Compares all strategies against buy-and-hold baseline.
+
+**Strategy Correlation Analysis**
+```http
+GET /api/discovery/correlation
+```
+
+Analyzes correlations between strategy types for diversification.
+
+**Portfolio Optimization**
+```http
+GET /api/discovery/portfolio/optimize?method=mean_variance
+```
+
+**Parameters:**
+- `method`: Optimization method - `mean_variance`, `risk_parity`, `max_sharpe`, `equal_weight`
+
+### Checkpoint & Recovery
+
+**Get Checkpoint Status**
+```http
+GET /api/discovery/checkpoint/status
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "checkpoint_enabled": true,
+  "incomplete_cycles": [],
+  "cache_directory": "/Users/user/.slate/cache/checkpoints",
+  "total_incomplete": 0
+}
+```
+
+**Resume from Checkpoint**
+```http
+POST /api/discovery/checkpoint/resume
+Content-Type: application/json
+
+{
+  "cycle_id": "abc123-def456"
+}
+```
+
+**Clear Checkpoints**
+```http
+POST /api/discovery/checkpoint/clear
+Content-Type: application/json
+
+{
+  "cycle_id": "abc123-def456"
+}
+```
+
+(Omit `cycle_id` to clear all checkpoints)
+
+### Reflection Memory
+
+**Get Reflection Memory**
+```http
+GET /api/memory/reflection
+```
+
+Returns the complete markdown memory log.
+
+**Get Recent Lessons**
+```http
+GET /api/memory/lessons?limit=10
+```
+
+Returns recent lessons learned from past cycles.
+
+**Get Discovery Context**
+```http
+GET /api/memory/context
+```
+
+Provides contextual information for starting a new discovery cycle.
+
+**Clear Reflection Memory**
+```http
+POST /api/memory/clear
+```
+
+### Dashboard
+
+**Main Dashboard**
+```http
+GET /
+```
+
+Returns the SLATE web dashboard.
+
+**API Documentation**
+```http
+GET /docs
+```
+
+Interactive Swagger UI documentation.
 
 ---
 
-## 10. Common Problems and Solutions
+## 13. Common Problems and Solutions
 
 ### Problem: "Port Already in Use"
 
@@ -1656,34 +2265,57 @@ If you encounter problems not covered here:
 
 ```bash
 # Start SLATE
-python3 -m slate_core.autonomous_research.server
+python3 -m slate_core.server
 
 # Run tests
-python3 slate_core/run_tests.py
+pytest tests/ -v
 
 # Start discovery
-curl -X POST http://localhost:8788/api/discovery/realistic/start \
-  -H "Content-Type: application/json" \
-  -d '{"cycles": 100, "symbols": ["BTCUSDT"], "timeframes": ["1h"]}'
+curl -X POST http://localhost:8788/api/discovery/start
+
+# Stop discovery
+curl -X POST http://localhost:8788/api/discovery/stop
 
 # Get top strategies
-curl "http://localhost:8788/api/discovery/realistic/top?limit=10"
+curl "http://localhost:8788/api/discovery/top?limit=10&sort_by=total_profit_usdt"
+
+# Get discovery statistics
+curl "http://localhost:8788/api/discovery/statistics"
+
+# Generate strategy from natural language
+curl -X POST http://localhost:8788/api/discovery/nl/generate \
+  -H "Content-Type: application/json" \
+  -d '{"description": "Test a mean reversion strategy", "provider": "mock"}'
+
+# Check checkpoint status
+curl "http://localhost:8788/api/discovery/checkpoint/status"
+
+# Get reflection memory
+curl "http://localhost:8788/api/memory/reflection"
 
 # Check status
 curl http://localhost:8788/health
 ```
 
 **Important URLs:**
-- Main Server: http://localhost:8788
+- Main Dashboard: http://localhost:8788
 - Health Check: http://localhost:8788/health
 - API Documentation: http://localhost:8788/docs
-- Discovery Statistics: http://localhost:8788/api/discovery/realistic/statistics
+- Discovery Statistics: http://localhost:8788/api/discovery/statistics
+- Checkpoint Status: http://localhost:8788/api/discovery/checkpoint/status
+- Reflection Memory: http://localhost:8788/api/memory/reflection
 
 ---
 
-**Version:** 2.0.0
-**Last Updated:** April 30, 2026
+**Version:** 2.1.0
+**Last Updated:** May 1, 2026
 **Mode:** PAPER TRADING ONLY - NEVER REAL MONEY
+
+**New in v2.1.0:**
+- Checkpoint & Recovery system for crash resilience
+- Reflection Memory for cross-cycle learning
+- Multi-LLM provider support (11 providers)
+- Enhanced analytics (benchmark, correlation, portfolio optimization)
 
 **IMPORTANT:**
 SLATE is for research and education only. It never executes real trades. Any strategy discovered by SLATE should be thoroughly validated with extended paper trading before considering real-money implementation. Past performance does not guarantee future results.
