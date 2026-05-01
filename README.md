@@ -58,12 +58,54 @@ The dashboard will be available at: **http://127.0.0.1:8788**
 - **CSV Export**: Export strategy data for further analysis
 - **Auto-refresh**: Updates every 5 seconds
 
+### Natural Language Strategy Generation
+
+SLATE now includes a powerful natural language to strategy conversion feature inspired by Vibe-Trading. Simply describe a trading strategy in plain English, and SLATE will automatically convert it to a testable strategy template.
+
+**How it works:**
+1. Enter a strategy description in the dashboard (e.g., "Test a mean reversion strategy when RSI is below 30")
+2. SLATE parses your description using rule-based patterns or LLM integration
+3. Click "Generate Strategy" to preview the strategy parameters
+4. Click "Generate & Test" to immediately backtest the strategy
+5. Results are automatically saved to the database
+
+**Example descriptions:**
+- "Test a mean reversion strategy when RSI is below 30"
+- "Create a momentum strategy with EMA 12/26 crossover"
+- "Test a breakout strategy when volume is high"
+- "Create a volatility squeeze play strategy"
+- "Test a support bounce strategy with 20-period lookback"
+
+**Supported LLM providers:**
+- **OpenAI**: GPT-4o-mini for advanced strategy generation
+- **Anthropic**: Claude 3 Haiku for fast, accurate conversion
+- **Ollama**: Local models for privacy-conscious users
+- **Mock**: Rule-based fallback (default, no API key required)
+
+**API Endpoints:**
+```bash
+# Generate strategy from description
+POST /api/discovery/nl/generate
+{
+  "description": "Test a mean reversion strategy when RSI is below 30",
+  "provider": "mock"  # or "openai", "anthropic", "ollama"
+}
+
+# Generate and immediately test strategy
+POST /api/discovery/nl/test
+{
+  "description": "Test a breakout strategy when volume is high"
+}
+```
+
 ### API Documentation
 
 - **Swagger UI**: http://127.0.0.1:8788/docs
 - **ReDoc**: http://127.0.0.1:8788/redoc
 - **Statistics API**: `/api/discovery/statistics`
 - **Top Strategies**: `/api/discovery/top?limit=10&sort_by=total_profit_usdt`
+- **NL Strategy Generate**: `/api/discovery/nl/generate`
+- **NL Strategy Test**: `/api/discovery/nl/test`
 
 ## 🧩 Strategy Types
 
@@ -196,7 +238,8 @@ SLATE/
 │   │       └── utils.js           # Utility functions
 │   ├── discovery/
 │   │   ├── edge_discovery_engine.py  # Main discovery engine
-│   │   └── discovery_memory.py       # Persistent memory system
+│   │   ├── discovery_memory.py       # Persistent memory system
+│   │   └── nl_strategy_generator.py  # Natural language to strategy conversion
 │   └── palace_data/               # Knowledge graph storage
 ├── tests/                         # Test suite
 └── requirements.txt               # Python dependencies
@@ -204,7 +247,16 @@ SLATE/
 
 ### Adding New Strategies
 
-To add a new strategy template:
+**Method 1: Using Natural Language (Recommended for quick testing)**
+
+Simply use the dashboard's Natural Language Strategy Generator:
+1. Enter a description like "Test a mean reversion strategy when RSI is below 30"
+2. Click "Generate & Test" to immediately backtest
+3. Results are saved automatically to the database
+
+**Method 2: Programming New Templates**
+
+To add a new strategy template programmatically:
 
 1. Add a new template method in `edge_discovery_engine.py`
 2. Implement the `_check_entry_signal()` logic for your strategy
