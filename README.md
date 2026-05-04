@@ -12,6 +12,35 @@ SLATE (Strategy Learning & Autonomous Trading Engine) is an intelligent system t
 
 **⚠️ IMPORTANT:** SLATE runs in **PAPER TRADING MODE ONLY**. No real money is ever risked.
 
+## 🚫 REAL DATA ONLY POLICY
+
+**SLATE uses ONLY real market data. NO synthetic, simulated, or artificial data is ever used.**
+
+- ✅ **Real Market Data**: All discoveries tested on actual Binance SOLUSDT futures data
+- ✅ **Brutally Realistic Costs**: Real transaction fees, slippage, and fill rates applied
+- ✅ **Genuine Market Conditions**: Authentic volatility, regime changes, and price action
+- ❌ **NO Synthetic Data**: Absolutely no artificial price generation or market simulation
+- ❌ **NO Optimistic Assumptions**: 100% fill rates or zero slippage are forbidden
+
+**Transaction Costs (Always Applied):**
+- Maker Fee: 0.02%
+- Taker Fee: 0.05%
+- Slippage: 10-20 bps (volatility-adjusted)
+- Fill Rate: 85% (not 100%)
+- Partial Fills: 15% probability
+
+This ensures SLATE discovers **genuine market edges**, not artifacts of synthetic data.
+
+---
+
+## Database Status
+
+**Current Status**: Fresh start as of May 4, 2026
+
+All previous discovery data has been purged due to synthetic data contamination. System has been reset and will only use authentic market data going forward.
+
+---
+
 ## ✨ Key Features
 
 - **🤖 Autonomous Discovery**: Continuously tests 35+ diverse strategy templates
