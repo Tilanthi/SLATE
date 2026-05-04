@@ -814,6 +814,7 @@ class EdgeDiscoveryEngine:
                 position = {
                     "entry_price": entry_price,
                     "shares": shares,
+                    "signal": signal,  # Store signal direction
                     "entry_time": df.index[i],
                     "stop_loss": entry_price * (1 - 2 * stop_distance / entry_price * signal),
                     "take_profit": entry_price * (1 + 3 * stop_distance / entry_price * signal)
@@ -825,21 +826,21 @@ class EdgeDiscoveryEngine:
                 exit_reason = None
 
                 # Check stop loss
-                if signal > 0 and df.iloc[i]["low"] <= position["stop_loss"]:
+                if position["signal"] > 0 and df.iloc[i]["low"] <= position["stop_loss"]:
                     exit_price = position["stop_loss"]
                     exit_signal = True
                     exit_reason = "stop_loss"
-                elif signal < 0 and df.iloc[i]["high"] >= position["stop_loss"]:
+                elif position["signal"] < 0 and df.iloc[i]["high"] >= position["stop_loss"]:
                     exit_price = position["stop_loss"]
                     exit_signal = True
                     exit_reason = "stop_loss"
 
                 # Check take profit
-                elif signal > 0 and df.iloc[i]["high"] >= position["take_profit"]:
+                elif position["signal"] > 0 and df.iloc[i]["high"] >= position["take_profit"]:
                     exit_price = position["take_profit"]
                     exit_signal = True
                     exit_reason = "take_profit"
-                elif signal < 0 and df.iloc[i]["low"] <= position["take_profit"]:
+                elif position["signal"] < 0 and df.iloc[i]["low"] <= position["take_profit"]:
                     exit_price = position["take_profit"]
                     exit_signal = True
                     exit_reason = "take_profit"
@@ -854,10 +855,10 @@ class EdgeDiscoveryEngine:
                 if exit_signal:
                     # Apply exit slippage and fees
                     exit_slippage = self._calculate_slippage(df, i, config)
-                    final_exit_price = exit_price * (1 - exit_slippage / 10000 * signal)
+                    final_exit_price = exit_price * (1 - exit_slippage / 10000 * position["signal"])
 
                     # Calculate PnL in USDT
-                    if signal > 0:
+                    if position["signal"] > 0:
                         pnl_usdt = (final_exit_price - position["entry_price"]) * position["shares"]
                     else:
                         pnl_usdt = (position["entry_price"] - final_exit_price) * position["shares"]
@@ -879,7 +880,20 @@ class EdgeDiscoveryEngine:
                     })
 
                     position = None
-                    equity_curve.append(capital)
+
+            # CRITICAL FIX: Track equity EVERY BAR, not just at trade exits
+            # This captures true drawdown during holding periods
+            if position is not None:
+                # Mark-to-market: calculate unrealized PnL for open position
+                if position["signal"] > 0:  # Long position
+                    unrealized_pnl = (current_price - position["entry_price"]) * position["shares"]
+                else:  # Short position
+                    unrealized_pnl = (position["entry_price"] - current_price) * position["shares"]
+                current_equity = capital + unrealized_pnl
+            else:
+                current_equity = capital
+
+            equity_curve.append(current_equity)
 
         # Calculate buy-and-hold baseline
         buy_hold_return_pct = (end_price - start_price) / start_price
@@ -896,7 +910,7 @@ class EdgeDiscoveryEngine:
 
         win_rate = sum(1 for t in trades if t["pnl_usdt"] > 0) / len(trades)
 
-        # Calculate drawdown
+        # Calculate drawdown using continuous equity tracking
         equity = np.array(equity_curve)
         running_max = np.maximum.accumulate(equity)
         drawdown_usdt = running_max - equity
@@ -904,10 +918,13 @@ class EdgeDiscoveryEngine:
         max_drawdown_usdt = drawdown_usdt.max()
         max_drawdown_pct = drawdown_pct.max()
 
-        # Sharpe ratio (UNCAPPED)
-        returns_pct = [t["return_pct"] for t in trades]
-        if len(returns_pct) > 1 and np.std(returns_pct) > 0:
-            sharpe = np.mean(returns_pct) / np.std(returns_pct) * np.sqrt(252)
+        # Sharpe ratio using CONTINUOUS equity returns (more accurate)
+        # This captures the true volatility of the strategy, including unrealized PnL
+        equity_returns = np.diff(equity) / equity[:-1]
+        equity_returns = equity_returns[~np.isnan(equity_returns)]  # Remove NaN values
+        if len(equity_returns) > 1 and np.std(equity_returns) > 0:
+            # Annualize hourly data to daily (24 hours) then to yearly (252 trading days)
+            sharpe = np.mean(equity_returns) / np.std(equity_returns) * np.sqrt(24 * 252)
         else:
             sharpe = 0
 
