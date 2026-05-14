@@ -1,0 +1,27 @@
+======================================================================
+VOLUME IMBALANCE - HONEST BACKTEST RESULTS
+======================================================================
+
+IMPORTANT: This uses PERPETUAL FUTURES data with brutally
+realistic transaction costs (fees, slippage, fill rates)
+
+Parameters:
+  VI Period: 9
+  VI Threshold: 0.20
+  Stop Loss: 1.5%
+  Take Profit: 3.0%
+  Trailing Stop: 1.0%
+
+Transaction Costs:
+  Maker Fee: 0.02%
+  Taker Fee: 0.04%
+  Slippage: 10-25 bps (volatility-adjusted)
+  Fill Rate: 80-98%
+  Partial Fills: 15%
+
+Results:
+  Return: +64.87%
+  Max DD: 11.49%
+  Win Rate: 47.2%
+  Profit Factor: 2.62
+  Trades: 108

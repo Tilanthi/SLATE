@@ -1,0 +1,182 @@
+// Volume Imbalance Strategy for HaasOnline
+// Optimized for Daily Timeframe - BTCUSDT Perpetual Futures
+//
+// Parameters:
+// - VI Period: 9 candles
+// - VI Threshold: 0.20
+// - Stop Loss: 1.5%
+// - Take Profit: 3.0%
+// - Trailing Stop: 1.0%
+//
+// Position Sizing: 2% of equity per trade (conservative)
+
+// Trading Parameters
+DefParamName('Timeframe', '1d');
+DefParamName('PositionSize', 2); // Percentage of equity
+DefParamName('Leverage', 1);
+DefParamName('MaxOpenPositions', 1);
+
+// Strategy Parameters
+DefParamName('VIPeriod', 9);
+DefParamName('VIThreshold', 0.20);
+DefParamName('StopLossPct', 1.5);
+DefParamName('TakeProfitPct', 3.0);
+DefParamName('TrailingStopPct', 1.0);
+
+// Fee Settings (Binance Futures)
+DefParamName('MakerFee', 0.02); // 0.02%
+DefParamName('TakerFee', 0.04); // 0.04%
+
+var: VolumeUp, VolumeDown, TotalVol, VI, VI_EMA;
+var: LongCondition, ShortCondition;
+var: StopPrice, TakeProfitPrice, TrailPrice;
+
+// Initialize
+procedure OnInit;
+begin
+  // Log parameters
+  Log('Volume Imbalance Strategy Initialized');
+  Log('Timeframe: ' + Timeframe);
+  Log('VI Period: ' + NumToStr(VIPeriod, 0));
+  Log('VI Threshold: ' + NumToStr(VIThreshold, 2));
+  Log('Stop Loss: ' + NumToStr(StopLossPct, 2) + '%');
+  Log('Take Profit: ' + NumToStr(TakeProfitPct, 2) + '%');
+  Log('Trailing Stop: ' + NumToStr(TrailingStopPct, 2) + '%');
+  Log('Position Size: ' + NumToStr(PositionSize, 0) + '%');
+  Log('Leverage: ' + NumToStr(Leverage, 0) + 'x');
+end;
+
+// Calculate Volume Imbalance
+procedure CalculateVI;
+begin
+  // Identify up and down candles
+  if (Close > Open) then begin
+    VolumeUp := Volume;
+    VolumeDown := 0;
+  end else if (Close < Open) then begin
+    VolumeUp := 0;
+    VolumeDown := Volume;
+  end else begin
+    VolumeUp := 0;
+    VolumeDown := 0;
+  end;
+
+  // Calculate sums over VIPeriod
+  TotalVol := Sum(Volume, VIPeriod);
+
+  // We need to track rolling sums
+  // Using built-in functions for Volume Imbalance
+  VI := (Sum(Volume * (Close > Open), VIPeriod) -
+          Sum(Volume * (Close < Open), VIPeriod)) / TotalVol;
+end;
+
+// Main trading logic
+procedure OnBar;
+var
+  CurrentPosition: Integer;
+  EntryPrice, StopLoss, TakeProfit: Float;
+begin
+  // Calculate Volume Imbalance
+  CalculateVI;
+
+  // Check entry conditions
+  LongCondition := (VI > VIThreshold);
+  ShortCondition := (VI < -VIThreshold);
+
+  // Check current position
+  CurrentPosition := CurrentPositionSize;
+
+  // Entry Logic
+  if (CurrentPosition = 0) then begin
+    // Long Entry
+    if LongCondition then begin
+      // Calculate position size (2% of equity)
+      EntryPrice := Close;
+
+      // Set stop loss and take profit
+      StopLoss := EntryPrice * (1 - StopLossPct / 100);
+      TakeProfit := EntryPrice * (1 + TakeProfitPct / 100);
+
+      // Place long order
+      Buy(PositionSize / 100 * Equity / Close);
+
+      // Set stop loss and take profit
+      SetStopLoss(StopLoss);
+      SetTakeProfit(TakeProfit);
+
+      Log('LONG Entry at ' + NumToStr(EntryPrice, 2) +
+          ' | VI: ' + NumToStr(VI, 3) +
+          ' | SL: ' + NumToStr(StopLoss, 2) +
+          ' | TP: ' + NumToStr(TakeProfit, 2));
+
+    // Short Entry
+    end else if ShortCondition then begin
+      EntryPrice := Close;
+
+      StopLoss := EntryPrice * (1 + StopLossPct / 100);
+      TakeProfit := EntryPrice * (1 - TakeProfitPct / 100);
+
+      SellShort(PositionSize / 100 * Equity / Close);
+
+      SetStopLoss(StopLoss);
+      SetTakeProfit(TakeProfit);
+
+      Log('SHORT Entry at ' + NumToStr(EntryPrice, 2) +
+          ' | VI: ' + NumToStr(VI, 3) +
+          ' | SL: ' + NumToStr(StopLoss, 2) +
+          ' | TP: ' + NumToStr(TakeProfit, 2));
+    end;
+  end;
+
+  // Trailing Stop Logic for Open Positions
+  if (CurrentPosition > 0) then begin
+    // Long position
+    TrailPrice := High * (1 - TrailingStopPct / 100);
+
+    // Update trailing stop
+    if (TrailPrice > StopLoss) then begin
+      SetStopLoss(TrailPrice);
+    end;
+
+    // Check for reverse signal
+    if ShortCondition then begin
+      ClosePosition('Signal Reverse');
+      Log('LONG closed on signal reverse');
+    end;
+
+  end else if (CurrentPosition < 0) then begin
+    // Short position
+    TrailPrice := Low * (1 + TrailingStopPct / 100);
+
+    if (TrailPrice < StopLoss) then begin
+      SetStopLoss(TrailPrice);
+    end;
+
+    // Check for reverse signal
+    if LongCondition then begin
+      ClosePosition('Signal Reverse');
+      Log('SHORT closed on signal reverse');
+    end;
+  end;
+end;
+
+// OnPositionClosed callback
+procedure OnPositionClosed(PositionSide: Integer; PositionProfit: Float);
+begin
+  Log('Position ' + IfThen(PositionSide > 0, 'LONG', 'SHORT') +
+      ' closed | P&L: $' + NumToStr(PositionProfit, 2));
+end;
+
+// OnTrade callback for detailed logging
+procedure OnTrade(TradeAction: Integer; TradeAmount: Float; TradePrice: Float);
+begin
+  case TradeAction of
+    1: Log('BUY executed: ' + NumToStr(TradeAmount, 4) + ' BTC @ $' + NumToStr(TradePrice, 2));
+    2: Log('SELL executed: ' + NumToStr(TradeAmount, 4) + ' BTC @ $' + NumToStr(TradePrice, 2));
+    3: Log('SELL SHORT executed: ' + NumToStr(TradeAmount, 4) + ' BTC @ $' + NumToStr(TradePrice, 2));
+    4: Log('BUY TO COVER executed: ' + NumToStr(TradeAmount, 4) + ' BTC @ $' + NumToStr(TradePrice, 2));
+  end;
+end;
+
+begin
+end.

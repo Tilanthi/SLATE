@@ -23,6 +23,13 @@ from .database import (
     SignalEvent,
 )
 from .fetcher import HistoricalDataFetcher, DataQualityChecker
+from .binance_fetcher import (
+    BinanceFetcher,
+    fetch_binance_data,
+    fetch_binance_data_week,
+    fetch_binance_data_month,
+    fetch_binance_futures_data
+)
 
 __all__ = [
     "DataNormalizer",
@@ -31,6 +38,12 @@ __all__ = [
     "DatabaseManager",
     "HistoricalDataFetcher",
     "DataQualityChecker",
+    # Binance fetcher (consolidated)
+    "BinanceFetcher",
+    "fetch_binance_data",
+    "fetch_binance_data_week",
+    "fetch_binance_data_month",
+    "fetch_binance_futures_data",
     # Database models
     "Ticker",
     "Candle",

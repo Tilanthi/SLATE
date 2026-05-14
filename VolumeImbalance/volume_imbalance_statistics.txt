@@ -1,0 +1,35 @@
+============================================================
+VOLUME IMBALANCE STRATEGY BACKTEST RESULTS
+============================================================
+
+PERFORMANCE METRICS
+============================================================
+Initial Capital: $10,000.00
+Final Equity: $9,406.33
+Total Return: -5.94%
+Total Profit: $-593.67
+Max Drawdown: -6.05%
+
+TRADE STATISTICS
+============================================================
+Total Trades: 342
+Winning Trades: 115
+Losing Trades: 227
+Win Rate: 33.63%
+Profit Factor: 0.58
+Average Win: $6.97
+Average Loss: $6.14
+Payoff Ratio: 1.14
+
+LONG vs SHORT PERFORMANCE
+============================================================
+Long Trades: 145
+Long Win Rate: 33.10%
+Short Trades: 197
+Short Win Rate: 34.01%
+
+EXIT REASON BREAKDOWN
+============================================================
+Stop Loss: 301
+Take Profit: 1
+Signal Reverse: 40

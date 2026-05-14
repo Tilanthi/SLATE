@@ -1,0 +1,28 @@
+======================================================================
+VOLUME IMBALANCE - DAILY TIMEFRAME RESULTS
+======================================================================
+
+ORIGINAL PARAMETERS
+----------------------------------------------------------------------
+VI Period: 12, Threshold: 0.30, SL: 2%, TP: 4%, Trail: 1.5%
+Return: +1.00%
+Max Drawdown: 1.11%
+Win Rate: 39.1%
+Trades: 64
+
+OPTIMIZED PARAMETERS
+----------------------------------------------------------------------
+VI Period: 9
+VI Threshold: 0.20
+Stop Loss: 1.5%
+Take Profit: 3.0%
+Trailing Stop: 1.0%
+Return: +7.92%
+Win Rate: 53.6%
+Profit Factor: 3.95
+Trades: 112
+
+IMPROVEMENT
+----------------------------------------------------------------------
+Return Improvement: +6.92%
+Relative Improvement: +694.9%

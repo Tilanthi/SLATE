@@ -1,0 +1,245 @@
+// Volume Imbalance Strategy for HaasOnline
+// BTCUSDT Perpetual Futures - Daily Timeframe
+// Optimized Parameters: VI Period=9, Threshold=0.20, SL=1.5%, TP=3%, Trail=1%
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+#pragma once
+
+// Trading pair
+def_trading_pair = "BTCUSDT"
+def_trading_type = "futures"  // Perpetual futures
+
+// Timeframe
+def_timeframe = "1d"
+
+// Position sizing
+def_position_size_pct = 2.0  // 2% of equity per trade
+def_leverage = 1  // 1x leverage
+
+// Strategy parameters
+def_vi_period = 9
+def_vi_threshold = 0.20
+def_stop_loss_pct = 1.5
+def_take_profit_pct = 3.0
+def_trailing_stop_pct = 1.0
+
+// Risk management
+def_max_position_size = 0.1  // Maximum position size in BTC
+def_min_distance_between_signals = 1  // Minimum bars between signals
+
+// ============================================================================
+// INPUTS
+// ============================================================================
+
+Inputs:
+    VIPeriod(9, 5, 50, 1),           // Volume Imbalance period
+    VIThreshold(0.20, 0.05, 0.50, 0.01),  // Volume Imbalance threshold
+    StopLossPct(1.5, 0.5, 5.0, 0.1),   // Stop loss percentage
+    TakeProfitPct(3.0, 1.0, 10.0, 0.5), // Take profit percentage
+    TrailingStopPct(1.0, 0.5, 3.0, 0.1), // Trailing stop percentage
+    PositionSizePct(2.0, 0.5, 10.0, 0.5); // Position size % of equity
+
+// ============================================================================
+// VARIABLES
+// ============================================================================
+
+Vars:
+    VI(0),                    // Volume Imbalance value
+    VolUp(0),                 // Volume of up bars
+    VolDown(0),               // Volume of down bars
+    TotalVolume(0),           // Total volume
+    LongSignal(false),        // Long entry signal
+    ShortSignal(false),       // Short entry signal
+    HighestSinceEntry(0),     // Highest price since long entry
+    LowestSinceEntry(0),      // Lowest price since short entry
+    BarsSinceEntry(0);        // Bars since last entry
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+once begin
+    // Log strategy start
+    Log("Volume Imbalance Strategy - " + def_trading_pair);
+    Log("Timeframe: " + def_timeframe);
+    Log("VI Period: " + Text:ToString(VIPeriod));
+    Log("VI Threshold: " + Text:ToString(VIThreshold, "%.2f"));
+    Log("Stop Loss: " + Text:ToString(StopLossPct, "%.1f") + "%");
+    Log("Take Profit: " + Text:ToString(TakeProfitPct, "%.1f") + "%");
+    Log("Trailing Stop: " + Text:ToString(TrailingStopPct, "%.1f") + "%");
+    Log("Position Size: " + Text:ToString(PositionSizePct, "%.1f") + "%");
+    Log("==========================================");
+end;
+
+// ============================================================================
+// CALCULATE VOLUME IMBALANCE
+// ============================================================================
+
+// Calculate Volume Imbalance
+VolUp = 0;
+VolDown = 0;
+TotalVolume = 0;
+
+// Sum volume for up and down bars over VIPeriod
+for i = 0 to VIPeriod - 1 begin
+    if (Close[VIPeriod - i] > Open[VIPeriod - i]) then
+        VolUp = VolUp + Volume[VIPeriod - i]
+    else
+        VolDown = VolDown + Volume[VIPeriod - i];
+
+    TotalVolume = TotalVolume + Volume[VIPeriod - i];
+end;
+
+// Calculate VI
+if (TotalVolume > 0) then
+    VI = (VolUp - VolDown) / TotalVolume
+else
+    VI = 0;
+
+// ============================================================================
+// ENTRY SIGNALS
+// ============================================================================
+
+// Long signal: buying pressure dominant
+LongSignal = (VI > VIThreshold);
+
+// Short signal: selling pressure dominant
+ShortSignal = (VI < -VIThreshold);
+
+// ============================================================================
+// TRADING LOGIC
+// ============================================================================
+
+// Entry logic
+if (MarketPosition = 0) then begin  // No position
+
+    // Long entry
+    if (LongSignal) and (BarsSinceEntry >= def_min_distance_between_signals) then begin
+
+        // Calculate position size
+        double positionValue = Equity * (PositionSizePct / 100);
+        double contracts = positionValue / Close;
+
+        // Limit max position size
+        if (contracts > def_max_position_size) then
+            contracts = def_max_position_size;
+
+        // Place long order
+        EnterLong(contracts, StopLossPct, TakeProfitPct);
+
+        // Reset tracking
+        HighestSinceEntry = Close;
+        BarsSinceEntry = 0;
+
+        Log("LONG Entry | VI: " + Text:ToString(VI, "%.3f") +
+            " | Price: $" + Text:ToString(Close, "%.2f") +
+            " | Contracts: " + Text:ToString(contracts, "%.4f") +
+            " | SL: " + Text:ToString(StopLossPct, "%.1f") + "%" +
+            " | TP: " + Text:ToString(TakeProfitPct, "%.1f") + "%");
+
+    // Short entry
+    end else if (ShortSignal) and (BarsSinceEntry >= def_min_distance_between_signals) then begin
+
+        // Calculate position size
+        double positionValue = Equity * (PositionSizePct / 100);
+        double contracts = positionValue / Close;
+
+        // Limit max position size
+        if (contracts > def_max_position_size) then
+            contracts = def_max_position_size;
+
+        // Place short order
+        EnterShort(contracts, StopLossPct, TakeProfitPct);
+
+        // Reset tracking
+        LowestSinceEntry = Close;
+        BarsSinceEntry = 0;
+
+        Log("SHORT Entry | VI: " + Text:ToString(VI, "%.3f") +
+            " | Price: $" + Text:ToString(Close, "%.2f") +
+            " | Contracts: " + Text:ToString(contracts, "%.4f") +
+            " | SL: " + Text:ToString(StopLossPct, "%.1f") + "%" +
+            " | TP: " + Text:ToString(TakeProfitPct, "%.1f") + "%");
+    end;
+
+end;
+
+// ============================================================================
+// EXIT LOGIC & TRAILING STOP
+// ============================================================================
+
+// Long position management
+if (MarketPosition > 0) then begin
+
+    // Update highest price
+    if (Close > HighestSinceEntry) then
+        HighestSinceEntry = Close;
+
+    // Trailing stop
+    double trailingStop = HighestSinceEntry * (1 - TrailingStopPct / 100);
+    double currentStop = EntryPrice * (1 - StopLossPct / 100);
+
+    if (trailingStop > currentStop) then
+        currentStop = trailingStop;
+
+    // Update stop loss
+    SetStopLoss(currentStop);
+
+    // Check for signal reverse (exit)
+    if (ShortSignal) then begin
+        Log("LONG Exit | Signal Reverse | VI: " + Text:ToString(VI, "%.3f"));
+        ExitLong();
+        BarsSinceEntry = VIPeriod;  // Wait before re-entering
+    end;
+
+end;
+
+// Short position management
+if (MarketPosition < 0) then begin
+
+    // Update lowest price
+    if (Close < LowestSinceEntry) then
+        LowestSinceEntry = Close;
+
+    // Trailing stop
+    double trailingStop = LowestSinceEntry * (1 + TrailingStopPct / 100);
+    double currentStop = EntryPrice * (1 + StopLossPct / 100);
+
+    if (trailingStop < currentStop) then
+        currentStop = trailingStop;
+
+    // Update stop loss
+    SetStopLoss(currentStop);
+
+    // Check for signal reverse (exit)
+    if (LongSignal) then begin
+        Log("SHORT Exit | Signal Reverse | VI: " + Text:ToString(VI, "%.3f"));
+        ExitShort();
+        BarsSinceEntry = VIPeriod;  // Wait before re-entering
+    end;
+
+end;
+
+// Increment bars since entry
+BarsSinceEntry = BarsSinceEntry + 1;
+
+// ============================================================================
+// PLOT INDICATORS
+// ============================================================================
+
+// Plot Volume Imbalance
+Plot(VI, "Volume Imbalance", White, 2, 0);
+
+// Plot threshold lines
+Plot(VIThreshold, "Long Threshold", Lime, 1, 1);
+Plot(-VIThreshold, "Short Threshold", Red, 1, 1);
+
+// Plot zero line
+Plot(0, "Zero", White, 1, 0);
+
+// ============================================================================
+// END OF SCRIPT
+// ============================================================================
