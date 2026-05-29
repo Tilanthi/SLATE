@@ -175,6 +175,9 @@ class EdgeBacktestResult:
 
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
+    # Timeframe tested (must be last to have default value)
+    timeframe: str = "1h"  # Candle timeframe (1m, 5m, 10m, 15m, 30m, 1h, 4h, 8h, 12h, 1d)
+
 
 class EdgeDiscoveryEngine:
     """
@@ -520,35 +523,49 @@ class EdgeDiscoveryEngine:
             },
         ]
 
-        # Randomly select strategies to test this cycle (exploration over exploitation)
-        num_strategies_to_test = random.randint(3, 8)
-        selected_strategies = random.sample(strategy_library, num_strategies_to_test)
+        # WIDE EXPLORATION: Test many diverse strategies per cycle
+        # This is DISCOVERY, not optimization - we explore full parameter space
+        # NOT narrowing in on small areas - that would be premature optimization
+        num_strategies_to_test = random.randint(15, 25)  # Increased for wider sweep
+
+        # Ensure we get diversity across ALL strategy types, not just random sampling
+        # First, shuffle to ensure randomness, then sample
+        random.shuffle(strategy_library)
+        selected_strategies = strategy_library[:num_strategies_to_test]
 
         candidates = []
+        strategy_types_seen = set()
+
         for strategy in selected_strategies:
             try:
-                candidate = strategy["template"]()
-                # Add unique identifier for database tracking
-                unique_id = str(uuid.uuid4())[:8]
-                candidate = EdgeCandidate(
-                    edge_type=candidate.edge_type,
-                    description=f"{candidate.description} [{unique_id}]",
-                    entry_conditions=candidate.entry_conditions,
-                    exit_conditions=candidate.exit_conditions,
-                    risk_params=candidate.risk_params,
-                    confidence=candidate.confidence,
-                    expected_return=candidate.expected_return,
-                    expected_drawdown=candidate.expected_drawdown
-                )
-                candidates.append(candidate)
+                # Generate multiple parameter variants per strategy for timescale diversity
+                # Different lookback periods, thresholds, etc.
+                for variant in range(3):  # 3 variants per strategy template
+                    candidate = strategy["template"]()
+                    # Add unique identifier for database tracking
+                    unique_id = str(uuid.uuid4())[:8]
+                    variant_tag = f"v{variant+1}"
+
+                    candidate = EdgeCandidate(
+                        edge_type=candidate.edge_type,
+                        description=f"{candidate.description} [{unique_id}-{variant_tag}]",
+                        entry_conditions=candidate.entry_conditions,
+                        exit_conditions=candidate.exit_conditions,
+                        risk_params=candidate.risk_params,
+                        confidence=candidate.confidence,
+                        expected_return=candidate.expected_return,
+                        expected_drawdown=candidate.expected_drawdown
+                    )
+                    candidates.append(candidate)
+                    strategy_types_seen.add(candidate.edge_type.value)
             except Exception as e:
                 logger.warning(f"Failed to generate {strategy['name']}: {e}")
 
         logger.info(f"Generated {len(candidates)} diverse edge candidates from {num_strategies_to_test} unique strategies")
-        return candidates
+        logger.info(f"Strategy types covered: {', '.join(sorted(strategy_types_seen))}")
         return candidates
 
-    async def fetch_solusdt_data(self, days: int = 90) -> Optional[pd.DataFrame]:
+    async def fetch_solusdt_data(self, days: int = 365, timeframe: str = "1h") -> Optional[pd.DataFrame]:  # 1 year for proper backtesting
         """
         Fetch REAL SOLUSDT historical data from Binance.
 
@@ -556,6 +573,7 @@ class EdgeDiscoveryEngine:
 
         Args:
             days: Number of days of historical data to fetch
+            timeframe: Candle timeframe (1m, 5m, 10m, 15m, 30m, 1h, 4h, 8h, 12h, 1d)
 
         Returns:
             DataFrame with OHLCV data or None if fetch fails
@@ -567,14 +585,12 @@ class EdgeDiscoveryEngine:
         import ssl
         import aiohttp
 
-        # First, try to load from cache (cached real data only)
-        cache_file = Path(f"./slate_core/palace_data/historical/SOLUSDT_1h.json")
+        # First, try to load from CSV cache (cached real data only)
+        # Use timeframe-specific CSV file that contains REAL Binance data
+        cache_file = Path(f"sol_data_cache/SOLUSDT_{timeframe}_1y.csv")
         if cache_file.exists():
             try:
-                with open(cache_file, 'r') as f:
-                    data = json.load(f)
-
-                df = pd.DataFrame(data)
+                df = pd.read_csv(cache_file)
                 df["timestamp"] = pd.to_datetime(df["timestamp"])
                 df.set_index("timestamp", inplace=True)
 
@@ -587,11 +603,13 @@ class EdgeDiscoveryEngine:
                 if "atr" not in df.columns:
                     df = self._calculate_indicators(df)
 
-                logger.info(f"Loaded {len(df)} REAL candles from cache for SOLUSDT")
+                logger.info(f"Loaded {len(df)} REAL {timeframe} candles from cache for SOLUSDT")
+                logger.info(f"Period: {df.index[0]} to {df.index[-1]}")
+                logger.info(f"Price range: ${df['close'].min():.2f} - ${df['close'].max():.2f}")
                 return df
 
             except Exception as e:
-                logger.warning(f"Failed to load cached data: {e}")
+                logger.warning(f"Failed to load cached data for {timeframe}: {e}")
 
         # Fetch from Binance API - REAL DATA ONLY
         try:
@@ -1417,8 +1435,9 @@ class EdgeDiscoveryEngine:
                     walk_forward_is_profitable, walk_forward_avg_profit_usdt,
                     avg_slippage_bps, avg_fill_rate, total_fees_usdt,
                     period_start, period_end, volatility_regime, start_price, end_price,
-                    passed_validation, validation_failures, timestamp, rank_score
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    passed_validation, validation_failures, timestamp, rank_score,
+                    timeframe
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 result.edge_type, result.edge_description,
                 result.total_profit_usdt, result.total_return_pct, result.final_capital, result.initial_capital,
@@ -1431,7 +1450,8 @@ class EdgeDiscoveryEngine:
                 result.avg_slippage_bps, result.avg_fill_rate, result.total_fees_usdt,
                 result.period_start, result.period_end, result.volatility_regime, result.start_price, result.end_price,
                 int(result.passed_validation), json.dumps(result.validation_failures),
-                result.timestamp, rank_score
+                result.timestamp, rank_score,
+                result.timeframe
             ))
 
             conn.commit()
@@ -2604,6 +2624,128 @@ class EdgeDiscoveryEngine:
                 }
                 for r in passed[:5]
             ]
+        }
+
+    async def run_multi_timeframe_discovery_cycle(self) -> Dict[str, Any]:
+        """
+        Run discovery cycle across ALL timeframes uniformly.
+
+        Tests each strategy across: 1m, 5m, 15m, 30m, 1h, 4h, 8h, 12h, 1d
+        Ensures WIDE exploration across timeframes, not just one.
+        """
+        timeframes = ['1m', '5m', '15m', '30m', '1h', '4h', '8h', '12h', '1d']
+
+        logger.info(f"")
+        logger.info(f"{'='*70}")
+        logger.info(f"MULTI-TIMEFRAME DISCOVERY CYCLE STARTING")
+        logger.info(f"{'='*70}")
+        logger.info(f"Testing across {len(timeframes)} timeframes: {', '.join(timeframes)}")
+        logger.info(f"This ensures WIDE exploration across time dimensions")
+        logger.info(f"{'='*70}")
+        logger.info(f"")
+
+        all_results = []
+        timeframe_stats = {}
+
+        for timeframe in timeframes:
+            logger.info(f"\\n{'─'*70}")
+            logger.info(f"TIMEFRAME: {timeframe}")
+            logger.info(f"{'─'*70}")
+
+            # Load data for this timeframe
+            try:
+                df = await self.fetch_solusdt_data(days=365, timeframe=timeframe)
+            except RuntimeError as e:
+                logger.warning(f"Skipping {timeframe}: {e}")
+                continue
+
+            if df is None or len(df) < 100:
+                logger.warning(f"Insufficient data for {timeframe} ({len(df) if df else 0} candles), skipping")
+                continue
+
+            logger.info(f"Loaded {len(df)} {timeframe} candles for backtesting")
+
+            # Generate candidates for this timeframe
+            candidates = self.generate_edge_candidates()
+            logger.info(f"Testing {len(candidates)} strategies on {timeframe} timeframe")
+
+            # Test each strategy on this timeframe
+            timeframe_results = []
+            for candidate in candidates:
+                # Update description to include timeframe
+                original_description = candidate.description
+                candidate.description = f"[{timeframe}] {original_description}"
+
+                try:
+                    result = self.simulate_edge_backtest(df, candidate, self.config)
+                    result.timeframe = timeframe  # Set timeframe
+
+                    # Monte Carlo validation if promising
+                    if result.total_profit_usdt > 0 and result.max_drawdown_pct < 0.25:
+                        mc_mean, mc_std, mc_5th, mc_win = self.run_monte_carlo_validation(
+                            df, candidate, self.config
+                        )
+                        result.monte_carlo_mean_profit_usdt = mc_mean
+                        result.monte_carlo_std_profit_usdt = mc_std
+                        result.monte_carlo_5th_percentile_usdt = mc_5th
+                        result.monte_carlo_win_rate = mc_win
+
+                    self.save_discovery(result)
+                    all_results.append(result)
+                    timeframe_results.append(result)
+
+                except Exception as e:
+                    logger.error(f"Error testing {candidate.description}: {e}")
+
+            # Log timeframe summary
+            profitable = sum(1 for r in timeframe_results if r.total_profit_usdt > 0)
+            avg_return = sum(r.total_return_pct for r in timeframe_results) / len(timeframe_results) if timeframe_results else 0
+
+            timeframe_stats[timeframe] = {
+                'tested': len(timeframe_results),
+                'profitable': profitable,
+                'best_return': max([r.total_return_pct for r in timeframe_results]) if timeframe_results else 0
+            }
+
+            logger.info(f"Timeframe {timeframe} complete: {len(timeframe_results)} strategies, {profitable} profitable, best return: {timeframe_stats[timeframe]['best_return']:.2%}")
+
+        # Overall summary
+        logger.info(f"")
+        logger.info(f"{'='*70}")
+        logger.info(f"MULTI-TIMEFRAME DISCOVERY COMPLETE")
+        logger.info(f"{'='*70}")
+        logger.info(f"Total strategies tested: {len(all_results)}")
+
+        for tf in timeframes:
+            if tf in timeframe_stats:
+                stats = timeframe_stats[tf]
+                logger.info(f"  {tf:4s}: {stats['tested']:4d} tested, {stats['profitable']:3d} profitable, best: {stats['best_return']:7.2%}")
+
+        logger.info(f"{'='*70}")
+        logger.info(f"")
+
+        passed = [r for r in all_results if r.passed_validation]
+        passed.sort(key=lambda x: x.total_profit_usdt, reverse=True)
+
+        return {
+            "status": "success",
+            "total_candidates": len(all_results),
+            "passed_validation": len(passed),
+            "top_edges": [
+                {
+                    "description": r.edge_description,
+                    "profit_usdt": r.total_profit_usdt,
+                    "return_pct": r.total_return_pct,
+                    "drawdown_pct": r.max_drawdown_pct,
+                    "beat_market": r.vs_buy_hold_usdt,
+                    "sharpe": r.sharpe_ratio,
+                    "mc_win_rate": r.monte_carlo_win_rate,
+                    "timeframe": r.timeframe
+                }
+                for r in passed[:5]
+            ],
+            "timeframes_tested": timeframes,
+            "results_by_timeframe": timeframe_stats
         }
 
 

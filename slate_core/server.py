@@ -162,9 +162,9 @@ async def start_discovery():
             global discovery_running
             try:
                 engine = EdgeDiscoveryEngine()
-                logger.info("Starting auto-discovery cycle...")
-                results = await engine.run_discovery_cycle()
-                logger.info(f"Discovery complete: {results}")
+                logger.info("Starting multi-timeframe auto-discovery cycle...")
+                results = await engine.run_multi_timeframe_discovery_cycle()
+                logger.info(f"Multi-timeframe discovery complete: {results}")
             except Exception as e:
                 logger.error(f"Discovery error: {e}", exc_info=True)
             finally:
@@ -1281,9 +1281,9 @@ async def auto_start_discovery():
 
         while True:
             try:
-                logger.info("Running discovery cycle...")
-                results = await engine.run_discovery_cycle()
-                logger.info(f"Discovery cycle complete: {results}")
+                logger.info("Running multi-timeframe discovery cycle...")
+                results = await engine.run_multi_timeframe_discovery_cycle()
+                logger.info(f"Multi-timeframe discovery cycle complete: {results}")
 
                 # Wait before next cycle (continuous discovery) - SHORT WAIT for continuous testing
                 logger.info("Waiting 5 seconds before next cycle...")
