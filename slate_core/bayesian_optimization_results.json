@@ -1,0 +1,38 @@
+[
+  {
+    "iteration": 15,
+    "params": {
+      "edge_threshold": 0.08,
+      "lmsr_b": 12000,
+      "lookback_hours": 24,
+      "position_size_base": 75,
+      "volatility_multiplier": 0.5
+    },
+    "metrics": {
+      "sharpe_ratio": -2.082263107969511,
+      "total_return": -0.009160514287378173,
+      "max_drawdown": -0.011162603644670161,
+      "win_rate": 0.31125827814569534,
+      "total_trades": 151
+    },
+    "is_best": true
+  },
+  {
+    "iteration": 16,
+    "params": {
+      "edge_threshold": 0.13839876341899365,
+      "lmsr_b": 3587,
+      "lookback_hours": 64,
+      "position_size_base": 196,
+      "volatility_multiplier": 1.5446410674006814
+    },
+    "metrics": {
+      "sharpe_ratio": -4.279622395886603,
+      "total_return": -0.2778427397101031,
+      "max_drawdown": -0.3406564332455364,
+      "win_rate": 0.4482758620689655,
+      "total_trades": 58
+    },
+    "is_best": false
+  }
+]

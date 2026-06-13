@@ -1,0 +1,81 @@
+{
+  "results": [
+    {
+      "iteration": 17,
+      "params": {
+        "edge_threshold": 0.0952,
+        "lmsr_b": 13109,
+        "lookback_hours": 45,
+        "position_size_base": 139,
+        "volatility_multiplier": 1.2337
+      },
+      "metrics": {
+        "sharpe_ratio": -0.41731946373460405,
+        "total_return": -44874.26416724535,
+        "max_drawdown": -44878.3191355364,
+        "win_rate": 0.4646302250803859,
+        "total_trades": 622
+      },
+      "is_best": true,
+      "timestamp": "2026-06-05T17:14:58.926869"
+    },
+    {
+      "iteration": 17,
+      "params": {
+        "edge_threshold": 0.0952,
+        "lmsr_b": 13109,
+        "lookback_hours": 45,
+        "position_size_base": 139,
+        "volatility_multiplier": 1.2337
+      },
+      "metrics": {
+        "sharpe_ratio": 1.689289911710848,
+        "total_return": -286.94187801400034,
+        "max_drawdown": -286.77642472951146,
+        "win_rate": 0.4142857142857143,
+        "total_trades": 420
+      },
+      "is_best": true,
+      "timestamp": "2026-06-05T17:15:17.406546"
+    },
+    {
+      "iteration": 17,
+      "params": {
+        "edge_threshold": 0.0952,
+        "lmsr_b": 13109,
+        "lookback_hours": 45,
+        "position_size_base": 139,
+        "volatility_multiplier": 1.2337
+      },
+      "metrics": {
+        "sharpe_ratio": -0.7032988032382362,
+        "total_return": -1.1514940033700882,
+        "max_drawdown": -1.1520741621975958,
+        "win_rate": 0.2925170068027211,
+        "total_trades": 147
+      },
+      "is_best": false,
+      "timestamp": "2026-06-05T17:15:31.242996"
+    },
+    {
+      "iteration": 19,
+      "params": {
+        "edge_threshold": 0.03468247044707715,
+        "lmsr_b": 5848.04276114006,
+        "lookback_hours": 13.863766319366366,
+        "position_size_base": 56.50289402981058,
+        "volatility_multiplier": 0.20272249775504092
+      },
+      "metrics": {
+        "sharpe_ratio": 3.7640902064335045e-05,
+        "total_return": 0.0,
+        "max_drawdown": -2.9018713923299393e-05,
+        "win_rate": 0.3482456140350877,
+        "total_trades": 1140
+      },
+      "is_best": false,
+      "timestamp": "2026-06-05T17:16:55.556736"
+    }
+  ],
+  "iteration": 19
+}

@@ -67,3 +67,31 @@ coverage.xml
 # pytest
 .pytest_cache/
 .tox/
+
+# Test scripts and backtest results
+*_backtest.py
+*_backtest_v*.py
+*_backtest_results.json
+*_backtest_results.png
+*_results_*.json
+*_iter*.py
+run_*.py
+check_*.py
+test_*.py
+implement_*.py
+fetch_*.py
+analyze_*.py
+final_*.py
+ml_probability_estimator.py
+momentum_volatility_estimator.py
+
+# Report files
+*_REPORT.md
+*_ANALYSIS.md
+
+# Data cache directories (optional - uncomment to ignore)
+# btc_data_cache/
+# sol_data_cache/
+
+# PID files (runtime state)
+*.pid
