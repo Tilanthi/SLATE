@@ -1174,6 +1174,218 @@ async def clear_reflection_memory():
 
 
 # ============================================================================
+# API Routes - YouTube Transcription & Video Analysis
+# ============================================================================
+
+@app.post("/api/youtube/transcribe")
+async def transcribe_youtube_video(request: Request):
+    """
+    Transcribe a YouTube video and extract trading insights.
+
+    Expects JSON body:
+    {
+        "url": "https://www.youtube.com/watch?v=...",
+        "extract_insights": true  # optional, default true
+    }
+
+    Returns:
+    {
+        "success": true,
+        "transcript": "...",
+        "video_id": "...",
+        "title": "...",
+        "duration": ...,
+        "insights": {
+            "strategies_found": [...],
+            "indicators_found": [...],
+            "assets_mentioned": [...],
+            "trading_relevance_score": 85.0,
+            "slate_action_items": [...]
+        }
+    }
+    """
+    try:
+        from slate_core.external_data.youtube_transcriber import YouTubeTranscriber
+        from slate_core.external_data.video_insight_extractor import VideoInsightExtractor
+
+        body = await request.json()
+        url = body.get('url')
+        extract_insights = body.get('extract_insights', True)
+
+        if not url:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Missing YouTube URL"}
+            )
+
+        logger.info(f"YouTube transcription request: {url}")
+
+        # Get transcript
+        transcriber = YouTubeTranscriber()
+        transcript_result = transcriber.get_transcript(url)
+
+        if not transcript_result.get('success'):
+            return transcript_result
+
+        # Extract trading insights if requested
+        insights = None
+        if extract_insights:
+            extractor = VideoInsightExtractor()
+            insights = extractor.extract_insights(transcript_result)
+
+        return {
+            "success": True,
+            "transcript": transcript_result.get('transcript'),
+            "video_id": transcript_result.get('video_id'),
+            "url": url,
+            "title": transcript_result.get('title', 'Unknown'),
+            "duration": transcript_result.get('duration', 0),
+            "word_count": transcript_result.get('word_count', 0),
+            "language": transcript_result.get('language', 'unknown'),
+            "method": transcript_result.get('method', 'unknown'),
+            "segments_count": len(transcript_result.get('segments', [])),
+            "insights": insights,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error transcribing YouTube video: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@app.post("/api/youtube/search")
+async def search_youtube_transcript(request: Request):
+    """
+    Search within a YouTube video transcript for specific topics.
+
+    Expects JSON body:
+    {
+        "url": "https://www.youtube.com/watch?v=...",
+        "query": "stop loss strategy"
+    }
+
+    Returns:
+    {
+        "success": true,
+        "query": "stop loss strategy",
+        "total_matches": 5,
+        "results": [
+            {
+                "timestamp": 123.45,
+                "timestamp_formatted": "2:03",
+                "text": "...",
+                "context": "..."
+            }
+        ]
+    }
+    """
+    try:
+        from slate_core.external_data.youtube_transcriber import YouTubeTranscriber
+
+        body = await request.json()
+        url = body.get('url')
+        query = body.get('query')
+
+        if not url or not query:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Missing URL or query"}
+            )
+
+        logger.info(f"YouTube search request: {url} - query: {query}")
+
+        transcriber = YouTubeTranscriber()
+        search_result = transcriber.search_transcript(url, query)
+
+        return search_result
+
+    except Exception as e:
+        logger.error(f"Error searching YouTube transcript: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@app.get("/api/youtube/status")
+async def youtube_status():
+    """Check YouTube transcription dependencies and capabilities."""
+    try:
+        from slate_core.external_data.youtube_transcriber import YouTubeTranscriber
+
+        transcriber = YouTubeTranscriber()
+        deps_status = transcriber._check_dependencies()
+
+        # Count cached transcripts
+        cache_count = 0
+        cache_dir = transcriber.cache_dir
+        if cache_dir.exists():
+            cache_count = len(list(cache_dir.glob("*.json")))
+
+        return {
+            "status": "operational",
+            "dependencies": deps_status,
+            "cache": {
+                "enabled": True,
+                "cached_transcripts": cache_count,
+                "cache_directory": str(cache_dir)
+            },
+            "capabilities": {
+                "transcribe": deps_status.get('youtube_transcript_api', False) or deps_status.get('yt_dlp', False) or deps_status.get('whisper', False),
+                "search": True,
+                "insight_extraction": True,
+                "multi_language": deps_status.get('whisper', False)
+            },
+            "installation_guide": transcriber.get_installation_instructions().strip(),
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting YouTube status: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@app.post("/api/youtube/cache/clear")
+async def clear_youtube_cache():
+    """Clear cached YouTube transcripts."""
+    try:
+        from slate_core.external_data.youtube_transcriber import YouTubeTranscriber
+
+        transcriber = YouTubeTranscriber()
+        cache_dir = transcriber.cache_dir
+
+        if cache_dir.exists():
+            cache_files = list(cache_dir.glob("*.json"))
+            for file in cache_files:
+                file.unlink()
+
+            logger.info(f"Cleared {len(cache_files)} cached transcripts")
+
+            return {
+                "success": True,
+                "message": f"Cleared {len(cache_files)} cached transcripts"
+            }
+        else:
+            return {
+                "success": True,
+                "message": "No cache directory found"
+            }
+
+    except Exception as e:
+        logger.error(f"Error clearing YouTube cache: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+# ============================================================================
 # Web Dashboard
 # ============================================================================
 
