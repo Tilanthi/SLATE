@@ -35,6 +35,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+# Autonomous system integration
+try:
+    from slate_core.autonomous import (
+        AutonomousOrchestrator,
+        get_exploratory_config,
+        AutonomousConfig
+    )
+    AUTONOMOUS_AVAILABLE = True
+except ImportError:
+    AUTONOMOUS_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -72,6 +83,16 @@ else:
 discovery_running = False
 discovery_task: Optional[asyncio.Task] = None
 start_time = datetime.now()
+
+# Autonomous system global state
+autonomous_orchestrator: Optional[AutonomousOrchestrator] = None
+autonomous_enabled = False
+
+
+def track_user_activity():
+    """Track user activity for autonomous pause/resume"""
+    if autonomous_enabled and autonomous_orchestrator:
+        autonomous_orchestrator.record_user_activity()
 
 
 # ============================================================================
@@ -149,6 +170,7 @@ async def health_summary():
 @app.post("/api/discovery/start")
 async def start_discovery():
     """Start a discovery cycle."""
+    track_user_activity()  # Track user activity for autonomous pause
     global discovery_running, discovery_task
 
     if discovery_running:
@@ -189,6 +211,7 @@ async def start_discovery():
 @app.post("/api/discovery/stop")
 async def stop_discovery():
     """Stop the current discovery cycle."""
+    track_user_activity()  # Track user activity for autonomous pause
     global discovery_running, discovery_task
 
     if not discovery_running:
@@ -209,6 +232,7 @@ async def stop_discovery():
 @app.get("/api/discovery/status")
 async def get_discovery_status():
     """Get current discovery status."""
+    track_user_activity()  # Track user activity for autonomous pause
     global discovery_running
 
     try:
@@ -845,6 +869,7 @@ async def generate_nl_strategy(request: dict):
             "description": "Test a mean reversion strategy when RSI is below 30"
         }
     """
+    track_user_activity()  # Track user activity for autonomous pause
     try:
         description = request.get("description", "")
         provider = request.get("provider", "mock")
@@ -906,6 +931,7 @@ async def test_nl_strategy(request: dict):
             "description": "Test a breakout strategy when volume is high"
         }
     """
+    track_user_activity()  # Track user activity for autonomous pause
     try:
         description = request.get("description", "")
         provider = request.get("provider", "mock")
@@ -1527,6 +1553,19 @@ async def startup_event():
     logger.info(f"API Docs: http://localhost:8788/docs")
     logger.info("=" * 60)
 
+    # Initialize autonomous system if available
+    global autonomous_orchestrator, autonomous_enabled
+    if AUTONOMOUS_AVAILABLE:
+        try:
+            autonomous_config = get_exploratory_config()
+            autonomous_orchestrator = AutonomousOrchestrator(autonomous_config)
+            autonomous_orchestrator.start()
+            autonomous_enabled = True
+            logger.info("✅ Autonomous system initialized and started")
+        except Exception as e:
+            logger.error(f"Failed to initialize autonomous system: {e}")
+            autonomous_enabled = False
+
     # Start auto-discovery in background
     asyncio.create_task(auto_start_discovery())
 
@@ -1534,9 +1573,18 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Run on server shutdown."""
-    global discovery_running, discovery_task
+    global discovery_running, discovery_task, autonomous_orchestrator, autonomous_enabled
 
     logger.info("SLATE Server shutting down...")
+
+    # Stop autonomous system
+    if autonomous_orchestrator:
+        try:
+            autonomous_orchestrator.cleanup()
+            autonomous_enabled = False
+            logger.info("Autonomous system stopped")
+        except Exception as e:
+            logger.error(f"Error stopping autonomous system: {e}")
 
     discovery_running = False
 
@@ -1547,6 +1595,167 @@ async def shutdown_event():
         except asyncio.CancelledError:
             pass
 
+
+# ============================================================================
+# Autonomous System Helper Functions
+# ============================================================================
+
+def get_autonomous_status():
+    """Get autonomous system status"""
+    if not autonomous_enabled or not autonomous_orchestrator:
+        return {
+            "autonomous_available": AUTONOMOUS_AVAILABLE,
+            "autonomous_enabled": False,
+            "message": "Autonomous system not enabled"
+        }
+
+    try:
+        status = autonomous_orchestrator.get_status()
+        status["autonomous_available"] = AUTONOMOUS_AVAILABLE
+        status["autonomous_enabled"] = True
+        return status
+    except Exception as e:
+        logger.error(f"Error getting autonomous status: {e}")
+        return {
+            "autonomous_available": AUTONOMOUS_AVAILABLE,
+            "autonomous_enabled": False,
+            "error": str(e)
+        }
+
+def get_autonomous_discoveries(limit: int = 20):
+    """Get autonomous discoveries"""
+    if not autonomous_enabled or not autonomous_orchestrator:
+        return {
+            "autonomous_enabled": False,
+            "discoveries": [],
+            "message": "Autonomous system not enabled"
+        }
+
+    try:
+        discoveries = autonomous_orchestrator.get_discoveries(limit=limit)
+        return {
+            "autonomous_enabled": True,
+            "total": len(discoveries),
+            "discoveries": discoveries,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting autonomous discoveries: {e}")
+        return {
+            "autonomous_enabled": False,
+            "discoveries": [],
+            "error": str(e)
+        }
+
+def start_autonomous_operations():
+    """Start autonomous operations"""
+    if not AUTONOMOUS_AVAILABLE:
+        return {
+            "success": False,
+            "message": "Autonomous capabilities not available"
+        }
+
+    try:
+        global autonomous_orchestrator, autonomous_enabled
+
+        if not autonomous_orchestrator:
+            autonomous_config = get_exploratory_config()
+            autonomous_orchestrator = AutonomousOrchestrator(autonomous_config)
+
+        autonomous_orchestrator.start()
+        autonomous_enabled = True
+
+        return {
+            "success": True,
+            "message": "Autonomous operations started",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error starting autonomous operations: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+def stop_autonomous_operations():
+    """Stop autonomous operations"""
+    try:
+        global autonomous_enabled
+
+        if autonomous_orchestrator:
+            autonomous_orchestrator.stop()
+            autonomous_enabled = False
+
+        return {
+            "success": True,
+            "message": "Autonomous operations stopped",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error stopping autonomous operations: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+def generate_autonomous_report():
+    """Generate comprehensive autonomous discovery report"""
+    if not autonomous_enabled or not autonomous_orchestrator:
+        return {
+            "autonomous_enabled": False,
+            "report": None,
+            "message": "Autonomous system not enabled"
+        }
+
+    try:
+        report = autonomous_orchestrator.generate_report()
+        return {
+            "autonomous_enabled": True,
+            "report": report,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error generating autonomous report: {e}")
+        return {
+            "autonomous_enabled": False,
+            "report": None,
+            "error": str(e)
+        }
+
+
+# ============================================================================
+# Autonomous System API Routes
+# ============================================================================
+
+@app.get("/api/autonomous/status")
+async def api_get_autonomous_status():
+    """Get autonomous system status and configuration"""
+    track_user_activity()
+    return get_autonomous_status()
+
+@app.get("/api/autonomous/discoveries")
+async def api_get_autonomous_discoveries(limit: int = 20):
+    """Get autonomous discoveries"""
+    track_user_activity()
+    return get_autonomous_discoveries(limit=limit)
+
+@app.post("/api/autonomous/start")
+async def api_start_autonomous():
+    """Start autonomous operations"""
+    track_user_activity()
+    return start_autonomous_operations()
+
+@app.post("/api/autonomous/stop")
+async def api_stop_autonomous():
+    """Stop autonomous operations"""
+    track_user_activity()
+    return stop_autonomous_operations()
+
+@app.get("/api/autonomous/report")
+async def api_get_autonomous_report():
+    """Generate comprehensive autonomous discovery report"""
+    track_user_activity()
+    return generate_autonomous_report()
 
 # ============================================================================
 # Main Entry Point
