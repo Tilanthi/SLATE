@@ -46,6 +46,19 @@ try:
 except ImportError:
     AUTONOMOUS_AVAILABLE = False
 
+# Startup coordinator for automatic discovery
+try:
+    from slate_core.startup_coordinator import (
+        get_startup_coordinator,
+        record_user_activity,
+        execute_with_discovery_paused,
+        get_system_status,
+        initialize_with_discovery
+    )
+    STARTUP_COORDINATOR_AVAILABLE = True
+except ImportError:
+    STARTUP_COORDINATOR_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -88,11 +101,23 @@ start_time = datetime.now()
 autonomous_orchestrator: Optional[AutonomousOrchestrator] = None
 autonomous_enabled = False
 
+# Startup coordinator for automatic discovery
+startup_coordinator: Optional[Any] = None
+startup_coordinator_enabled = False
+
 
 def track_user_activity():
-    """Track user activity for autonomous pause/resume"""
+    """Track user activity for automatic discovery pause/resume"""
+    # Record in autonomous system
     if autonomous_enabled and autonomous_orchestrator:
         autonomous_orchestrator.record_user_activity()
+
+    # Record in startup coordinator
+    if STARTUP_COORDINATOR_AVAILABLE:
+        try:
+            record_user_activity()
+        except Exception as e:
+            logger.error(f"Error recording user activity: {e}")
 
 
 # ============================================================================
@@ -104,13 +129,22 @@ async def health_check():
     """Health check endpoint."""
     from slate_core.discovery.edge_discovery_engine import EdgeDiscoveryEngine
 
+    # Get startup coordinator status if available
+    startup_status = {}
+    if STARTUP_COORDINATOR_AVAILABLE and startup_coordinator:
+        try:
+            startup_status = get_system_status()
+        except Exception as e:
+            logger.error(f"Error getting startup coordinator status: {e}")
+
     return {
         "status": "healthy",
         "mode": "paper_trading",
         "timestamp": datetime.now().isoformat(),
         "uptime_seconds": (datetime.now() - start_time).total_seconds(),
         "discovery_running": discovery_running,
-        "port": 8788
+        "port": 8788,
+        "startup_coordinator": startup_status
     }
 
 
@@ -1543,15 +1577,34 @@ async def auto_start_discovery():
 
 @app.on_event("startup")
 async def startup_event():
-    """Run on server startup."""
-    logger.info("=" * 60)
-    logger.info("SLATE Server Starting")
-    logger.info("=" * 60)
+    """Run on server startup - ALWAYS starts automatic discovery."""
+    logger.info("=" * 70)
+    logger.info("SLATE Server Starting with AUTOMATIC DISCOVERY")
+    logger.info("=" * 70)
     logger.info(f"Port: 8788")
     logger.info(f"Mode: Paper Trading Only")
     logger.info(f"Dashboard: http://localhost:8788")
     logger.info(f"API Docs: http://localhost:8788/docs")
-    logger.info("=" * 60)
+    logger.info("=" * 70)
+    logger.info("AUTOMATIC DISCOVERY ENABLED:")
+    logger.info("  • Discovery starts immediately on startup")
+    logger.info("  • Runs continuously unless user requests specific tasks")
+    logger.info("  • User activity automatically pauses discovery")
+    logger.info("  • Resumes after 5 minutes of user inactivity")
+    logger.info("=" * 70)
+
+    # Initialize startup coordinator for automatic discovery
+    if STARTUP_COORDINATOR_AVAILABLE:
+        try:
+            global startup_coordinator
+            startup_coordinator = await initialize_with_discovery()
+            logger.info("✅ Startup coordinator initialized - automatic discovery started")
+        except Exception as e:
+            logger.error(f"Failed to initialize startup coordinator: {e}")
+    else:
+        logger.warning("Startup coordinator not available - using legacy auto-start")
+        # Fallback to legacy auto-start
+        asyncio.create_task(auto_start_discovery())
 
     # Initialize autonomous system if available
     global autonomous_orchestrator, autonomous_enabled
@@ -1565,9 +1618,6 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Failed to initialize autonomous system: {e}")
             autonomous_enabled = False
-
-    # Start auto-discovery in background
-    asyncio.create_task(auto_start_discovery())
 
 
 @app.on_event("shutdown")
