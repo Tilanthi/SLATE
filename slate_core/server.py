@@ -1606,15 +1606,18 @@ async def startup_event():
         # Fallback to legacy auto-start
         asyncio.create_task(auto_start_discovery())
 
-    # Initialize autonomous system if available
+    # Initialize autonomous system if available (with async context)
     global autonomous_orchestrator, autonomous_enabled
     if AUTONOMOUS_AVAILABLE:
         try:
             autonomous_config = get_exploratory_config()
             autonomous_orchestrator = AutonomousOrchestrator(autonomous_config)
-            autonomous_orchestrator.start()
+            await autonomous_orchestrator.start_async()  # Use async start for full functionality
             autonomous_enabled = True
-            logger.info("✅ Autonomous system initialized and started")
+            logger.info("✅ Autonomous system initialized in async context")
+            logger.info("   - Real discovery engine integrated")
+            logger.info("   - Trading executor active (paper trading)")
+            logger.info("   - Market data auto-fetch enabled")
         except Exception as e:
             logger.error(f"Failed to initialize autonomous system: {e}")
             autonomous_enabled = False
@@ -1806,6 +1809,123 @@ async def api_get_autonomous_report():
     """Generate comprehensive autonomous discovery report"""
     track_user_activity()
     return generate_autonomous_report()
+
+@app.get("/api/autonomous/trading/statistics")
+async def api_get_trading_statistics():
+    """Get autonomous trading executor statistics"""
+    track_user_activity()
+    try:
+        if not autonomous_enabled or not autonomous_orchestrator:
+            return {
+                "success": False,
+                "error": "Autonomous system not enabled",
+                "trading_enabled": False
+            }
+
+        trading_stats = autonomous_orchestrator.trading_executor.get_statistics()
+        return {
+            "success": True,
+            "trading_enabled": True,
+            "statistics": trading_stats
+        }
+    except Exception as e:
+        logger.error(f"Error getting trading statistics: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/autonomous/trading/positions")
+async def api_get_paper_positions():
+    """Get current paper trading positions"""
+    track_user_activity()
+    try:
+        if not autonomous_enabled or not autonomous_orchestrator:
+            return {
+                "success": False,
+                "error": "Autonomous system not enabled",
+                "positions": []
+            }
+
+        positions = autonomous_orchestrator.trading_executor.get_paper_positions()
+        return {
+            "success": True,
+            "positions": positions
+        }
+    except Exception as e:
+        logger.error(f"Error getting paper positions: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/autonomous/trading/decisions")
+async def api_get_trading_decisions(limit: int = 20):
+    """Get recent trading decisions"""
+    track_user_activity()
+    try:
+        if not autonomous_enabled or not autonomous_orchestrator:
+            return {
+                "success": False,
+                "error": "Autonomous system not enabled",
+                "decisions": []
+            }
+
+        decisions = autonomous_orchestrator.trading_executor.get_decision_history(limit=limit)
+        return {
+            "success": True,
+            "decisions": decisions,
+            "count": len(decisions)
+        }
+    except Exception as e:
+        logger.error(f"Error getting trading decisions: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/autonomous/market/data")
+async def api_get_market_data():
+    """Get autonomous market data manager statistics"""
+    track_user_activity()
+    try:
+        if not autonomous_enabled or not autonomous_orchestrator:
+            return {
+                "success": False,
+                "error": "Autonomous system not enabled",
+                "market_data_available": False
+            }
+
+        market_stats = autonomous_orchestrator.market_data_manager.get_statistics()
+        market_intelligence = autonomous_orchestrator.market_data_manager.get_market_intelligence()
+
+        return {
+            "success": True,
+            "statistics": market_stats,
+            "market_intelligence": market_intelligence
+        }
+    except Exception as e:
+        logger.error(f"Error getting market data: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/autonomous/market/symbols")
+async def api_get_market_symbols():
+    """Get cached market data for all symbols"""
+    track_user_activity()
+    try:
+        if not autonomous_enabled or not autonomous_orchestrator:
+            return {
+                "success": False,
+                "error": "Autonomous system not enabled",
+                "symbols": {}
+            }
+
+        market_data = autonomous_orchestrator.market_data_manager.get_all_cached_data()
+        symbols_data = {
+            symbol: data.to_dict()
+            for symbol, data in market_data.items()
+        }
+
+        return {
+            "success": True,
+            "symbols": symbols_data,
+            "count": len(symbols_data),
+            "last_update": autonomous_orchestrator.market_data_manager.last_update_time.isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting market symbols: {e}")
+        return {"success": False, "error": str(e)}
 
 # ============================================================================
 # Main Entry Point

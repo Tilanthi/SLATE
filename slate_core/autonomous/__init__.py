@@ -16,23 +16,35 @@ SAFETY CONSTRAINTS:
 """
 
 from .orchestrator import AutonomousOrchestrator
-from .config import AutonomousConfig, TradingGoal, Discovery
+from .config import (
+    AutonomousConfig,
+    TradingGoal,
+    Discovery,
+    get_exploratory_config
+)
 from .resource_manager import ResourceManager
 from .decision_maker import TradingDecisionMaker
 from .strategy_validator import StrategyValidator
 from .sub_agent_spawner import MarketSubAgentSpawner
 from .discovery_reporter import DiscoveryReporter
+from .trading_executor import TradingExecutor, TradingDecision
+from .market_data_manager import MarketDataManager, MarketDataSnapshot
 
 __all__ = [
     'AutonomousOrchestrator',
     'AutonomousConfig',
     'TradingGoal',
     'Discovery',
+    'get_exploratory_config',
     'ResourceManager',
     'TradingDecisionMaker',
     'StrategyValidator',
     'MarketSubAgentSpawner',
-    'DiscoveryReporter'
+    'DiscoveryReporter',
+    'TradingExecutor',
+    'TradingDecision',
+    'MarketDataManager',
+    'MarketDataSnapshot'
 ]
 
 # Version and availability
