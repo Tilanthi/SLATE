@@ -35,6 +35,14 @@ except ImportError:
     DISCOVERY_ENGINE_AVAILABLE = False
     logger.warning("EdgeDiscoveryEngine not available - autonomous system will use mock discoveries")
 
+# Import trading intelligence layer for Phase 2
+try:
+    from ..intelligence.trading_intelligence_orchestrator import get_trading_intelligence_orchestrator
+    TRADING_INTELLIGENCE_AVAILABLE = True
+except ImportError:
+    TRADING_INTELLIGENCE_AVAILABLE = False
+    logger.warning("Trading Intelligence Layer not available - using basic autonomous mode")
+
 logger = logging.getLogger(__name__)
 
 
@@ -86,6 +94,21 @@ class AutonomousOrchestrator:
             symbols=self.config.allowed_symbols,
             update_interval_seconds=60  # Update every minute
         )
+
+        # Initialize trading intelligence layer (Phase 2)
+        self.trading_intelligence = None
+        self.intelligence_active = False
+        if TRADING_INTELLIGENCE_AVAILABLE:
+            try:
+                self.trading_intelligence = get_trading_intelligence_orchestrator(
+                    cycle_interval_seconds=60,
+                    enable_auto_deployment=True,
+                    enable_auto_rebalancing=True,
+                    enable_risk_management=True
+                )
+                logger.info("🧠 Trading Intelligence Layer initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize trading intelligence: {e}")
 
         # State management
         self.autonomous_state = AutonomousState.IDLE
@@ -286,8 +309,18 @@ class AutonomousOrchestrator:
                 # We're clear to run autonomous operations
                 self.autonomous_state = AutonomousState.ACTIVE
 
-                # Run one discovery cycle
+                # Run discovery cycle (existing functionality)
                 await self._run_discovery_cycle_async()
+
+                # Run trading intelligence cycle (Phase 2 new functionality)
+                if self.trading_intelligence and not self.intelligence_active:
+                    try:
+                        # Start intelligence loop if not already running
+                        await self.trading_intelligence.start_intelligence_task()
+                        self.intelligence_active = True
+                        logger.info("🧠 Trading Intelligence activated")
+                    except Exception as e:
+                        logger.error(f"Failed to start trading intelligence: {e}")
 
                 # Small sleep between cycles
                 await asyncio.sleep(5)
@@ -661,5 +694,68 @@ class AutonomousOrchestrator:
     def cleanup(self):
         """Cleanup resources before shutdown"""
         logger.info("Cleaning up autonomous orchestrator...")
+
+        # Stop trading intelligence if active
+        if self.trading_intelligence and self.intelligence_active:
+            self.trading_intelligence.stop_intelligence_loop()
+            self.intelligence_active = False
+
         self.stop()
         logger.info("Autonomous orchestrator cleaned up")
+
+    # ================================================================================
+    # TRADING INTELLIGENCE METHODS (Phase 2)
+    # ================================================================================
+
+    def get_intelligence_status(self) -> Dict[str, Any]:
+        """Get comprehensive trading intelligence system status"""
+        if not self.trading_intelligence:
+            return {
+                'intelligence_available': False,
+                'intelligence_active': False,
+                'message': 'Trading Intelligence Layer not available'
+            }
+
+        intelligence_status = self.trading_intelligence.get_intelligence_status()
+        intelligence_status['intelligence_available'] = True
+        intelligence_status['intelligence_active'] = self.intelligence_active
+        intelligence_status['autonomous_integration'] = True
+
+        return intelligence_status
+
+    def enable_intelligence_layer(self, enabled: bool = True):
+        """Enable or disable the trading intelligence layer"""
+        if not self.trading_intelligence:
+            logger.warning("Trading Intelligence Layer not available")
+            return False
+
+        if enabled and not self.intelligence_active:
+            try:
+                # Start intelligence loop
+                asyncio.create_task(self.trading_intelligence.start_intelligence_task())
+                self.intelligence_active = True
+                logger.info("🧠 Trading Intelligence Layer enabled")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to enable trading intelligence: {e}")
+                return False
+        elif not enabled and self.intelligence_active:
+            self.trading_intelligence.stop_intelligence_loop()
+            self.intelligence_active = False
+            logger.info("Trading Intelligence Layer disabled")
+            return True
+
+        return True
+
+    def get_intelligence_components(self) -> Dict[str, bool]:
+        """Get availability status of intelligence components"""
+        if not self.trading_intelligence:
+            return {
+                'strategy_selector': False,
+                'portfolio_manager': False,
+                'health_monitor': False,
+                'risk_controller': False,
+                'lifecycle_manager': False
+            }
+
+        return self.trading_intelligence.get_intelligence_status()['components']
