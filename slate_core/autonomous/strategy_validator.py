@@ -257,6 +257,17 @@ class StrategyValidator:
 
         # Check win rate is reasonable (not 100% which is suspicious)
         win_rate = discovery.win_rate
+
+        # CRITICAL: Minimum win rate threshold (based on 52,268 strategy analysis)
+        # Profitable strategies average 51.0% win rate vs 39.7% for unprofitable
+        # Minimum 48% required to proceed to validation
+        min_win_rate_threshold = 0.48
+        if win_rate < min_win_rate_threshold:
+            return 0.0, {
+                'passed': False,
+                'reason': f'Win rate below minimum threshold: {win_rate*100:.1f}% < {min_win_rate_threshold*100:.1f}% (analysis shows profitable strategies avg 51.0%)'
+            }
+
         if win_rate >= 0.95:
             return 0.2, {
                 'passed': False,

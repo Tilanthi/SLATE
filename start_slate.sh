@@ -1,17 +1,35 @@
 #!/bin/bash
 # SLATE Auto-Start Script
-# Ensures SLATE discovery engine starts on system boot
-# Place in: ~/Library/LaunchAgents/com.slate.auto.plist
+# This script ensures SLATE server is running with autonomous discovery
 
 SLATE_DIR="/Users/gjw255/astrodata/SWARM/SLATE"
-cd "$SLATE_DIR"
+LOG_FILE="/tmp/slate_startup.log"
 
-# Start server
-nohup python3 -m slate_core.server > slate_server.log 2>&1 &
-echo $! > slate_server.pid
+cd "$SLATE_DIR" || exit 1
 
-# Start watchdog
-nohup ./slate_watchdog.sh > slate_watchdog.log 2>&1 &
-echo $! > slate_watchdog.pid
+# Check if SLATE is already running
+if curl -s http://127.0.0.1:8788/health > /dev/null 2>&1; then
+    echo "$(date): SLATE server already running" >> "$LOG_FILE"
+    exit 0
+fi
 
-echo "SLATE auto-started at $(date)"
+echo "$(date): Starting SLATE server with autonomous discovery" >> "$LOG_FILE"
+
+# Activate virtual environment if it exists
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+fi
+
+# Start SLATE server
+python -m slate_core.server >> "$LOG_FILE" 2>&1 &
+
+# Wait for startup
+sleep 5
+
+# Verify it started
+if curl -s http://127.0.0.1:8788/health > /dev/null 2>&1; then
+    echo "$(date): SLATE server started successfully" >> "$LOG_FILE"
+else
+    echo "$(date): Failed to start SLATE server" >> "$LOG_FILE"
+    exit 1
+fi
