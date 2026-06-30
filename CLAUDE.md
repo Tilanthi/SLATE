@@ -2,6 +2,23 @@
 
 **Current Status**: **Autonomous Quantitative Trading System with Trading Intelligence Layer** 🧠
 
+## 🎯 **CRITICAL INSTRUCTIONS**
+
+**GitHub Repository Target:** 
+- **SLATE Repository**: https://github.com/Tilanthi/SLATE
+- **Push Instructions**: When asked to push to GitHub from this SLATE project, **ALWAYS** push **ONLY** to the SLATE repository at `https://github.com/Tilanthi/SLATE`
+- **Do NOT** push to any other repositories (ASTRA, personal projects, etc.)
+- **Current Directory**: `/Users/gjw255/astrodata/SWARM/SLATE/` (confirm you're in SLATE before pushing)
+
+**Command Verification:**
+```bash
+# Always confirm you're in SLATE before pushing
+pwd  # Should show: /Users/gjw255/astrodata/SWARM/SLATE/
+git remote -v  # Should show: https://github.com/Tilanthi/SLATE.git
+```
+
+---
+
 ## 🎯 **MAJOR TRANSFORMATION ACHIEVED** (Just Completed)
 
 **SLATE has evolved from "Autonomous Strategy Discovery Researcher" to "Autonomous Quantitative Trading System"**
