@@ -29,7 +29,7 @@
 
 ---
 
-**GitHub Repository Target:** 
+**GitHub Repository Target:**
 - **SLATE Repository**: https://github.com/Tilanthi/SLATE
 - **Push Instructions**: When asked to push to GitHub from this SLATE project, **ALWAYS** push **ONLY** to the **main branch** of the SLATE repository at `https://github.com/Tilanthi/SLATE`
 - **Do NOT** push to any other repositories (ASTRA, personal projects, etc.)
@@ -46,7 +46,62 @@ git branch --show-current  # Should show: main
 
 ---
 
-## 🎯 Regime-Aware Strategy System (UPDATED 2026-07-03)
+## 🚨 MAJOR SYSTEM OVERHAUL (COMPLETED 2026-07-04)
+
+### **Critical Problem Identified**
+**Previous System Flaws:**
+- ❌ **Broken Strategy Implementation** - EMA crossovers not working correctly
+- ❌ **Wrong Market Direction** - Long entries in bear markets, no short entries
+- ❌ **No Risk Management** - No stop losses, stuck positions, no exits
+- ❌ **Failed Discovery** - 108,753 fundamentally broken strategies
+- ❌ **Zero Validation Success** - 0% validation rate (correctly rejecting all junk)
+
+### **Complete System Rebuild**
+**World-Class Quantitative Trading Framework:**
+- ✅ **Market Regime Awareness** - Different strategies for bull/bear/sideways markets
+- ✅ **Proper Risk Management** - Stop losses, position sizing, portfolio heat limits
+- ✅ **Multiple Strategy Classes** - Trend following, mean reversion, momentum, arbitrage
+- ✅ **Realistic Signal Generation** - Proper entry/exit logic with market structure analysis
+- ✅ **Robust Validation** - Minimum trades, win rates, Sharpe ratios, drawdown limits
+
+### **New Trading Principles (World-Class Standards)**
+```python
+# Market Regimes
+STRONG_BULL    → Trend Following (long only)
+STRONG_BEAR   → Trend Following (short only)
+SIDEWAYS      → Mean Reversion (long & short)
+VOLATILE      → Volatility Strategies (reduced size)
+```
+
+### **Risk Management Framework**
+- **Position Sizing**: 1.5-3% per position (regime-dependent)
+- **Stop Losses**: 1.5-2x ATR volatility-adjusted
+- **Risk-Reward Ratio**: Minimum 2:1 reward-risk
+- **Portfolio Heat**: Max 15% total exposure
+- **Drawdown Limits**: 15% maximum strategy drawdown
+
+### **Validation Requirements (World-Class)**
+- **Minimum Trades**: 10+ trades per 12-month period (statistical significance)
+- **Win Rate**: 45% minimum (realistic success rate)
+- **Sharpe Ratio**: 0.5+ minimum (positive risk-adjusted returns)
+- **Max Drawdown**: <15% (controlled risk)
+- **Profitability**: Positive returns after all costs
+
+### **Implementation Files**
+- **Strategy Engine**: `slate_core/discovery/world_class_strategies.py`
+- **Discovery System**: `slate_core/discovery/world_class_discovery.py`
+- **Integration Layer**: `slate_core/discovery/world_class_integration.py`
+
+### **System Status**
+- ✅ **Database Cleared**: 108,753 broken strategies removed
+- ✅ **Framework Rebuilt**: Proper quantitative trading principles
+- ✅ **Risk Management**: Stop losses, position sizing, portfolio limits
+- ✅ **Market Awareness**: Regime-dependent strategy selection
+- ✅ **Validation Standards**: World-class quantitative finance requirements
+
+---
+
+## 🎯 World-Class Strategy System (UPDATED 2026-07-04)
 
 ### **Critical Enhancement: Regime-Specific Strategies**
 
