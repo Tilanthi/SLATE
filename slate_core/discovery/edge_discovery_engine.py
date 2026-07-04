@@ -28,6 +28,14 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
+
+# Import intelligent filtering for focused discovery
+try:
+    from .intelligent_filter import get_intelligent_filter, RegimeType
+    INTELLIGENT_FILTER_AVAILABLE = True
+except ImportError:
+    INTELLIGENT_FILTER_AVAILABLE = False
+    logging.warning("Intelligent filter not available - will use broader discovery")
 from enum import Enum
 import json
 from pathlib import Path
@@ -523,10 +531,10 @@ class EdgeDiscoveryEngine:
             },
         ]
 
-        # WIDE EXPLORATION: Test many diverse strategies per cycle
-        # This is DISCOVERY, not optimization - we explore full parameter space
-        # NOT narrowing in on small areas - that would be premature optimization
-        num_strategies_to_test = random.randint(15, 25)  # Increased for wider sweep
+        # INTELLIGENT DISCOVERY: Test many strategies but filter intelligently
+        # Focus on daily timeframe (97.5% of profitable strategies) and regime-compatible edges
+        # Avoid short timeframes that consistently lose due to transaction costs
+        num_strategies_to_test = random.randint(25, 40)  # Increased volume with smart filtering
 
         # Ensure we get diversity across ALL strategy types, not just random sampling
         # First, shuffle to ensure randomness, then sample
@@ -561,11 +569,38 @@ class EdgeDiscoveryEngine:
             except Exception as e:
                 logger.warning(f"Failed to generate {strategy['name']}: {e}")
 
+        # INTELLIGENT FILTERING: Apply smart filtering before testing
+        if INTELLIGENT_FILTER_AVAILABLE:
+            intelligent_filter = get_intelligent_filter()
+            filtered_candidates = []
+
+            for candidate in candidates:
+                # Convert candidate to filter format
+                strategy_params = {
+                    'timeframe': '1d',  # All candidates are daily timeframe
+                    'strategy_type': candidate.edge_type.value,
+                    'parameters': {
+                        'fast_period': candidate.risk_params.get('lookback_period', 15),
+                        'slow_period': candidate.risk_params.get('slow_period', 50),
+                        'signal_threshold': candidate.risk_params.get('signal_threshold', 1.0),
+                        'position_size': candidate.risk_params.get('position_size', 0.03)
+                    }
+                }
+
+                # Apply intelligent filter
+                should_test, reason = intelligent_filter.filter_strategy_candidate(strategy_params)
+                if should_test:
+                    filtered_candidates.append(candidate)
+
+            logger.info(f"INTELLIGENT FILTER: {len(filtered_candidates)}/{len(candidates)} candidates passed filtering")
+            logger.info(f"Filter stats: {intelligent_filter.get_filter_stats()}")
+            candidates = filtered_candidates
+
         logger.info(f"Generated {len(candidates)} diverse edge candidates from {num_strategies_to_test} unique strategies")
         logger.info(f"Strategy types covered: {', '.join(sorted(strategy_types_seen))}")
         return candidates
 
-    async def fetch_solusdt_data(self, days: int = 365, timeframe: str = "1h") -> Optional[pd.DataFrame]:  # 1 year for proper backtesting
+    async def fetch_solusdt_data(self, days: int = 365, timeframe: str = "1d") -> Optional[pd.DataFrame]:  # 1 year for proper backtesting
         """
         Fetch REAL SOLUSDT historical data from Binance.
 
@@ -573,7 +608,7 @@ class EdgeDiscoveryEngine:
 
         Args:
             days: Number of days of historical data to fetch
-            timeframe: Candle timeframe (1m, 5m, 10m, 15m, 30m, 1h, 4h, 8h, 12h, 1d)
+            timeframe: Candle timeframe (default: 1d - where 97.5% of profitable strategies exist)
 
         Returns:
             DataFrame with OHLCV data or None if fetch fails

@@ -161,13 +161,20 @@ class EnhancedDiscoveryEngine:
         return strategies
 
     def _generate_random_parameters(self) -> Dict[str, Any]:
-        """Generate random strategy parameters."""
+        """Generate intelligent strategy parameters based on historical performance.
+
+        Focus on parameters that have shown success in daily timeframes:
+        - Longer lookback periods for trend detection (not HFT-style scalping)
+        - Conservative position sizing for risk management
+        - Realistic thresholds that avoid overfitting
+        """
         import random
         return {
-            'fast_period': random.randint(5, 20),
-            'slow_period': random.randint(20, 50),
-            'signal_threshold': round(random.uniform(0.1, 2.0), 1),
-            'position_size': round(random.uniform(0.01, 0.05), 3)
+            # Longer periods for daily timeframe trend following
+            'fast_period': random.randint(10, 30),    # Increased from 5-20 for daily trends
+            'slow_period': random.randint(40, 90),   # Increased from 20-50 for longer-term signals
+            'signal_threshold': round(random.uniform(0.3, 1.5), 1),  # More conservative thresholds
+            'position_size': round(random.uniform(0.02, 0.04), 3)  # Conservative sizing
         }
 
     def _test_single_strategy(self, strategy: StrategyTest) -> Dict[str, Any]:

@@ -202,8 +202,16 @@ class WorldClassDiscoveryEngine:
                 final_capital = self.quant_strategies.capital_base * (1 + result.total_return)
                 total_return_pct = result.total_return
 
-                # Determine beat_market
-                buy_hold_return = (df['close'].iloc[-1] / df['close'].iloc[0] - 1) if len(df) > 0 else 0
+                # Determine beat_market (load fresh market data)
+                try:
+                    market_df = self.load_market_data()
+                    if market_df is not None and len(market_df) > 1:
+                        buy_hold_return = (market_df['close'].iloc[-1] / market_df['close'].iloc[0] - 1)
+                    else:
+                        buy_hold_return = 0
+                except:
+                    buy_hold_return = 0
+
                 beat_market = 1 if total_return_pct > buy_hold_return else 0
 
                 # Insert into database

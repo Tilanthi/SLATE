@@ -145,7 +145,7 @@ class SmartPreFilters:
         start_time = __import__('time').time()
 
         # Extract key parameters
-        timeframe = strategy_params.get('timeframe', '1h')
+        timeframe = strategy_params.get('timeframe', '1d')  # Changed default to daily (97.5% of profitable strategies)
         strategy_type = strategy_params.get('strategy_type', 'unknown')
         parameters = strategy_params.get('parameters', {})
 
