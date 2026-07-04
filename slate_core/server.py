@@ -216,7 +216,7 @@ async def health_summary():
 async def start_enhanced_discovery(
     num_strategies: int = 100,
     enable_enhanced: bool = True,
-    timeframes: str = "1d,4h,1h"
+    timeframes: str = "1d"
 ):
     """
     Start enhanced discovery cycle with BIODISC-inspired improvements.
@@ -224,7 +224,7 @@ async def start_enhanced_discovery(
     Args:
         num_strategies: Number of strategies to test (default: 100)
         enable_enhanced: Whether to use enhanced discovery (default: True)
-        timeframes: Comma-separated timeframes to test (default: "1d,4h,1h")
+        timeframes: Comma-separated timeframes to test (default: "1d" - 97.5% of profitable strategies)
     """
     track_user_activity()
     global discovery_running, discovery_task
@@ -1325,6 +1325,137 @@ async def optimize_portfolio(method: str = "mean_variance"):
 
 
 # ============================================================================
+# API Routes - Swarm Intelligence Discovery
+# ============================================================================
+
+@app.post("/api/swarm/start")
+async def start_swarm_discovery(num_agents: int = 63, duration_minutes: int = 60):
+    """
+    Start swarm intelligence discovery process.
+
+    Args:
+        num_agents: Number of agents to deploy (default: 63)
+        duration_minutes: How long to run swarm discovery (default: 60 minutes)
+
+    Returns:
+        Swarm discovery status and configuration
+    """
+    track_user_activity()  # Track user activity for autonomous pause
+    try:
+        from slate_core.swarm.swarm_integration import get_swarm_integration
+
+        swarm_integration = get_swarm_integration()
+
+        # Initialize if needed
+        if not swarm_integration.is_initialized:
+            init_result = await swarm_integration.initialize()
+            if init_result.get('status') != 'success':
+                return init_result
+
+        # Run swarm discovery cycle
+        result = await swarm_integration.run_swarm_discovery_cycle(num_agents)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error starting swarm discovery: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/api/swarm/stop")
+async def stop_swarm_discovery():
+    """Stop current swarm discovery process."""
+    track_user_activity()  # Track user activity for autonomous pause
+    try:
+        from slate_core.swarm.swarm_integration import get_swarm_integration
+
+        swarm_integration = get_swarm_integration()
+        result = await swarm_integration.stop_swarm_discovery()
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error stopping swarm discovery: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/swarm/status")
+async def get_swarm_status():
+    """Get current swarm discovery status."""
+    track_user_activity()  # Track user activity for autonomous pause
+    try:
+        from slate_core.swarm.swarm_integration import get_swarm_integration
+
+        swarm_integration = get_swarm_integration()
+        status = swarm_integration.get_integration_status()
+
+        return status
+
+    except Exception as e:
+        logger.error(f"Error getting swarm status: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/swarm/intelligence")
+async def get_swarm_intelligence():
+    """Get current collective intelligence from swarm."""
+    track_user_activity()  # Track user activity for autonomous pause
+    try:
+        from slate_core.swarm.swarm_discovery import get_swarm_coordinator
+
+        swarm_coordinator = get_swarm_coordinator()
+        if swarm_coordinator is None:
+            return {
+                "status": "not_initialized",
+                "message": "Swarm coordinator not initialized"
+            }
+
+        # Get collective intelligence
+        recent_observations = swarm_coordinator.collective_memory[-100:] if swarm_coordinator.collective_memory else []
+        active_pheromones = [p for p in swarm_coordinator.pheromone_map if p.is_active()]
+
+        return {
+            "status": "success",
+            "collective_memory_size": len(swarm_coordinator.collective_memory),
+            "recent_observations": len(recent_observations),
+            "active_pheromones": len(active_pheromones),
+            "pheromone_hotspots": [
+                {
+                    "location": p.location,
+                    "strength": p.strength,
+                    "type": p.pheromone_type.value,
+                    "source_agent": p.source_agent
+                }
+                for p in sorted(active_pheromones, key=lambda x: x.strength, reverse=True)[:10]
+            ],
+            "current_regime": swarm_coordinator.regime_history[-1].value if swarm_coordinator.regime_history else "unknown",
+            "swarm_stats": {
+                "total_agent_cycles": swarm_coordinator.total_agent_cycles,
+                "collective_success_rate": swarm_coordinator.collective_success_rate,
+                "swarm_efficiency_gain": swarm_coordinator.swarm_efficiency_gain
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting swarm intelligence: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+# ============================================================================
 # API Routes - Natural Language Strategy Generation
 # ============================================================================
 
@@ -2016,6 +2147,39 @@ async def auto_start_discovery():
 # Startup Event
 # ============================================================================
 
+async def periodic_discovery_health_check():
+    """Periodic health check to ensure discovery keeps running."""
+    while True:
+        try:
+            await asyncio.sleep(60)  # Check every minute
+
+            if STARTUP_COORDINATOR_AVAILABLE and startup_coordinator:
+                # Get coordinator status
+                try:
+                    status = get_system_status()
+
+                    # Check if discovery is supposed to be running but isn't
+                    coordinator_state = status.get('state', '')
+                    discovery_running = status.get('discovery_running', False)
+                    discovery_task_active = status.get('discovery_task_active', False)
+
+                    # If we're in auto-discovery state but task isn't running, restart it
+                    if coordinator_state == 'auto_discovery' and not discovery_task_active:
+                        logger.warning("⚠️ Discovery should be running but isn't - auto-restarting")
+                        await startup_coordinator.start_discovery_loop()
+
+                        # Update global discovery_running flag
+                        global discovery_running
+                        discovery_running = True
+                        logger.info("✅ Discovery restarted successfully")
+
+                except Exception as e:
+                    logger.error(f"Error checking discovery status: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in periodic discovery health check: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     """Run on server startup - ALWAYS starts automatic discovery."""
@@ -2031,7 +2195,7 @@ async def startup_event():
     logger.info("  • Discovery starts immediately on startup")
     logger.info("  • Runs continuously unless user requests specific tasks")
     logger.info("  • User activity automatically pauses discovery")
-    logger.info("  • Resumes after 5 minutes of user inactivity")
+    logger.info("  • Auto-restart if discovery stops (watchdog every 30s)")
     logger.info("=" * 70)
 
     # Initialize startup coordinator for automatic discovery
@@ -2040,6 +2204,10 @@ async def startup_event():
             global startup_coordinator
             startup_coordinator = await initialize_with_discovery()
             logger.info("✅ Startup coordinator initialized - automatic discovery started")
+
+            # Start periodic discovery health check
+            asyncio.create_task(periodic_discovery_health_check())
+            logger.info("🐕 Discovery watchdog started - will auto-restart if stopped")
         except Exception as e:
             logger.error(f"Failed to initialize startup coordinator: {e}")
     else:
