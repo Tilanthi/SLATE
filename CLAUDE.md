@@ -217,81 +217,248 @@ Feedback Learning → System Optimization
 
 ---
 
-## 🔴 Current Operational Status (UPDATED 2026-07-04)
+## 🔴 Current Operational Status (UPDATED 2026-07-05)
 
-**System Status:** 🟢 **CLOSED-LOOP AI DISCOVERY SYSTEM - FULLY OPERATIONAL**
+**System Status:** 🟢 **CLOSED-LOOP AI DISCOVERY SYSTEM - FULLY OPERATIONAL WITH AUTO-RESTART**
 
 **Quick Summary:**
 - **Discovery System:** ✅ CLOSED-LOOP AI Framework (3,350+ lines of research-grade code)
-- **First Discovery Cycle:** ✅ COMPLETED (4 hypotheses, 3/3 validated - 100% success rate)
+- **Auto-Restart Mechanism:** ✅ FIXED - Discovery starts automatically with watchdog protection
+- **Server:** ✅ Running with StartupCoordinator integration on port 8788
 - **Market:** SOLUSDT Perpetual Futures (Binance)
 - **Backtest Period:** 12 months (Nov 2025 - Jul 2026)
 - **Position Types:** Long + Short (perpetual contracts enable both)
 - **Funding Rates:** ✅ Applied every 8 hours
 - **Transaction Costs:** ✅ Brutally realistic (fees, slippage, fill rates)
-- **Database:** ✅ Clean and ready (0 strategies, fresh start for closed-loop system)
-- **Server:** ✅ Running with closed-loop AI endpoints on port 8788
 
-**Current System - Closed-Loop AI Framework:**
+**Current System - Closed-Loop AI Framework with Auto-Restart:**
+- **Startup Coordinator:** ✅ Properly initialized with watchdog monitoring
 - **Hypothesis Generation:** Systematic strategy hypothesis formulation
 - **Rigorous Validation:** 6 pluralistic validation methods (bootstrap, walk-forward, Monte Carlo, regime stress, parameter sensitivity, cost sensitivity)
 - **Feedback Learning:** System learns from validation results and improves over time
 - **Hybrid Strategies:** Combines statistical patterns with symbolic trading rules
+- **Auto-Restart:** Watchdog monitors every 30 seconds, restarts on failure
 - **Scientific Discovery:** World's first application of closed-loop AI to quantitative trading
 
-**Discovery Pipeline Results:**
-- **Hypotheses Generated:** 4 (first cycle)
-- **Validation Success:** 3/3 strategies (100% initial success rate)
-- **Cycle Duration:** 0.026 seconds (extremely fast)
-- **System Learning:** Ready for continuous improvement
+**Discovery Pipeline Status:**
+- **Auto-Start:** ✅ Working - starts immediately on server launch
+- **Watchdog:** ✅ Active - monitors and auto-restarts on failure
+- **Health Monitoring:** ✅ Operational - accurate status reporting
+- **Error Recovery:** ✅ Implemented - exponential backoff and retry logic
 
 *For detailed live status, see: [CLAUDE_OPERATIONAL_STATUS.md](CLAUDE_OPERATIONAL_STATUS.md)*
 
 ---
 
-## 🔄 Auto-Restart Mechanism (UPDATED 2026-07-04)
+## 🔄 Auto-Restart Mechanism (FIXED 2026-07-05)
 
-### **Problem Solved: Discovery Pipeline Stopping**
-**Issue:** Discovery pipeline would stop unexpectedly due to unhandled errors or task completion, requiring manual restart.
+### **Problem Solved: Discovery Pipeline Not Starting Automatically**
+**Issue:** Discovery pipeline was not starting automatically on server startup due to:
+1. Server using broken `start_continuous_discovery()` function instead of StartupCoordinator
+2. Missing integration between server startup and coordinator initialization
+3. No watchdog mechanism activation
+4. Inconsistent status reporting between coordinator and server
 
-**Solution:** Implemented comprehensive auto-restart mechanism with multiple layers of protection:
+**Root Cause:** Server had its own poorly implemented discovery loop that:
+- Attempted to read CSV file as JSON (parsing errors)
+- Waited 60 seconds for user inactivity before starting (too long)
+- Lacked proper error handling and auto-restart
+- Did not use the existing StartupCoordinator with watchdog
+
+### **Solution Implemented**
+**Fixed server startup to properly use StartupCoordinator:**
+
+1. **Server Integration** (`server.py`):
+   - Added StartupCoordinator import and initialization
+   - Replaced broken discovery loop with proper coordinator usage
+   - Integrated `periodic_discovery_health_check()` for server-level monitoring
+   - Enhanced health endpoints to show coordinator status
+   - Added fallback discovery for when coordinator unavailable
+
+2. **Startup Coordinator** (`startup_coordinator.py`):
+   - Existing watchdog mechanism now properly activated
+   - Enhanced error recovery with exponential backoff
+   - State synchronization across all endpoints
+   - Automatic restart on discovery failure
 
 ### **Auto-Restart Features**
-- **Watchdog Monitoring:** Background task checks discovery health every 30-60 seconds
+- **Immediate Startup:** Discovery starts immediately on server launch (no 60s delay)
+- **Watchdog Monitoring:** Background task checks discovery health every 30 seconds
 - **Error Recovery:** Exponential backoff on consecutive errors (max 60s wait)
 - **State Synchronization:** Maintains global `discovery_running` flag across health endpoints
 - **Smart Restart:** Only restarts when appropriate (not during user tasks)
-- **Consecutive Error Detection:** Pauses briefly after 5 consecutive errors, then retries
-
-### **Implementation Components**
-1. **Startup Coordinator Enhancements** (`startup_coordinator.py`):
-   - Enhanced `_discovery_loop()` with error counting and recovery
-   - Added `watchdog_check_discovery()` for continuous monitoring
-   - Global state synchronization with server endpoints
-
-2. **Server Integration** (`server.py`):
-   - Added `periodic_discovery_health_check()` for server-level monitoring
-   - Integrated watchdog startup in server initialization
-   - Health endpoint improvements for accurate status reporting
+- **Consecutive Error Detection:** Pauses after 5 consecutive errors, then retries
+- **Fallback System:** If coordinator fails, server runs fallback discovery loop
 
 ### **Auto-Restart Behavior**
-- **Normal Operation:** Discovery runs continuously, checked every 60 seconds
+- **Normal Operation:** Discovery runs continuously, checked every 30 seconds
 - **Error Handling:** Up to 5 consecutive errors trigger 30s wait, then retry
 - **Crash Recovery:** Automatic detection and restart of stopped discovery tasks
 - **User Task Awareness:** Won't interrupt during active user requests
-- **Status Accuracy:** Health endpoints reflect true discovery state
+- **Status Accuracy:** Health endpoints reflect true discovery state from coordinator
 
 ### **Monitoring & Verification**
 ```bash
-# Check discovery status
-curl http://127.0.0.1:8788/health | jq '.discovery_running'
+# Check overall system health
+curl http://127.0.0.1:8788/health | jq '.'
 
-# Check coordinator status
-curl http://127.0.0.1:8788/health | jq '.startup_coordinator.discovery_running'
+# Check coordinator status specifically
+curl http://127.0.0.1:8788/health | jq '.closed_loop_discovery.startup_coordinator'
 
-# Verify swarm status
-curl http://127.0.0.1:8788/api/swarm/status | jq '.initialized'
+# Verify discovery is running
+curl http://127.0.0.1:8788/health | jq '.closed_loop_discovery.discovery_running'
+
+# Check closed-loop status
+curl http://127.0.0.1:8788/api/closed-loop/status | jq '.discovery_running'
 ```
+
+### **Implementation Details**
+**Key Changes to `slate_core/server.py`:**
+1. Added StartupCoordinator import and availability checking
+2. Modified `startup_event()` to initialize coordinator with watchdog
+3. Replaced broken `start_continuous_discovery()` with proper fallback version
+4. Added `periodic_discovery_health_check()` for additional monitoring
+5. Enhanced health endpoints to report coordinator status accurately
+
+**Result:** Discovery now starts automatically on server launch with comprehensive auto-restart protection.
+
+---
+
+## 📹 YouTube Integration (ADDED 2026-07-04)
+
+### **Video Transcription & Analysis Capability**
+SLATE includes comprehensive YouTube video transcription for extracting trading insights and strategies from expert content.
+
+### **Core Capabilities**
+- ✅ **Video Transcription**: Convert spoken content to text using multiple methods
+- ✅ **Transcript Search**: Find specific concepts within videos
+- ✅ **Insight Extraction**: Identify trading strategies and ideas automatically
+- ✅ **Caching System**: Store transcriptions for 7 days for faster access
+- ✅ **Multi-Language Support**: 100+ languages supported
+- ✅ **Timestamp Information**: Precise time references for all content
+
+### **Technical Implementation**
+**Primary Method:** youtube-transcript-api (fastest, uses existing YouTube captions)
+**Fallback Method:** yt-dlp (downloads video transcripts)
+**Advanced Method:** Whisper AI (full speech-to-text, requires separate installation)
+
+**All methods are FREE and require NO API keys.**
+
+### **API Endpoints**
+
+#### **Transcribe YouTube Video**
+```bash
+POST /api/youtube/transcribe
+Content-Type: application/json
+
+{
+  "url": "https://www.youtube.com/watch?v=CsOB3lCMrFc",
+  "video_id": "CsOB3lCMrFc",  # alternatively provide video_id directly
+  "extract_insights": true  # optional, default true
+}
+
+# Example usage
+curl -X POST "http://127.0.0.1:8788/api/youtube/transcribe" \
+-H "Content-Type: application/json" \
+-d '{"video_id": "CsOB3lCMrFc"}'
+```
+
+#### **Search Transcript**
+```bash
+POST /api/youtube/search
+Content-Type: application/json
+
+{
+  "url": "https://www.youtube.com/watch?v=CsOB3lCMrFc",
+  "video_id": "CsOB3lCMrFc",
+  "query": "gold investment strategy"
+}
+
+# Returns: Matching segments with context and timestamps
+```
+
+#### **Check YouTube Status**
+```bash
+GET /api/youtube/status
+
+# Returns: System status, available methods, cache information
+```
+
+#### **Clear Transcript Cache**
+```bash
+POST /api/youtube/cache/clear
+
+# Clears all cached transcripts to free space or force refresh
+```
+
+### **Usage Examples**
+
+#### **Example 1: Transcribe Trading Strategy Video**
+```bash
+# Get full transcript
+curl -X POST "http://127.0.0.1:8788/api/youtube/transcribe" \
+-H "Content-Type: application/json" \
+-d '{"video_id": "xyz123"}'
+
+# Search for specific strategies
+curl -X POST "http://127.0.0.1:8788/api/youtube/search" \
+-H "Content-Type: application/json" \
+-d '{"video_id": "xyz123", "query": "moving average crossover"}'
+```
+
+#### **Example 2: Extract Financial Insights**
+```python
+# Transcribe and analyze financial video
+response = requests.post(
+    "http://127.0.0.1:8788/api/youtube/transcribe",
+    json={"video_id": "CsOB3lCMrFc", "extract_insights": true}
+)
+
+# Results include:
+# - Full transcript text
+# - Video metadata (title, duration, language)
+# - Trading insights extracted
+# - Strategy recommendations
+# - Market analysis
+```
+
+### **Benefits**
+1. **Learn from Experts**: Extract insights from professional traders and analysts
+2. **Strategy Discovery**: Find new strategies mentioned in educational content
+3. **Concept Search**: Quickly locate specific topics within long videos
+4. **Time Saving**: Cached transcriptions for repeated access
+5. **Documentation**: Create written summaries from video content
+
+### **System Requirements**
+- ✅ **No API Keys Required**: Uses free software libraries
+- ✅ **No Paid Services**: All open-source tools
+- ✅ **Non-Interference**: Does not impact discovery pipeline performance
+- ✅ **Background Operation**: Transcripts cached for 7 days automatically
+
+### **Installation**
+```bash
+# Install required libraries (if not already present)
+pip install youtube-transcript-api yt-dlp
+
+# Optional: For full speech-to-text capability
+pip install openai-whisper
+# Requires ffmpeg: brew install ffmpeg (macOS) or apt install ffmpeg (Linux)
+```
+
+### **Troubleshooting**
+**Issue**: "Sign in to confirm you're not a bot"  
+**Solution**: YouTube may block requests from VPNs. Disable VPN and retry.
+
+**Issue**: "No transcript found"  
+**Solution**: Video may not have captions. Try Whisper AI method for full transcription.
+
+**Issue**: Slow transcription  
+**Solution**: First request is slower, subsequent requests use cache (7 days).
+
+### **File Outputs**
+- **Text File**: `youtube_transcript_{video_id}.txt` - Human-readable transcript with timestamps
+- **Cache Files**: `slate_core/cache/youtube_transcripts/{video_id}.json` - Machine-readable cached data
+- **PDF Generation**: Can create professional PDF summaries from transcripts
 
 ---
 
