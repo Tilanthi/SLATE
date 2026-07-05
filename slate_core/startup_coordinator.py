@@ -60,9 +60,9 @@ class StartupCoordinator:
         logger.info("Startup Coordinator initialized")
 
     def start(self):
-        """Start SLATE with automatic discovery."""
+        """Start SLATE with automatic closed-loop AI discovery."""
         logger.info("=" * 70)
-        logger.info("🧠 SLATE STARTING WITH CONTINUOUS SWARM DISCOVERY")
+        logger.info("🧠 SLATE STARTING WITH CONTINUOUS CLOSED-LOOP AI DISCOVERY")
         logger.info("=" * 70)
         logger.info(f"Startup time: {datetime.now().isoformat()}")
         logger.info(f"Initial state: {self.state.value}")
@@ -71,21 +71,18 @@ class StartupCoordinator:
         logger.info("🔄 Discovery resumes IMMEDIATELY after request completion")
         logger.info("=" * 70)
 
-        # Initialize discovery engines (both legacy and swarm)
+        # Initialize closed-loop AI discovery system
         try:
+            from .discovery.closed_loop_integration import get_enhanced_discovery_system
             from .discovery.edge_discovery_engine import EdgeDiscoveryEngine
-            from .swarm.swarm_integration import get_swarm_integration
 
+            self.closed_loop_system = get_enhanced_discovery_system()
             self.discovery_engine = EdgeDiscoveryEngine()
-            self.swarm_integration = get_swarm_integration()
 
-            # Initialize swarm system
-            asyncio.create_task(self._initialize_swarm_system())
-
-            logger.info("Discovery engines initialized (legacy + swarm)")
+            logger.info("✅ Closed-Loop AI Discovery System initialized")
             self.startup_complete = True
         except Exception as e:
-            logger.error(f"Failed to initialize discovery engines: {e}", exc_info=True)
+            logger.error(f"Failed to initialize closed-loop discovery: {e}", exc_info=True)
 
     async def start_discovery_loop(self):
         """Start the discovery loop - must be called from async context."""
@@ -115,20 +112,6 @@ class StartupCoordinator:
             logger.info("🎯 User request detected - IMMEDIATELY pausing discovery")
             self.state = SystemState.USER_TASK
             self.user_requested_pause = True
-
-    async def _initialize_swarm_system(self):
-        """Initialize swarm discovery system in background."""
-        try:
-            logger.info("🧠 Initializing swarm discovery system...")
-            init_result = await self.swarm_integration.initialize()
-
-            if init_result.get('status') == 'success':
-                logger.info("✅ Swarm discovery system ready")
-            else:
-                logger.warning(f"Swarm initialization warning: {init_result.get('message')}")
-
-        except Exception as e:
-            logger.error(f"Failed to initialize swarm system: {e}")
 
     async def execute_user_task(self, task_func, *args, **kwargs):
         """
@@ -213,22 +196,37 @@ class StartupCoordinator:
                 except ImportError:
                     pass  # Server module not available, continue anyway
 
-                # 🧠 RUN SWARM DISCOVERY CYCLE
-                logger.debug("🧠 Running continuous swarm discovery cycle...")
-                results = await self.swarm_integration.run_swarm_discovery_cycle(num_agents=63)
+                # 🧠 RUN CLOSED-LOOP AI DISCOVERY CYCLE
+                logger.debug("🧠 Running closed-loop AI discovery cycle...")
 
-                if results.get('status') == 'success':
-                    cycle_results = results.get('cycle_results', {})
-                    total_tests = cycle_results.get('successful_results', 0)
-                    emergent = cycle_results.get('emergent_strategies', 0)
-                    current_regime = cycle_results.get('current_regime', 'unknown')
+                try:
+                    # Load market data for discovery
+                    import pandas as pd
+                    df = pd.read_csv('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+                    logger.info(f"✅ Market data loaded: {len(df)} days")
 
-                    logger.info(f"✅ Swarm cycle: {total_tests} agents, {emergent} emergent, regime: {current_regime}")
+                    # Run closed-loop AI discovery cycle
+                    results = self.closed_loop_system.run_enhanced_discovery_cycle(df)
 
-                    # Reset error counter on success
-                    consecutive_errors = 0
-                else:
-                    logger.warning(f"⚠️  Swarm cycle issue: {results.get('message', 'Unknown error')}")
+                    if results.get('status') == 'success':
+                        performance = results.get('performance', {})
+                        discovery = results.get('discovery', {})
+
+                        hypotheses = performance.get('hypotheses_generated', 0)
+                        strategies = performance.get('strategies_generated', 0)
+                        validated = performance.get('total_validated', 0)
+                        success_rate = performance.get('overall_success_rate', 0)
+
+                        logger.info(f"✅ Closed-Loop AI cycle: {hypotheses} hypotheses, {strategies} strategies, {validated} validated, {success_rate:.1%} success")
+
+                        # Reset error counter on success
+                        consecutive_errors = 0
+                    else:
+                        logger.warning(f"⚠️  Closed-loop discovery issue: {results.get('message', 'Unknown error')}")
+                        consecutive_errors += 1
+
+                except Exception as discovery_error:
+                    logger.error(f"❌ Closed-loop discovery execution error: {discovery_error}")
                     consecutive_errors += 1
 
                 # Check for too many consecutive errors
@@ -343,14 +341,14 @@ async def initialize_with_discovery() -> StartupCoordinator:
 
 def auto_start():
     """
-    Auto-start SLATE with CONTINUOUS discovery running.
+    Auto-start SLATE with CONTINUOUS CLOSED-LOOP AI discovery running.
 
     This should be called when SLATE starts up to ensure
     discovery begins immediately and runs CONTINUOUSLY 24/7.
     Discovery only pauses during active user request execution.
     """
     coordinator = get_startup_coordinator()
-    logger.info("🧠 SLATE auto-started with CONTINUOUS swarm discovery (24/7 operation)")
+    logger.info("🧠 SLATE auto-started with CONTINUOUS CLOSED-LOOP AI discovery (24/7 operation)")
     return coordinator
 
 
