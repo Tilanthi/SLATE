@@ -330,68 +330,126 @@ class EnhancedDiscoveryIntegration:
                 logger.warning(f"No backtest result found for {strategy_name}")
                 return None
 
-            # Convert to perpetual database format
-            initial_capital = 10000.0  # Standard capital base
-            final_capital = initial_capital * (1 + backtest_result.get('total_return', 0))
-            total_profit_usdt = final_capital - initial_capital
+            # Convert to perpetual database format using ACTUAL backtest results
+            # CRITICAL FIX: Use real backtest data instead of estimates
 
-            # Calculate buy-hold baseline
-            buy_hold_return = backtest_result.get('buy_hold_return', 0.02)  # Default 2% market return
-            buy_hold_profit_usdt = initial_capital * buy_hold_return
+            # Extract actual backtest results
+            initial_capital = backtest_result.initial_capital
+            final_capital = backtest_result.final_capital
+            total_profit_usdt = backtest_result.total_profit_usdt
+            total_return_pct = backtest_result.total_return_pct
+
+            # Use actual buy-hold baseline from backtest
+            buy_hold_profit_usdt = backtest_result.buy_hold_profit_usdt
+            buy_hold_return_pct = backtest_result.buy_hold_return_pct
+            vs_buy_hold_usdt = backtest_result.vs_buy_hold_usdt
+            beat_market = backtest_result.beat_market
+
+            # Use actual trading statistics from backtest
+            total_trades = backtest_result.total_trades
+            winning_trades = backtest_result.winning_trades
+            losing_trades = backtest_result.losing_trades
+            win_rate = backtest_result.win_rate * 100  # Convert to percentage
+
+            # Use actual risk metrics from backtest
+            max_drawdown_pct = backtest_result.max_drawdown_pct
+            max_drawdown_usdt = backtest_result.max_drawdown_usdt
+            sharpe_ratio = backtest_result.sharpe_ratio
+
+            # Use actual cost breakdown from backtest
+            total_fees_usdt = backtest_result.total_fees_usdt
+            total_slippage_usdt = backtest_result.total_slippage_usdt
+            total_transaction_costs_usdt = backtest_result.total_transaction_costs_usdt
+
+            # Use actual perpetual futures metrics from backtest
+            total_funding_paid_usdt = backtest_result.total_funding_paid_usdt
+            total_funding_received_usdt = backtest_result.total_funding_received_usdt
+            net_funding_usdt = backtest_result.net_funding_usdt
+            avg_funding_daily_usdt = backtest_result.avg_funding_daily_usdt
+
+            # Use actual realism metrics from backtest
+            avg_slippage_bps = backtest_result.avg_slippage_bps
+            avg_fill_rate = backtest_result.avg_fill_rate
+            total_signals = backtest_result.total_signals
+            filled_signals = backtest_result.filled_signals
+            partial_fills = backtest_result.partial_fills
+
+            # Additional trading statistics from backtest
+            profit_factor = backtest_result.profit_factor if hasattr(backtest_result, 'profit_factor') else 0.0
+            avg_trade_pnl_usdt = backtest_result.avg_trade_pnl_usdt if hasattr(backtest_result, 'avg_trade_pnl_usdt') else 0.0
+            avg_win_usdt = backtest_result.avg_win_usdt if hasattr(backtest_result, 'avg_win_usdt') else 0.0
+            avg_loss_usdt = backtest_result.avg_loss_usdt if hasattr(backtest_result, 'avg_loss_usdt') else 0.0
+            largest_win_usdt = backtest_result.largest_win_usdt if hasattr(backtest_result, 'largest_win_usdt') else 0.0
+            largest_loss_usdt = backtest_result.largest_loss_usdt if hasattr(backtest_result, 'largest_loss_usdt') else 0.0
+
+            # Market data from backtest
+            period_start = backtest_result.period_start
+            period_end = backtest_result.period_end
+            start_price = backtest_result.start_price
+            end_price = backtest_result.end_price
+            volatility_regime = backtest_result.volatility_regime
 
             strategy_data = {
                 'strategy_name': f"closed_loop_{strategy_name}",
                 'strategy_description': f"Closed-loop AI {strategy_name} - {validation_report.get('deployment_recommendation')} quality",
                 'edge_type': 'closed_loop_discovery',
 
-                # Primary metrics
+                # Primary metrics - ACTUAL VALUES FROM BACKTEST
                 'total_profit_usdt': total_profit_usdt,
-                'total_return_pct': backtest_result.get('total_return', 0),
+                'total_return_pct': total_return_pct * 100,  # Convert to percentage
                 'final_capital': final_capital,
                 'initial_capital': initial_capital,
 
-                # Market comparison
+                # Market comparison - ACTUAL VALUES FROM BACKTEST
                 'buy_hold_profit_usdt': buy_hold_profit_usdt,
-                'buy_hold_return_pct': buy_hold_return * 100,
-                'vs_buy_hold_usdt': total_profit_usdt - buy_hold_profit_usdt,
-                'beat_market': total_profit_usdt > buy_hold_profit_usdt,
+                'buy_hold_return_pct': buy_hold_return_pct * 100,  # Convert to percentage
+                'vs_buy_hold_usdt': vs_buy_hold_usdt,
+                'beat_market': beat_market,
 
-                # Risk metrics
-                'max_drawdown_pct': backtest_result.get('max_drawdown', 0.1) * 100,
-                'max_drawdown_usdt': initial_capital * backtest_result.get('max_drawdown', 0.1),
-                'sharpe_ratio': backtest_result.get('sharpe_ratio', 0.5),
+                # Risk metrics - ACTUAL VALUES FROM BACKTEST
+                'max_drawdown_pct': max_drawdown_pct,
+                'max_drawdown_usdt': max_drawdown_usdt,
+                'sharpe_ratio': sharpe_ratio,
 
-                # Trading statistics
-                'total_trades': backtest_result.get('total_trades', 10),
-                'winning_trades': int(backtest_result.get('total_trades', 10) * backtest_result.get('win_rate', 0.5)),
-                'losing_trades': int(backtest_result.get('total_trades', 10) * (1 - backtest_result.get('win_rate', 0.5))),
-                'win_rate': backtest_result.get('win_rate', 0.5) * 100,
+                # Trading statistics - ACTUAL VALUES FROM BACKTEST
+                'total_trades': total_trades,
+                'winning_trades': winning_trades,
+                'losing_trades': losing_trades,
+                'win_rate': win_rate,
 
-                # Perpetual-specific (placeholder values for now)
-                'total_funding_paid_usdt': 0.0,
-                'total_funding_received_usdt': 0.0,
-                'net_funding_usdt': 0.0,
-                'avg_funding_daily_usdt': 0.0,
+                # Additional trading stats - ACTUAL VALUES FROM BACKTEST
+                'profit_factor': profit_factor,
+                'avg_trade_pnl_usdt': avg_trade_pnl_usdt,
+                'avg_win_usdt': avg_win_usdt,
+                'avg_loss_usdt': avg_loss_usdt,
+                'largest_win_usdt': largest_win_usdt,
+                'largest_loss_usdt': largest_loss_usdt,
 
-                # Cost breakdown (brutally realistic estimates)
-                'total_fees_usdt': abs(total_profit_usdt) * 0.0002,  # 0.02% maker fee
-                'total_slippage_usdt': abs(total_profit_usdt) * 0.0015,  # 15 bps slippage
-                'total_transaction_costs_usdt': abs(total_profit_usdt) * 0.0017,  # Total costs
+                # Perpetual-specific - ACTUAL VALUES FROM BACKTEST
+                'total_funding_paid_usdt': total_funding_paid_usdt,
+                'total_funding_received_usdt': total_funding_received_usdt,
+                'net_funding_usdt': net_funding_usdt,
+                'avg_funding_daily_usdt': avg_funding_daily_usdt,
 
-                # Realism metrics
-                'avg_slippage_bps': 15.0,
-                'avg_fill_rate': 0.8,  # 80% fill rate for perpetuals
-                'total_signals': backtest_result.get('total_trades', 10),
-                'filled_signals': int(backtest_result.get('total_trades', 10) * 0.8),
-                'partial_fills': int(backtest_result.get('total_trades', 10) * 0.2),
+                # Cost breakdown - ACTUAL VALUES FROM BACKTEST
+                'total_fees_usdt': total_fees_usdt,
+                'total_slippage_usdt': total_slippage_usdt,
+                'total_transaction_costs_usdt': total_transaction_costs_usdt,
 
-                # Market data
-                'period_start': '2025-11-01',
-                'period_end': '2026-07-01',
-                'start_price': 150.0,
-                'end_price': 145.0,
-                'volatility_regime': 'high',
-                'timeframe': '1d',
+                # Realism metrics - ACTUAL VALUES FROM BACKTEST
+                'avg_slippage_bps': avg_slippage_bps,
+                'avg_fill_rate': avg_fill_rate,
+                'total_signals': total_signals,
+                'filled_signals': filled_signals,
+                'partial_fills': partial_fills,
+
+                # Market data - ACTUAL VALUES FROM BACKTEST
+                'period_start': period_start,
+                'period_end': period_end,
+                'start_price': start_price,
+                'end_price': end_price,
+                'volatility_regime': volatility_regime,
+                'timeframe': backtest_result.timeframe,
 
                 # Validation
                 'passed_validation': 1 if validation_report.get('deployment_recommendation') == 'DEPLOY' else 0,
