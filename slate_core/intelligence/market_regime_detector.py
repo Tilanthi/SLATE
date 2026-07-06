@@ -24,6 +24,9 @@ from enum import Enum
 import json
 from pathlib import Path
 
+# Import regime transition detector for enhanced prediction
+from slate_core.intelligence.regime_transition_detector import RegimeTransitionDetector, get_regime_transition_detector
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,7 +74,10 @@ class MarketRegimeDetector:
         self.trend_threshold = 0.02  # 2% trend threshold
         self.volatility_threshold = 0.015
 
-        logger.info("MarketRegimeDetector initialized")
+        # Transition detector for enhanced prediction
+        self.transition_detector = get_regime_transition_detector()
+
+        logger.info("MarketRegimeDetector initialized with transition prediction")
 
     async def detect_market_regime(
         self,
@@ -126,6 +132,280 @@ class MarketRegimeDetector:
 
         logger.info(f"Market regime detected: {regime.value} (confidence: {state.confidence:.2f})")
         return state
+
+    def detect_regime_with_confidence(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Detect market regime with enhanced confidence scoring and recommendations.
+
+        Returns comprehensive regime information including:
+        - Regime type and confidence score
+        - Individual method scores
+        - Regime-specific strategy recommendations
+        - Regime duration and stability
+        - Transition probability
+
+        This is the enhanced version for hypothesis generation system.
+        """
+        # Extract price and volume data
+        prices = df['close']
+        volume = df['volume']
+        returns = prices.pct_change().dropna()
+
+        # Collect detection signals
+        signals = {
+            'trend': self._detect_trend_regime(prices, returns),
+            'volatility': self._detect_volatility_regime(returns),
+            'momentum': self._detect_momentum_regime(returns),
+            'volume': self._detect_volume_regime(volume),
+            'microstructure': self._detect_microstructure_regime(prices, volume)
+        }
+
+        # Combine signals using voting
+        regime = self._combine_regime_signals(signals)
+
+        # Calculate confidence using multiple methods
+        confidence_scores = self._calculate_regime_confidence(df, regime, signals)
+
+        # Get regime-specific recommendations
+        recommendations = self._get_regime_recommendations(regime)
+
+        # Track regime duration and stability
+        regime_info = self._analyze_regime_stability(df, regime)
+
+        return {
+            'regime': regime.value,
+            'confidence': confidence_scores['overall'],
+            'method_scores': confidence_scores['methods'],
+            'recommendations': recommendations,
+            'duration_days': regime_info['duration'],
+            'stability': regime_info['stability'],
+            'transition_probability': regime_info['transition_prob'],
+            'signals': signals  # Include for debugging
+        }
+
+    def detect_regime_with_transition_prediction(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Enhanced regime detection with transition prediction for adaptive strategy.
+
+        This is the key method for the adaptive regime-switching strategy.
+        Provides comprehensive regime information including transition probability
+        and recommended trading approach.
+
+        Returns:
+            Dictionary with:
+            - regime: Current market regime
+            - confidence: Detection confidence (0-1)
+            - transition_info: Transition probability and prediction
+            - recommended_strategy: Adaptive strategy recommendation
+            - approach_details: Specific trading parameters
+        """
+        # Get current regime with confidence
+        regime_info = self.detect_regime_with_confidence(df)
+
+        # Add transition detection
+        transition_info = self.transition_detector.detect_transition_signals(
+            df, regime_info['regime']
+        )
+
+        # Convert to dictionary
+        transition_dict = transition_info.to_dict() if hasattr(transition_info, 'to_dict') else {
+            'transition_probability': transition_info.transition_probability,
+            'likely_next_regime': transition_info.likely_next_regime,
+            'transition_speed': transition_info.transition_speed,
+            'confidence': transition_info.confidence,
+            'signals': transition_info.signals
+        }
+
+        # Combine information
+        return {
+            **regime_info,
+            'transition_info': transition_dict,
+            'recommended_strategy': self._get_adaptive_strategy_recommendation(regime_info, transition_dict)
+        }
+
+    def _get_adaptive_strategy_recommendation(self, regime_info: Dict,
+                                         transition_info: Dict) -> Dict[str, Any]:
+        """
+        Get adaptive strategy recommendation based on regime and transition info.
+
+        This is the core decision-making logic for the adaptive strategy.
+        Tells the system which approach to use and how to size positions.
+        """
+        current_regime = regime_info['regime']
+        confidence = regime_info['confidence']
+        transition_prob = transition_info.get('transition_probability', 0.0)
+        stability = regime_info.get('stability', 'unknown')
+
+        # High transition probability = use cautious approach
+        if transition_prob > 0.7:
+            return {
+                'primary_approach': 'transition_handling',
+                'secondary_approach': current_regime,
+                'position_sizing_multiplier': 0.5,  # Reduce risk
+                'stop_loss_multiplier': 0.8,  # Tighter stops
+                'signal_aggregation': 'conservative',  # Only strongest signals
+                'reasoning': 'High transition probability - reducing exposure'
+            }
+
+        # Unstable regime = use adaptive blended approach
+        elif stability == 'unstable':
+            return {
+                'primary_approach': 'adaptive_mean_reversion',
+                'secondary_approach': 'range_trading',
+                'position_sizing_multiplier': 0.7,
+                'stop_loss_multiplier': 0.9,
+                'signal_aggregation': 'blended',  # Combine multiple signals
+                'reasoning': 'Unstable regime - using adaptive blended approach'
+            }
+
+        # Low confidence = use cautious approach
+        elif confidence < 0.6:
+            return {
+                'primary_approach': 'statistical_arbitrage',
+                'secondary_approach': 'mean_reversion',
+                'position_sizing_multiplier': 0.6,
+                'stop_loss_multiplier': 0.9,
+                'signal_aggregation': 'conservative',
+                'reasoning': 'Low regime confidence - using conservative approach'
+            }
+
+        # Stable regime = use regime-specific full approach
+        else:
+            strategy_mapping = {
+                'sideways': {
+                    'primary_approach': 'mean_reversion',
+                    'secondary_approach': 'statistical_arbitrage',
+                    'position_sizing_multiplier': 1.0,
+                    'stop_loss_multiplier': 1.0,
+                    'signal_aggregation': 'combined',  # Multiple signal confirmation
+                    'reasoning': 'Stable sideways regime - full mean reversion approach'
+                },
+                'trending_up': {
+                    'primary_approach': 'momentum',
+                    'secondary_approach': 'breakout',
+                    'position_sizing_multiplier': 1.0,
+                    'stop_loss_multiplier': 1.2,
+                    'signal_aggregation': 'trend_following',
+                    'reasoning': 'Stable uptrend - full momentum trend following'
+                },
+                'trending_down': {
+                    'primary_approach': 'short_momentum',
+                    'secondary_approach': 'downside_breakout',
+                    'position_sizing_multiplier': 1.0,
+                    'stop_loss_multiplier': 1.2,
+                    'signal_aggregation': 'trend_following',
+                    'reasoning': 'Stable downtrend - full short momentum following'
+                },
+                'high_volatility': {
+                    'primary_approach': 'volatility_breakout',
+                    'secondary_approach': 'statistical_arbitrage',
+                    'position_sizing_multiplier': 0.6,
+                    'stop_loss_multiplier': 1.5,
+                    'signal_aggregation': 'breakout_confirmation',
+                    'reasoning': 'High volatility - reduced size, wider stops, breakout focus'
+                },
+                'low_volatility': {
+                    'primary_approach': 'mean_reversion',
+                    'secondary_approach': 'range_trading',
+                    'position_sizing_multiplier': 1.0,
+                    'stop_loss_multiplier': 0.9,
+                    'signal_aggregation': 'combined',
+                    'reasoning': 'Low volatility - tight stops, full position size'
+                }
+            }
+
+            return strategy_mapping.get(current_regime, strategy_mapping['sideways'])
+
+    def _calculate_regime_confidence(self, df: pd.DataFrame, regime: MarketRegime,
+                                    signals: Dict[str, Dict]) -> Dict[str, Any]:
+        """Calculate confidence scores using multiple detection methods."""
+
+        # Get individual method probabilities
+        method_scores = {
+            'trend': signals['trend'].get('probability', 0.5),
+            'volatility': signals['volatility'].get('probability', 0.5),
+            'momentum': signals['momentum'].get('probability', 0.5),
+            'volume': signals['volume'].get('probability', 0.5),
+            'microstructure': signals['microstructure'].get('probability', 0.5)
+        }
+
+        # Calculate overall confidence based on agreement
+        probabilities = list(method_scores.values())
+        variance = np.var(probabilities) if len(probabilities) > 0 else 0.25
+        overall_confidence = 1.0 - min(variance * 2, 0.8)  # Scale to 0.2-1.0
+
+        # Boost confidence if multiple methods agree
+        agreement_count = sum(1 for score in method_scores.values() if score > 0.7)
+        if agreement_count >= 3:
+            overall_confidence = min(overall_confidence + 0.1, 1.0)
+
+        return {
+            'overall': overall_confidence,
+            'methods': method_scores
+        }
+
+    def _get_regime_recommendations(self, regime: MarketRegime) -> List[str]:
+        """Get regime-specific strategy recommendations."""
+        recommendations_map = {
+            MarketRegime.SIDEWAYS: [
+                'mean_reversion',
+                'range_trading',
+                'statistical_arbitrage',
+                'support_resistance'
+            ],
+            MarketRegime.TRENDING_UP: [
+                'momentum',
+                'breakout',
+                'trend_following'
+            ],
+            MarketRegime.TRENDING_DOWN: [
+                'short_momentum',
+                'downside_breakout',
+                'trend_following'
+            ],
+            MarketRegime.HIGH_VOLATILITY: [
+                'volatility_breakout',
+                'statistical_arbitrage',
+                'options_like_strategies'
+            ],
+            MarketRegime.LOW_VOLATILITY: [
+                'mean_reversion',
+                'statistical_arbitrage',
+                'range_trading'
+            ]
+        }
+        return recommendations_map.get(regime, ['diversified'])
+
+    def _analyze_regime_stability(self, df: pd.DataFrame, regime: MarketRegime) -> Dict[str, Any]:
+        """Analyze regime stability and estimate transition probability."""
+
+        # Get current regime duration
+        duration_bars = self._get_regime_duration(regime)
+        duration_days = duration_bars  # Assuming daily data
+
+        # Get expected duration
+        expected_duration = self._estimate_regime_duration(regime)
+
+        # Calculate stability based on duration consistency
+        if duration_bars < expected_duration * 0.3:
+            stability = 'unstable'
+            transition_prob = 0.7  # High probability of transition
+        elif duration_bars < expected_duration * 0.7:
+            stability = 'developing'
+            transition_prob = 0.4  # Moderate probability
+        elif duration_bars < expected_duration * 1.2:
+            stability = 'stable'
+            transition_prob = 0.2  # Low probability
+        else:
+            stability = 'overdue'
+            transition_prob = 0.6  # Increasing probability
+
+        return {
+            'duration': duration_days,
+            'stability': stability,
+            'transition_prob': transition_prob,
+            'expected_duration': expected_duration
+        }
 
     def _detect_trend_regime(self, prices: pd.Series, returns: pd.Series) -> Dict[str, Any]:
         """Detect trend-based regimes."""

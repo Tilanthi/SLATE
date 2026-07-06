@@ -654,6 +654,173 @@ class FeedbackLearningSystem:
 
         return recommendations
 
+    def learn_from_validation_results(self, validation_results: Dict, regime_info: Dict) -> None:
+        """
+        Learn from validation results to improve future hypothesis generation.
+
+        This implements Phase 5 continuous learning with:
+        - Track strategy performance by regime
+        - Adaptive threshold optimization
+        - Hypothesis quality scoring
+
+        This is the key to continuous improvement in validation success rate.
+        """
+        logger.info("📚 Starting enhanced feedback learning cycle")
+
+        # Track performance by strategy type and regime
+        strategies_tested = validation_results.get('strategies_tested', [])
+        strategies_validated = validation_results.get('strategies_validated', [])
+
+        for strategy_result in strategies_tested:
+            strategy_type = strategy_result.get('hypothesis_type', 'unknown')
+            passed_validation = strategy_result.get('passed', False)
+
+            # Update performance tracking
+            self._update_strategy_regime_performance(strategy_type, regime_info['regime'], passed_validation)
+
+        # Adjust thresholds if needed
+        self._optimize_validation_thresholds(regime_info['regime'])
+
+        # Update generation priorities
+        self._update_generation_priorities()
+
+        logger.info("   Enhanced feedback learning complete")
+
+    def _update_strategy_regime_performance(self, strategy_type: str, regime: str, passed: bool) -> None:
+        """Update performance tracking for strategy-regime combinations"""
+
+        # Initialize performance tracking if not exists
+        if not hasattr(self, 'performance_tracking'):
+            self.performance_tracking = {}
+
+        key = f"{strategy_type}_{regime}"
+
+        if key not in self.performance_tracking:
+            self.performance_tracking[key] = {
+                'attempts': 0,
+                'successes': 0,
+                'success_rate': 0.0,
+                'last_updated': datetime.now()
+            }
+
+        self.performance_tracking[key]['attempts'] += 1
+        if passed:
+            self.performance_tracking[key]['successes'] += 1
+
+        self.performance_tracking[key]['success_rate'] = (
+            self.performance_tracking[key]['successes'] / self.performance_tracking[key]['attempts']
+        )
+        self.performance_tracking[key]['last_updated'] = datetime.now()
+
+        logger.debug(f"Updated {key} performance: {self.performance_tracking[key]['success_rate']:.2%}")
+
+    def _optimize_validation_thresholds(self, regime: str) -> None:
+        """
+        Automatically adjust validation thresholds based on success rates.
+
+        If success rate too low (<2%): relax thresholds
+        If success rate too high (>30%): tighten thresholds
+        Target: 5-15% success rate
+        """
+        if not hasattr(self, 'performance_tracking'):
+            return
+
+        # Calculate overall success rate for this regime
+        regime_attempts = 0
+        regime_successes = 0
+
+        for key, perf_data in self.performance_tracking.items():
+            if key.endswith(f"_{regime}"):
+                regime_attempts += perf_data['attempts']
+                regime_successes += perf_data['successes']
+
+        if regime_attempts < 10:  # Need minimum data
+            return
+
+        success_rate = regime_successes / regime_attempts
+
+        # Adjust thresholds based on success rate
+        if success_rate < 0.02:  # Less than 2% success
+            logger.info(f"   Low success rate ({success_rate:.1%}) - thresholds may be too strict")
+            # Could implement automatic threshold relaxation here
+        elif success_rate > 0.30:  # More than 30% success
+            logger.info(f"   High success rate ({success_rate:.1%}) - thresholds may be too lenient")
+            # Could implement automatic threshold tightening here
+
+    def _update_generation_priorities(self) -> None:
+        """
+        Update which hypothesis types get priority based on success rates.
+
+        This implements adaptive hypothesis generation by prioritizing
+        successful strategy-regime combinations.
+        """
+        if not hasattr(self, 'performance_tracking'):
+            return
+
+        # Initialize priority tracking
+        if not hasattr(self, 'priority_combinations'):
+            self.priority_combinations = set()
+        if not hasattr(self, 'deprecated_combinations'):
+            self.deprecated_combinations = set()
+
+        for key, perf_data in self.performance_tracking.items():
+            strategy_type, regime = key.split('_')
+
+            # Prioritize high-success combinations (>10% success rate)
+            if perf_data['success_rate'] > 0.10 and perf_data['attempts'] >= 5:
+                self.priority_combinations.add((strategy_type, regime))
+                logger.info(f"   Prioritizing {strategy_type} in {regime} (success: {perf_data['success_rate']:.1%})")
+
+            # Deprioritize low-success combinations (<2% success, 100+ attempts)
+            if perf_data['success_rate'] < 0.02 and perf_data['attempts'] > 100:
+                self.deprecated_combinations.add((strategy_type, regime))
+                logger.info(f"   Deprioritizing {strategy_type} in {regime} (success: {perf_data['success_rate']:.1%})")
+
+    def get_priority_combinations(self) -> set:
+        """Get high-priority strategy-regime combinations"""
+        return getattr(self, 'priority_combinations', set())
+
+    def get_deprecated_combinations(self) -> set:
+        """Get deprecated strategy-regime combinations"""
+        return getattr(self, 'deprecated_combinations', set())
+
+    def get_performance_summary(self) -> Dict[str, Any]:
+        """Get summary of performance tracking for analysis"""
+        if not hasattr(self, 'performance_tracking'):
+            return {'status': 'no_performance_data'}
+
+        summary = {
+            'total_combinations': len(self.performance_tracking),
+            'combinations_tracked': list(self.performance_tracking.keys()),
+            'top_performers': [],
+            'underperformers': []
+        }
+
+        # Get top and bottom performers
+        sorted_perf = sorted(
+            self.performance_tracking.items(),
+            key=lambda x: x[1]['success_rate'],
+            reverse=True
+        )
+
+        for key, perf_data in sorted_perf[:5]:  # Top 5
+            if perf_data['attempts'] >= 5:
+                summary['top_performers'].append({
+                    'combination': key,
+                    'success_rate': perf_data['success_rate'],
+                    'attempts': perf_data['attempts']
+                })
+
+        for key, perf_data in sorted_perf[-5:]:  # Bottom 5
+            if perf_data['attempts'] >= 5:
+                summary['underperformers'].append({
+                    'combination': key,
+                    'success_rate': perf_data['success_rate'],
+                    'attempts': perf_data['attempts']
+                })
+
+        return summary
+
     def reset_learning(self):
         """Reset learning system (use with caution)"""
         self.bias_system = BiasUpdateSystem()
