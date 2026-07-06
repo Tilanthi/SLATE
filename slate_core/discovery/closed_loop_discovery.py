@@ -24,6 +24,14 @@ import logging
 from datetime import datetime
 import json
 
+# Import perpetual futures backtest system for realistic backtesting
+from slate_core.discovery.perpetual_futures_backtest import (
+    PerpetualBacktestResult,
+    PerpetualFuturesBacktester,
+    PerpetualBacktestConfig,
+    BacktestRiskConfig
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -864,18 +872,95 @@ class ClosedLoopDiscoveryEngine:
             'learning_updated': True
         }
 
-    def run_hypothesis_backtest(self, hypothesis: StrategyHypothesis, df: pd.DataFrame) -> Dict[str, Any]:
-        """Run backtest for a specific hypothesis"""
-        # This would connect to the actual backtest engine
-        # For now, return placeholder results
-        return {
-            'total_trades': 12,
-            'win_rate': 0.58,
-            'total_return': 0.08,
-            'sharpe_ratio': 0.65,
-            'max_drawdown': 0.12,
-            'profit_factor': 1.8
-        }
+    def run_hypothesis_backtest(self, hypothesis: StrategyHypothesis, df: pd.DataFrame) -> PerpetualBacktestResult:
+        """
+        Run actual perpetual futures backtest for a hypothesis.
+
+        CRITICAL FIX: Now connects to real perpetual futures backtest system
+        instead of returning fake placeholder results.
+        """
+        from slate_core.discovery.perpetual_futures_backtest import PerpetualFuturesBacktester
+        from slate_core.discovery.perpetual_futures_backtest import PerpetualBacktestConfig, BacktestRiskConfig
+        import pandas as pd
+        import numpy as np
+
+        logger.info(f"🔄 Running actual perpetual futures backtest for {hypothesis.name}")
+
+        # Create realistic perpetual futures backtest configuration
+        config = BacktestRiskConfig(
+            initial_capital=10000.0,
+            max_leverage=3.0,
+            max_position_size=0.03,
+            base_fill_rate=0.8,
+            partial_fill_probability=0.2,
+            partial_fill_min_size=0.5,
+            stop_loss_atr_multiple=2.0,
+            take_profit_atr_multiple=3.0,
+            maker_fee=0.0002,  # 0.02% maker fee
+            taker_fee=0.0005,  # 0.05% taker fee
+            funding_rate_hourly=0.0002,  # 0.02% hourly funding
+            funding_rate_interval_hours=8,
+            max_drawdown_limit=0.20,
+            min_trades_required=5
+        )
+
+        # Create perpetual futures backtester
+        backtester = PerpetualFuturesBacktester(config)
+
+        # Create signal function from hypothesis
+        def signal_function(df, i, params):
+            """Generate trading signal based on hypothesis"""
+            # Extract hypothesis parameters
+            indicators = hypothesis.indicators if hasattr(hypothesis, 'indicators') else {}
+
+            # Basic signal generation based on hypothesis type
+            if hasattr(hypothesis, 'signal_rules') and hypothesis.signal_rules:
+                # Use hypothesis-specific signal rules
+                signal = 0
+                for rule in hypothesis.signal_rules:
+                    try:
+                        # Evaluate rule (simplified - would be more complex in production)
+                        if rule.get('condition') == 'momentum':
+                            if 'ema_short' in indicators and 'ema_long' in df.columns:
+                                if df['ema_short'].iloc[i] > df['ema_long'].iloc[i]:
+                                    signal = 1  # Long signal
+                                elif df['ema_short'].iloc[i] < df['ema_long'].iloc[i]:
+                                    signal = -1  # Short signal
+                        elif rule.get('condition') == 'mean_reversion':
+                            if 'bb_upper' in indicators and 'bb_lower' in df.columns:
+                                if df['close'].iloc[i] < df['bb_lower'].iloc[i]:
+                                    signal = 1  # Long signal (oversold)
+                                elif df['close'].iloc[i] > df['bb_upper'].iloc[i]:
+                                    signal = -1  # Short signal (overbought)
+                    except Exception as e:
+                        logger.debug(f"Rule evaluation error: {e}")
+
+                return signal
+            else:
+                # Default momentum signal if no rules defined
+                if 'ema_short' in indicators and 'ema_long' in df.columns:
+                    if df['ema_short'].iloc[i] > df['ema_long'].iloc[i]:
+                        return 1  # Long signal
+                    elif df['ema_short'].iloc[i] < df['ema_long'].iloc[i]:
+                        return -1  # Short signal
+                return 0
+
+        # Extract parameters from hypothesis
+        parameters = hypothesis.parameters if hasattr(hypothesis, 'parameters') else {}
+
+        # Run the actual perpetual futures backtest
+        result = backtester.backtest_strategy(
+            df=df,
+            strategy_name=hypothesis.name,
+            strategy_description=hypothesis.description if hasattr(hypothesis, 'description') else f"Closed-loop AI {hypothesis.name}",
+            edge_type="closed_loop_discovery",
+            signal_function=signal_function,
+            parameters=parameters
+        )
+
+        logger.info(f"✅ Actual backtest complete: {len(result)} trades, ${result.total_profit_usdt:.2f} profit")
+
+        return result
 
     def update_learning_bias(self, validation_result: HypothesisTestResult, success: bool):
         """Update discovery biases based on validation results"""
