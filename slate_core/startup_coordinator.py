@@ -202,7 +202,12 @@ class StartupCoordinator:
                 try:
                     # Load market data for discovery
                     import pandas as pd
-                    df = pd.read_csv('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+
+                    # Load JSON data and set timestamp as index
+                    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+                    df['timestamp'] = pd.to_datetime(df['timestamp'])
+                    df.set_index('timestamp', inplace=True)
+
                     logger.info(f"✅ Market data loaded: {len(df)} days")
 
                     # Run closed-loop AI discovery cycle

@@ -28,8 +28,7 @@ import json
 from slate_core.discovery.perpetual_futures_backtest import (
     PerpetualBacktestResult,
     PerpetualFuturesBacktester,
-    PerpetualBacktestConfig,
-    BacktestRiskConfig
+    PerpetualBacktestConfig
 )
 
 logger = logging.getLogger(__name__)
@@ -842,9 +841,12 @@ class ClosedLoopDiscoveryEngine:
                 # Run backtest (placeholder for actual backtest execution)
                 backtest_result = self.run_hypothesis_backtest(hypothesis, df)
 
+                # Convert PerpetualBacktestResult object to dict for validation
+                backtest_dict = self.convert_backtest_to_dict(backtest_result)
+
                 # Validate with pluralistic methods
                 validation_result = self.validation_system.validate_hypothesis(
-                    hypothesis, backtest_result
+                    hypothesis, backtest_dict
                 )
 
                 if validation_result.is_successful():
@@ -880,20 +882,20 @@ class ClosedLoopDiscoveryEngine:
         instead of returning fake placeholder results.
         """
         from slate_core.discovery.perpetual_futures_backtest import PerpetualFuturesBacktester
-        from slate_core.discovery.perpetual_futures_backtest import PerpetualBacktestConfig, BacktestRiskConfig
+        from slate_core.discovery.perpetual_futures_backtest import PerpetualBacktestConfig
         import pandas as pd
         import numpy as np
 
         logger.info(f"🔄 Running actual perpetual futures backtest for {hypothesis.name}")
 
         # Create realistic perpetual futures backtest configuration
-        config = BacktestRiskConfig(
+        config = PerpetualBacktestConfig(
             initial_capital=10000.0,
-            max_leverage=3.0,
+            max_leverage=3,
             max_position_size=0.03,
-            base_fill_rate=0.8,
-            partial_fill_probability=0.2,
-            partial_fill_min_size=0.5,
+            base_fill_rate=0.80,
+            partial_fill_probability=0.20,
+            partial_fill_min_size=0.25,
             stop_loss_atr_multiple=2.0,
             take_profit_atr_multiple=3.0,
             maker_fee=0.0002,  # 0.02% maker fee
@@ -901,7 +903,10 @@ class ClosedLoopDiscoveryEngine:
             funding_rate_hourly=0.0002,  # 0.02% hourly funding
             funding_rate_interval_hours=8,
             max_drawdown_limit=0.20,
-            min_trades_required=5
+            min_trades_required=10,
+            backtest_months=12,
+            symbol="SOLUSDT",
+            timeframe="1d"
         )
 
         # Create perpetual futures backtester
@@ -958,9 +963,37 @@ class ClosedLoopDiscoveryEngine:
             parameters=parameters
         )
 
-        logger.info(f"✅ Actual backtest complete: {len(result)} trades, ${result.total_profit_usdt:.2f} profit")
+        logger.info(f"✅ Actual backtest complete: {result.total_trades} trades, ${result.total_profit_usdt:.2f} profit")
 
         return result
+
+    def convert_backtest_to_dict(self, backtest_result) -> Dict[str, Any]:
+        """
+        Convert PerpetualBacktestResult object to dictionary format for validation system.
+
+        This handles the object-to-dict conversion needed by the validation methods.
+        """
+        if isinstance(backtest_result, dict):
+            return backtest_result
+
+        # Convert PerpetualBacktestResult object to dict
+        return {
+            'sharpe_ratio': backtest_result.sharpe_ratio,
+            'total_return': backtest_result.total_return_pct / 100,  # Convert percentage to decimal
+            'win_rate': backtest_result.win_rate,
+            'total_trades': backtest_result.total_trades,
+            'max_drawdown': backtest_result.max_drawdown_pct / 100,  # Convert percentage to decimal
+            'profit_factor': backtest_result.profit_factor if hasattr(backtest_result, 'profit_factor') else 0,
+            'total_profit': backtest_result.total_profit_usdt,
+            'initial_capital': backtest_result.initial_capital,
+            'final_capital': backtest_result.final_capital,
+            'winning_trades': backtest_result.winning_trades,
+            'losing_trades': backtest_result.losing_trades,
+            'avg_trade_pnl': backtest_result.avg_trade_pnl_usdt if hasattr(backtest_result, 'avg_trade_pnl_usdt') else 0,
+            'total_fees': backtest_result.total_fees_usdt,
+            'total_slippage': backtest_result.total_slippage_usdt,
+            'max_drawdown_pct': backtest_result.max_drawdown_pct
+        }
 
     def update_learning_bias(self, validation_result: HypothesisTestResult, success: bool):
         """Update discovery biases based on validation results"""

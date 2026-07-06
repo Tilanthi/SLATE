@@ -131,6 +131,18 @@ class EnhancedDiscoveryIntegration:
         # Update enhancement metrics
         self.update_enhancement_metrics(results)
 
+        # Determine overall cycle status
+        discovery_status = discovery_results.get('status', 'error')
+        validation_status = validation_results.get('status', 'error')
+
+        if discovery_status == 'success' and validation_status == 'success':
+            results['status'] = 'success'
+        elif discovery_status == 'success' or validation_status == 'success':
+            results['status'] = 'partial'
+        else:
+            results['status'] = 'error'
+            results['message'] = f"Discovery failed: {discovery_results.get('error', 'Unknown error')}, Validation failed: {validation_results.get('error', 'Unknown error')}"
+
         self.cycle_count += 1
 
         # Final summary
@@ -194,6 +206,31 @@ class EnhancedDiscoveryIntegration:
                 'hybrid_strategies': []
             }
 
+    def convert_backtest_result_to_dict(self, backtest_result) -> Dict[str, Any]:
+        """
+        Convert PerpetualBacktestResult object to dictionary format for validation system.
+
+        This handles the object-to-dict conversion needed by the validation system.
+        """
+        if isinstance(backtest_result, dict):
+            return backtest_result
+
+        # Convert PerpetualBacktestResult object to dict
+        return {
+            'sharpe_ratio': backtest_result.sharpe_ratio,
+            'total_return': backtest_result.total_return_pct / 100,  # Convert percentage to decimal
+            'win_rate': backtest_result.win_rate,
+            'total_trades': backtest_result.total_trades,
+            'max_drawdown': backtest_result.max_drawdown_pct / 100,  # Convert percentage to decimal
+            'profit_factor': backtest_result.profit_factor if hasattr(backtest_result, 'profit_factor') else 0,
+            'total_profit': backtest_result.total_profit_usdt,
+            'initial_capital': backtest_result.initial_capital,
+            'final_capital': backtest_result.final_capital,
+            'winning_trades': backtest_result.winning_trades,
+            'losing_trades': backtest_result.losing_trades,
+            'avg_trade_pnl': backtest_result.avg_trade_pnl_usdt if hasattr(backtest_result, 'avg_trade_pnl_usdt') else 0
+        }
+
     def run_rigorous_validation(self, discovery_results: Dict[str, Any],
                                hybrid_results: Dict[str, Any], df: pd.DataFrame) -> Dict[str, Any]:
         """Run rigorous statistical validation on all strategies"""
@@ -211,6 +248,9 @@ class EnhancedDiscoveryIntegration:
                         backtest_result = strategy_result.backtest_result
                         strategy_name = strategy_result.hypothesis.name
 
+                        # Convert PerpetualBacktestResult object to dict for validation
+                        backtest_dict = self.convert_backtest_result_to_dict(backtest_result)
+
                         # Prepare additional data for validation
                         additional_data = {
                             'price_data': df,  # Pass price data for walk-forward validation
@@ -221,7 +261,7 @@ class EnhancedDiscoveryIntegration:
 
                         # Run pluralistic validation with additional data
                         validation_report = self.validation_system.validate_strategy(
-                            strategy_name, backtest_result, additional_data
+                            strategy_name, backtest_dict, additional_data
                         )
 
                         all_validation_reports.append(validation_report)
