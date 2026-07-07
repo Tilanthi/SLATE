@@ -358,7 +358,10 @@ async def start_continuous_discovery():
                     # Load market data properly
                     import pandas as pd
 
-                    df = pd.read_csv('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+                    # Load JSON data file (not CSV format despite extension)
+                    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+                    df['timestamp'] = pd.to_datetime(df['timestamp'])
+                    df.set_index('timestamp', inplace=True)
                     logger.info(f"✅ Market data loaded: {len(df)} days")
 
                     # Run discovery cycle
@@ -711,6 +714,247 @@ async def clear_youtube_cache():
 
     except Exception as e:
         logger.error(f"Error clearing cache: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+# ============================================================================
+# API Routes - Strategy Monitoring System
+# ============================================================================
+
+@app.get("/api/monitoring/status")
+async def monitoring_status():
+    """Get strategy monitoring system status and all CONDITIONAL strategies being tracked."""
+    try:
+        from slate_core.intelligence.strategy_monitor import get_strategy_monitoring_system
+
+        monitoring_system = get_strategy_monitoring_system()
+        status = monitoring_system.get_monitoring_status()
+
+        return {
+            "success": True,
+            "monitoring_system": status,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting monitoring status: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@app.get("/api/monitoring/strategies")
+async def list_monitored_strategies():
+    """List all CONDITIONAL strategies currently being monitored."""
+    try:
+        from slate_core.intelligence.strategy_monitor import get_strategy_monitoring_system
+
+        monitoring_system = get_strategy_monitoring_system()
+        strategies = monitoring_system.get_conditional_strategies()
+
+        return {
+            "success": True,
+            "count": len(strategies),
+            "strategies": strategies,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error listing monitored strategies: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@app.post("/api/monitoring/evaluate/{strategy_id}")
+async def evaluate_strategy(strategy_id: int):
+    """Evaluate a specific strategy's performance and get upgrade recommendation."""
+    try:
+        from slate_core.intelligence.strategy_monitor import get_strategy_monitoring_system
+
+        monitoring_system = get_strategy_monitoring_system()
+        evaluation = monitoring_system.evaluate_strategy_performance(strategy_id)
+
+        if 'error' in evaluation:
+            raise HTTPException(status_code=404, detail=evaluation['error'])
+
+        recommendation = monitoring_system.get_upgrade_recommendation(strategy_id)
+
+        return {
+            "success": True,
+            "strategy_id": strategy_id,
+            "evaluation": evaluation,
+            "recommendation": recommendation,
+            "timestamp": datetime.now().isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error evaluating strategy {strategy_id}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@app.post("/api/monitoring/upgrade/{strategy_id}")
+async def upgrade_strategy(strategy_id: int):
+    """Upgrade a strategy from CONDITIONAL to DEPLOY quality."""
+    try:
+        from slate_core.intelligence.strategy_monitor import get_strategy_monitoring_system
+
+        monitoring_system = get_strategy_monitoring_system()
+
+        # First check if upgrade is warranted
+        evaluation = monitoring_system.evaluate_strategy_performance(strategy_id)
+        if 'error' in evaluation:
+            raise HTTPException(status_code=404, detail=evaluation['error'])
+
+        recommendation = evaluation.get('recommendation')
+        if recommendation != "UPGRADE_TO_DEPLOY":
+            return {
+                "success": False,
+                "message": f"Strategy not ready for upgrade. Current recommendation: {recommendation}",
+                "evaluation": evaluation,
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # Perform upgrade
+        success = monitoring_system.upgrade_strategy_to_deploy(strategy_id)
+
+        if success:
+            logger.info(f"✅ Strategy {strategy_id} upgraded to DEPLOY quality")
+            return {
+                "success": True,
+                "message": f"Strategy {strategy_id} successfully upgraded to DEPLOY quality",
+                "strategy_id": strategy_id,
+                "previous_quality": "CONDITIONAL",
+                "new_quality": "DEPLOY",
+                "evaluation": evaluation,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Upgrade failed")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error upgrading strategy {strategy_id}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@app.post("/api/monitoring/downgrade/{strategy_id}")
+async def downgrade_strategy(strategy_id: int):
+    """Downgrade a strategy from DEPLOY to CONDITIONAL quality."""
+    try:
+        from slate_core.intelligence.strategy_monitor import get_strategy_monitoring_system
+
+        monitoring_system = get_strategy_monitoring_system()
+        success = monitoring_system.downgrade_strategy_to_conditional(strategy_id)
+
+        if success:
+            logger.warning(f"⚠️  Strategy {strategy_id} downgraded to CONDITIONAL quality")
+            return {
+                "success": True,
+                "message": f"Strategy {strategy_id} downgraded to CONDITIONAL quality",
+                "strategy_id": strategy_id,
+                "previous_quality": "DEPLOY",
+                "new_quality": "CONDITIONAL",
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Downgrade failed")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downgrading strategy {strategy_id}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+
+@app.post("/api/monitoring/run-auto-upgrade")
+async def run_auto_upgrade():
+    """Automatically evaluate all CONDITIONAL strategies and upgrade those that qualify."""
+    try:
+        from slate_core.intelligence.strategy_monitor import get_strategy_monitoring_system
+
+        monitoring_system = get_strategy_monitoring_system()
+        strategies = monitoring_system.get_conditional_strategies()
+
+        results = {
+            "evaluated": len(strategies),
+            "upgraded": 0,
+            "kept_conditional": 0,
+            "errors": [],
+            "details": []
+        }
+
+        for strategy in strategies:
+            strategy_id = strategy['id']
+            try:
+                # Evaluate performance
+                evaluation = monitoring_system.evaluate_strategy_performance(strategy_id)
+
+                if 'error' in evaluation:
+                    results["errors"].append({
+                        "strategy_id": strategy_id,
+                        "error": evaluation['error']
+                    })
+                    continue
+
+                recommendation = evaluation.get('recommendation')
+
+                # Only upgrade if clearly qualified
+                if recommendation == "UPGRADE_TO_DEPLOY":
+                    upgrade_success = monitoring_system.upgrade_strategy_to_deploy(strategy_id)
+
+                    if upgrade_success:
+                        results["upgraded"] += 1
+                        results["details"].append({
+                            "strategy_id": strategy_id,
+                            "action": "upgraded",
+                            "evaluation": evaluation
+                        })
+                        logger.info(f"✅ Auto-upgraded strategy {strategy_id} to DEPLOY")
+                    else:
+                        results["errors"].append({
+                            "strategy_id": strategy_id,
+                            "error": "Upgrade failed"
+                        })
+                else:
+                    results["kept_conditional"] += 1
+                    results["details"].append({
+                        "strategy_id": strategy_id,
+                        "action": "kept_conditional",
+                        "recommendation": recommendation
+                    })
+
+            except Exception as e:
+                results["errors"].append({
+                    "strategy_id": strategy_id,
+                    "error": str(e)
+                })
+                logger.error(f"Error processing strategy {strategy_id}: {e}")
+
+        logger.info(f"Auto-upgrade complete: {results['upgraded']} upgraded, {results['kept_conditional']} kept conditional")
+
+        return {
+            "success": True,
+            "results": results,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error running auto-upgrade: {e}")
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": str(e)}

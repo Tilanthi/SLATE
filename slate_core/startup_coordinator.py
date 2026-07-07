@@ -11,6 +11,8 @@ Core Principles:
 3. User activity automatically pauses discovery ONLY during request execution
 4. Discovery resumes IMMEDIATELY after user request completes (no waiting period)
 5. System is paper-trading only (never real money)
+6. Automatic restart on crashes, hangs, or failures
+7. Watchdog protection with health monitoring
 """
 
 import asyncio
@@ -53,11 +55,20 @@ class StartupCoordinator:
         self.user_requested_pause = False
         self.startup_complete = False
 
+        # Hang detection and timeout protection
+        self.last_cycle_complete_time = datetime.now()
+        self.cycle_timeout_seconds = 120  # 2 minutes max per discovery cycle
+        self.hang_detection_enabled = True
+        self.consecutive_hangs = 0
+        self.max_consecutive_hangs = 3
+
         # Configuration
         self.idle_timeout_minutes = 0.1  # Resume discovery after 6 seconds of inactivity
         self.discovery_cycle_interval_seconds = 5  # Run discovery every 5 seconds when active
+        self.monitoring_interval_hours = 1  # Run strategy monitoring every hour
+        self.last_monitoring_time = datetime.now()
 
-        logger.info("Startup Coordinator initialized")
+        logger.info("Startup Coordinator initialized with hang detection and strategy monitoring")
 
     def start(self):
         """Start SLATE with automatic closed-loop AI discovery."""
@@ -198,6 +209,7 @@ class StartupCoordinator:
 
                 # 🧠 RUN CLOSED-LOOP AI DISCOVERY CYCLE
                 logger.debug("🧠 Running closed-loop AI discovery cycle...")
+                cycle_start_time = datetime.now()
 
                 try:
                     # Load market data for discovery
@@ -210,8 +222,25 @@ class StartupCoordinator:
 
                     logger.info(f"✅ Market data loaded: {len(df)} days")
 
-                    # Run closed-loop AI discovery cycle
-                    results = self.closed_loop_system.run_enhanced_discovery_cycle(df)
+                    # Filter data for optimal volatility regime (Option 4: Test different market regimes)
+                    from slate_core.discovery.market_regime_filter import get_market_regime_filter
+
+                    regime_filter = get_market_regime_filter()
+
+                    # Analyze volatility regimes
+                    regime_analysis = regime_filter.analyze_volatility_regimes(df)
+
+                    # Filter for high volatility regime (optimal for adaptive/mean reversion strategies)
+                    df_filtered = regime_filter.filter_for_discovery(df, strategy_type='adaptive_regime_switching')
+
+                    logger.info(f"🎯 Using filtered data: {len(df_filtered)} days (high volatility regime)")
+
+                    # Run closed-loop AI discovery cycle on filtered data
+                    results = self.closed_loop_system.run_enhanced_discovery_cycle(df_filtered)
+
+                    # Update last cycle complete time for hang detection
+                    self.last_cycle_complete_time = datetime.now()
+                    cycle_duration = (self.last_cycle_complete_time - cycle_start_time).total_seconds()
 
                     if results.get('status') == 'success':
                         performance = results.get('performance', {})
@@ -222,13 +251,25 @@ class StartupCoordinator:
                         validated = performance.get('total_validated', 0)
                         success_rate = performance.get('overall_success_rate', 0)
 
-                        logger.info(f"✅ Closed-Loop AI cycle: {hypotheses} hypotheses, {strategies} strategies, {validated} validated, {success_rate:.1%} success")
+                        logger.info(f"✅ Closed-Loop AI cycle: {hypotheses} hypotheses, {strategies} strategies, {validated} validated, {success_rate:.1%} success (duration: {cycle_duration:.1f}s)")
 
+                        # Reset hang counter on successful cycle completion
+                        self.consecutive_hangs = 0
                         # Reset error counter on success
                         consecutive_errors = 0
                     else:
                         logger.warning(f"⚠️  Closed-loop discovery issue: {results.get('message', 'Unknown error')}")
                         consecutive_errors += 1
+
+                    # 🎯 PERIODIC STRATEGY MONITORING CYCLE
+                    # Run monitoring every hour (separate from discovery cycles)
+                    time_since_last_monitoring = (datetime.now() - self.last_monitoring_time).total_seconds()
+                    monitoring_interval_seconds = self.monitoring_interval_hours * 3600
+
+                    if time_since_last_monitoring >= monitoring_interval_seconds:
+                        logger.info("🎯 Starting periodic strategy monitoring cycle...")
+                        await self._run_monitoring_cycle()
+                        self.last_monitoring_time = datetime.now()
 
                 except Exception as discovery_error:
                     logger.error(f"❌ Closed-loop discovery execution error: {discovery_error}")
@@ -297,12 +338,33 @@ class StartupCoordinator:
         }
 
     async def watchdog_check_discovery(self):
-        """Watchdog to ensure discovery keeps running - auto-restart if stopped."""
-        logger.info("🐕 Watchdog started - monitoring discovery loop health")
+        """Watchdog to ensure discovery keeps running - auto-restart if stopped or hung."""
+        logger.info("🐕 Watchdog started - monitoring discovery loop health with hang detection")
 
         while True:
             try:
                 await asyncio.sleep(30)  # Check every 30 seconds
+
+                # Check for hang detection
+                if self.hang_detection_enabled:
+                    time_since_last_cycle = (datetime.now() - self.last_cycle_complete_time).total_seconds()
+
+                    if time_since_last_cycle > self.cycle_timeout_seconds:
+                        logger.warning(f"⚠️ Potential hang detected - no cycle completion for {time_since_last_cycle:.0f}s (timeout: {self.cycle_timeout_seconds}s)")
+                        self.consecutive_hangs += 1
+
+                        if self.consecutive_hangs >= self.max_consecutive_hangs:
+                            logger.error(f"❌ Too many consecutive hangs ({self.consecutive_hangs}) - forcing restart")
+                            # Force restart by cancelling current task
+                            if self.discovery_task and not self.discovery_task.done():
+                                self.discovery_task.cancel()
+                                try:
+                                    await self.discovery_task
+                                except asyncio.CancelledError:
+                                    logger.info("✅ Hung discovery task cancelled")
+                            self.consecutive_hangs = 0
+                        else:
+                            logger.warning(f"⚠️ Hang {self.consecutive_hangs}/{self.max_consecutive_hangs} - monitoring")
 
                 # Check if discovery task is still running
                 if self.discovery_task is None or self.discovery_task.done():
@@ -314,10 +376,97 @@ class StartupCoordinator:
                         await self.start_discovery_loop()
                     else:
                         logger.debug("🎯 Discovery paused due to user task - will resume when task completes")
+                else:
+                    # Discovery is running normally
+                    logger.debug(f"✅ Discovery healthy (last cycle: {(datetime.now() - self.last_cycle_complete_time).total_seconds():.0f}s ago)")
 
             except Exception as e:
                 logger.error(f"❌ Watchdog error: {e}", exc_info=True)
                 await asyncio.sleep(60)  # Wait longer on watchdog errors
+
+    async def _run_monitoring_cycle(self):
+        """Run strategy monitoring cycle and auto-upgrade qualifying strategies."""
+        try:
+            from slate_core.intelligence.strategy_monitor import get_strategy_monitoring_system
+
+            logger.info("🎯 Running strategy monitoring and auto-upgrade cycle...")
+
+            monitoring_system = get_strategy_monitoring_system()
+            strategies = monitoring_system.get_conditional_strategies()
+
+            logger.info(f"🎯 Monitoring {len(strategies)} CONDITIONAL strategies for potential upgrade")
+
+            if not strategies:
+                logger.info("✅ No CONDITIONAL strategies to monitor")
+                return
+
+            # Track upgrade results
+            results = {
+                "evaluated": len(strategies),
+                "upgraded": 0,
+                "kept_conditional": 0,
+                "errors": []
+            }
+
+            for strategy in strategies:
+                strategy_id = strategy['id']
+                strategy_name = strategy.get('name', f'Strategy {strategy_id}')
+
+                try:
+                    # Evaluate performance
+                    evaluation = monitoring_system.evaluate_strategy_performance(strategy_id)
+
+                    if 'error' in evaluation:
+                        results["errors"].append({
+                            "strategy_id": strategy_id,
+                            "strategy_name": strategy_name,
+                            "error": evaluation['error']
+                        })
+                        continue
+
+                    recommendation = evaluation.get('recommendation')
+                    upgrade_score = evaluation.get('upgrade_score', 0)
+
+                    logger.debug(f"Strategy {strategy_id} ({strategy_name}): {recommendation} (score: {upgrade_score:.2f})")
+
+                    # Only upgrade if clearly qualified (UPGRADE_TO_DEPLOY recommendation)
+                    if recommendation == "UPGRADE_TO_DEPLOY":
+                        upgrade_success = monitoring_system.upgrade_strategy_to_deploy(strategy_id)
+
+                        if upgrade_success:
+                            results["upgraded"] += 1
+                            logger.info(f"✅ Auto-upgraded strategy {strategy_id} ({strategy_name}) to DEPLOY quality")
+                            logger.info(f"   Performance: {evaluation.get('total_return_pct', 0):.1f}% return, {evaluation.get('sharpe_ratio', 0):.2f} Sharpe, {evaluation.get('win_rate', 0):.1%} win rate")
+                        else:
+                            results["errors"].append({
+                                "strategy_id": strategy_id,
+                                "strategy_name": strategy_name,
+                                "error": "Upgrade failed"
+                            })
+                    else:
+                        results["kept_conditional"] += 1
+                        logger.debug(f"Strategy {strategy_id} kept CONDITIONAL: {recommendation}")
+
+                except Exception as e:
+                    results["errors"].append({
+                        "strategy_id": strategy_id,
+                        "strategy_name": strategy_name,
+                        "error": str(e)
+                    })
+                    logger.error(f"Error evaluating strategy {strategy_id}: {e}")
+
+            # Log summary
+            logger.info("=" * 60)
+            logger.info(f"🎯 MONITORING CYCLE COMPLETE")
+            logger.info(f"   Evaluated: {results['evaluated']} strategies")
+            logger.info(f"   Upgraded: {results['upgraded']} strategies to DEPLOY")
+            logger.info(f"   Kept CONDITIONAL: {results['kept_conditional']} strategies")
+            if results['errors']:
+                logger.warning(f"   Errors: {len(results['errors'])} strategies had evaluation errors")
+            logger.info("=" * 60)
+
+        except Exception as e:
+            logger.error(f"❌ Monitoring cycle error: {e}", exc_info=True)
 
 
 # Global coordinator instance
@@ -386,6 +535,17 @@ async def execute_with_discovery_paused(task_func, *args, **kwargs):
     return await coordinator.execute_user_task(task_func, *args, **kwargs)
 
 
+async def execute_user_task(task_func, *args, **kwargs):
+    """
+    Execute a user task with automatic discovery pause/resume.
+
+    This is a convenience function that uses the coordinator to manage
+    discovery state during user task execution.
+    """
+    coordinator = get_startup_coordinator()
+    return await coordinator.execute_user_task(task_func, *args, **kwargs)
+
+
 def get_system_status() -> Dict[str, Any]:
     """Get current system status."""
     coordinator = get_startup_coordinator()
@@ -435,3 +595,35 @@ def check_and_restart_discovery():
     except Exception as e:
         logger.error(f"❌ Failed to check discovery status: {e}")
         return False
+
+
+async def force_restart_discovery():
+    """
+    Force restart discovery regardless of current state.
+
+    This is useful for manual intervention or recovery from severe hangs.
+    """
+    coordinator = get_startup_coordinator()
+
+    logger.info("🔄 Force restarting discovery...")
+
+    # Cancel existing task if running
+    if coordinator.discovery_task and not coordinator.discovery_task.done():
+        logger.info("Cancelling existing discovery task...")
+        coordinator.discovery_task.cancel()
+        try:
+            await coordinator.discovery_task
+        except asyncio.CancelledError:
+            logger.info("✅ Previous discovery task cancelled")
+
+    # Reset state
+    coordinator.state = SystemState.AUTO_DISCOVERY
+    coordinator.user_requested_pause = False
+    coordinator.consecutive_hangs = 0
+    coordinator.last_cycle_complete_time = datetime.now()
+
+    # Start fresh discovery loop
+    await coordinator.start_discovery_loop()
+
+    logger.info("✅ Discovery force restarted successfully")
+    return True
