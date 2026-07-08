@@ -1,0 +1,22 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rust-trend-optuna"
+version = "0.1.0"
+description = "Python Optuna orchestration for the Rust Trend WFO engine"
+requires-python = ">=3.11"
+dependencies = [
+  "optuna>=4.0,<5.0",
+  "numpy>=1.26",
+  "pandas>=2.0",
+]
+
+[project.scripts]
+rust-trend-optuna = "rust_trend_optuna.runner:main"
+
+[tool.maturin]
+features = ["python-module"]
+python-source = "python"
+module-name = "rust_trend_optuna._rust"

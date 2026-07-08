@@ -830,6 +830,226 @@ class FeedbackLearningSystem:
         logger.warning("⚠️  Learning system reset")
 
 
+class EnhancedFeedbackLearning:
+    """
+    Enhanced feedback learning system incorporating swarm intelligence.
+
+    This class extends the existing feedback learning system to incorporate:
+    1. Swarm collective intelligence learning
+    2. Pheromone signal learning
+    3. Multi-source feedback integration (closed-loop + swarm)
+
+    Following the principle: Learn from ALL sources of intelligence.
+    """
+
+    def __init__(self):
+        """Initialize enhanced feedback learning system."""
+        # Existing feedback learning system
+        self.feedback_system = FeedbackLearningSystem()
+
+        # Swarm-specific learning
+        self.swarm_learning_history = []
+        self.pheromone_effectiveness = {}
+        self.collective_intelligence_patterns = []
+
+        # Integration statistics
+        self.learning_sources_count = {
+            'closed_loop': 0,
+            'swarm': 0,
+            'combined': 0
+        }
+
+        logger.info("🧠 Enhanced feedback learning system initialized with swarm integration")
+
+    def learn_from_validation_results(self, validation_results: List[Any],
+                                     swarm_results: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Learn from both closed-loop and swarm validation results.
+
+        Args:
+            validation_results: List of validation results from both systems
+            swarm_results: Optional swarm collective intelligence results
+
+        Returns:
+            Learning summary incorporating all intelligence sources
+        """
+        logger.info("📚 Starting enhanced feedback learning (Closed-Loop + Swarm)")
+
+        # 1. Existing closed-loop learning
+        try:
+            # Convert validation results to format expected by existing system
+            closed_loop_results = [self._convert_validation_result(r) for r in validation_results]
+
+            closed_loop_learning = self.feedback_system.learn_from_validation_cycle(
+                closed_loop_results,
+                []  # Strategy hypotheses would be passed separately if available
+            )
+
+            self.learning_sources_count['closed_loop'] += 1
+            logger.info(f"✅ Closed-loop learning: {closed_loop_learning['patterns_extracted']} patterns")
+
+        except Exception as e:
+            logger.warning(f"Closed-loop learning failed (non-critical): {e}")
+            closed_loop_learning = {'patterns_extracted': 0, 'efficiency': 0.0}
+
+        # 2. Swarm intelligence learning
+        swarm_learning = {'patterns_extracted': 0, 'efficiency': 0.0}
+        if swarm_results and swarm_results.get('status') == 'success':
+            try:
+                swarm_learning = self._learn_from_swarm_intelligence(swarm_results)
+                self.learning_sources_count['swarm'] += 1
+                logger.info(f"✅ Swarm learning: {swarm_learning['patterns_extracted']} patterns")
+            except Exception as e:
+                logger.warning(f"Swarm learning failed (non-critical): {e}")
+
+        # 3. Combined intelligence synthesis
+        combined_learning = self._synthesize_combined_intelligence(
+            closed_loop_learning,
+            swarm_learning,
+            validation_results
+        )
+
+        self.learning_sources_count['combined'] += 1
+
+        # 4. Update collective intelligence patterns
+        self._update_collective_intelligence(validation_results, swarm_results)
+
+        learning_summary = {
+            'status': 'success',
+            'learning_sources': self.learning_sources_count,
+            'closed_loop_patterns': closed_loop_learning.get('patterns_extracted', 0),
+            'swarm_patterns': swarm_learning.get('patterns_extracted', 0),
+            'combined_patterns': combined_learning.get('patterns_extracted', 0),
+            'overall_efficiency': combined_learning.get('efficiency', 0.0),
+            'collective_intelligence_size': len(self.collective_intelligence_patterns),
+            'timestamp': datetime.now().isoformat()
+        }
+
+        logger.info(f"🎯 Enhanced learning complete: {learning_summary}")
+
+        return learning_summary
+
+    def _learn_from_swarm_intelligence(self, swarm_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Learn from swarm collective intelligence results."""
+        patterns_extracted = 0
+
+        try:
+            # Extract pheromone signals
+            pheromone_signals = swarm_results.get('pheromone_signals', [])
+
+            # Learn from pheromone effectiveness
+            for pheromone in pheromone_signals:
+                pheromone_type = pheromone.get('pheromone_type', 'DISCOVERY')
+                strength = pheromone.get('strength', 0.0)
+
+                # Track pheromone effectiveness over time
+                if pheromone_type not in self.pheromone_effectiveness:
+                    self.pheromone_effectiveness[pheromone_type] = []
+
+                self.pheromone_effectiveness[pheromone_type].append({
+                    'strength': strength,
+                    'timestamp': datetime.now()
+                })
+
+                patterns_extracted += 1
+
+            # Extract collective intelligence patterns
+            collective_intelligence = swarm_results.get('collective_intelligence', {})
+            successful_patterns = collective_intelligence.get('successful_patterns', [])
+
+            for pattern in successful_patterns:
+                self.collective_intelligence_patterns.append({
+                    'pattern': pattern,
+                    'source': 'swarm',
+                    'timestamp': datetime.now()
+                })
+                patterns_extracted += 1
+
+            # Calculate swarm learning efficiency
+            hypotheses_generated = swarm_results.get('hypotheses_generated', 0)
+            strategies_validated = swarm_results.get('strategies_validated', 0)
+
+            efficiency = strategies_validated / hypotheses_generated if hypotheses_generated > 0 else 0.0
+
+            return {
+                'patterns_extracted': patterns_extracted,
+                'efficiency': efficiency,
+                'pheromone_signals_processed': len(pheromone_signals)
+            }
+
+        except Exception as e:
+            logger.warning(f"Error learning from swarm intelligence: {e}")
+            return {'patterns_extracted': 0, 'efficiency': 0.0}
+
+    def _synthesize_combined_intelligence(self, closed_loop_learning: Dict,
+                                         swarm_learning: Dict,
+                                         validation_results: List[Any]) -> Dict[str, Any]:
+        """Synthesize combined intelligence from both sources."""
+        # Combine pattern counts
+        combined_patterns = (
+            closed_loop_learning.get('patterns_extracted', 0) +
+            swarm_learning.get('patterns_extracted', 0)
+        )
+
+        # Calculate combined efficiency (weighted average)
+        closed_loop_weight = 0.7  # Closed-loop is more established
+        swarm_weight = 0.3  # Swarm is newer but valuable
+
+        combined_efficiency = (
+            closed_loop_learning.get('efficiency', 0.0) * closed_loop_weight +
+            swarm_learning.get('efficiency', 0.0) * swarm_weight
+        )
+
+        return {
+            'patterns_extracted': combined_patterns,
+            'efficiency': combined_efficiency,
+            'intelligence_sources': ['closed_loop', 'swarm']
+        }
+
+    def _update_collective_intelligence(self, validation_results: List[Any],
+                                      swarm_results: Dict[str, Any] = None):
+        """Update collective intelligence patterns from both sources."""
+        for validation in validation_results:
+            try:
+                # Extract successful patterns
+                if hasattr(validation, 'is_successful') and validation.is_successful():
+                    self.collective_intelligence_patterns.append({
+                        'pattern': {
+                            'source': 'validation',
+                            'strategy': getattr(validation, 'strategy_name', 'unknown'),
+                            'performance': getattr(validation, 'overall_score', 0.0)
+                        },
+                        'timestamp': datetime.now()
+                    })
+            except Exception as e:
+                logger.debug(f"Error extracting pattern from validation: {e}")
+
+    def _convert_validation_result(self, result: Any) -> Dict[str, Any]:
+        """Convert validation result to format expected by existing system."""
+        if hasattr(result, 'to_dict'):
+            return result.to_dict()
+        elif isinstance(result, dict):
+            return result
+        else:
+            return {'status': 'unknown', 'is_successful': False}
+
+    def get_collective_intelligence_summary(self) -> Dict[str, Any]:
+        """Get summary of collective intelligence patterns."""
+        return {
+            'total_patterns': len(self.collective_intelligence_patterns),
+            'pheromone_effectiveness': self.pheromone_effectiveness,
+            'learning_sources': self.learning_sources_count,
+            'recent_patterns': [
+                p for p in self.collective_intelligence_patterns[-10:]
+            ] if self.collective_intelligence_patterns else []
+        }
+
+
+def get_enhanced_feedback_learning() -> EnhancedFeedbackLearning:
+    """Factory function to get enhanced feedback learning system"""
+    return EnhancedFeedbackLearning()
+
+
 def get_feedback_learning_system() -> FeedbackLearningSystem:
     """Factory function to get feedback learning system"""
     return FeedbackLearningSystem()

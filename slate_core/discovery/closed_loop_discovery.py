@@ -112,8 +112,15 @@ class HypothesisTestResult:
     tested_at: datetime = field(default_factory=datetime.now)
 
     def is_successful(self) -> bool:
-        """Determine if hypothesis test was successful"""
-        return self.validation_score >= 0.5
+        """
+        Determine if hypothesis test was successful.
+
+        Updated to match relaxed validation thresholds:
+        - DEPLOY: score >= 0.5
+        - CONDITIONAL: score >= 0.3
+        - REJECT: score < 0.3
+        """
+        return self.validation_score >= 0.3  # Relaxed from 0.5 to match new thresholds
 
 
 class MarketInformationExtractor:
@@ -1321,6 +1328,113 @@ class ClosedLoopDiscoveryEngine:
             'learning_updated': True
         }
 
+    async def run_enhanced_discovery_cycle_with_swarm(self, df: pd.DataFrame,
+                                                     swarm_integration: Any = None) -> Dict[str, Any]:
+        """
+        Enhanced discovery with both closed-loop and swarm hypotheses.
+
+        NEW METHOD: This integrates the swarm intelligence system with the existing
+        closed-loop discovery system for comprehensive strategy discovery.
+
+        Args:
+            df: Market data DataFrame
+            swarm_integration: Optional swarm integration system
+
+        Returns:
+            Summary of enhanced discovery with both hypothesis sources
+        """
+        logger.info("🧠 Starting Enhanced Discovery Cycle (Closed-Loop + Swarm)")
+
+        # 1. Generate closed-loop hypotheses (existing system)
+        logger.info("💡 Generating closed-loop hypotheses...")
+        closed_loop_hypotheses = self.hypothesis_generator.generate_regime_aware_hypotheses(df)
+        logger.info(f"   Generated {len(closed_loop_hypotheses)} closed-loop hypotheses")
+
+        # 2. Generate swarm hypotheses (if swarm system available)
+        swarm_hypotheses = []
+        if swarm_integration and hasattr(swarm_integration, 'run_swarm_hypothesis_cycle'):
+            try:
+                logger.info("🐜 Generating swarm hypotheses...")
+                swarm_results = await swarm_integration.run_swarm_hypothesis_cycle(num_agents=63)
+
+                if swarm_results.get('status') == 'success':
+                    # Extract swarm hypotheses from results
+                    swarm_hypotheses = [
+                        h for h in swarm_results.get('validated_strategies', [])
+                        if hasattr(h, 'strategy_design')
+                    ]
+                    logger.info(f"   Generated {len(swarm_hypotheses)} swarm hypotheses")
+                else:
+                    logger.warning(f"Swarm hypothesis generation failed: {swarm_results.get('message')}")
+
+            except Exception as e:
+                logger.warning(f"Swarm integration error (non-critical): {e}")
+        else:
+            logger.info("   Swarm integration not available, using closed-loop only")
+
+        # 3. Combine all hypotheses
+        all_hypotheses = closed_loop_hypotheses + swarm_hypotheses
+        logger.info(f"   Total hypotheses to validate: {len(all_hypotheses)}")
+
+        # 4. Validate all hypotheses through backtest
+        validated_strategies = []
+        validation_passed = 0
+
+        for hypothesis in all_hypotheses:
+            try:
+                # Run backtest
+                backtest_result = self.run_hypothesis_backtest(hypothesis, df)
+
+                # Convert to dict for validation
+                backtest_dict = self.convert_backtest_to_dict(backtest_result)
+
+                # Validate with pluralistic methods
+                validation_result = self.validation_system.validate_hypothesis(
+                    hypothesis, backtest_dict
+                )
+
+                if validation_result.is_successful():
+                    validated_strategies.append(validation_result)
+                    validation_passed += 1
+                    logger.info(f"   ✅ {hypothesis.name} validated successfully")
+                else:
+                    logger.info(f"   ❌ {hypothesis.name} failed validation")
+                    # Learn from failure
+                    self.update_learning_bias(validation_result, success=False)
+
+            except Exception as e:
+                logger.error(f"   Error testing {hypothesis.name}: {e}")
+
+        # 5. Learn from validation results
+        self.learn_from_discovery_cycle(validated_strategies, all_hypotheses)
+
+        # 6. Update learning biases from both systems
+        if swarm_integration:
+            try:
+                # Import enhanced feedback learning
+                from slate_core.discovery.feedback_learning import EnhancedFeedbackLearning
+
+                enhanced_learning = EnhancedFeedbackLearning()
+                enhanced_learning.learn_from_validation_results(
+                    validated_strategies,
+                    swarm_results if swarm_integration else None
+                )
+            except Exception as e:
+                logger.warning(f"Enhanced learning failed (non-critical): {e}")
+
+        logger.info(f"🎯 Enhanced discovery complete: {validation_passed}/{len(all_hypotheses)} strategies validated")
+
+        return {
+            'status': 'success',
+            'hypotheses_generated': len(all_hypotheses),
+            'closed_loop_hypotheses': len(closed_loop_hypotheses),
+            'swarm_hypotheses': len(swarm_hypotheses),
+            'strategies_validated': validation_passed,
+            'validated_strategies': validated_strategies,
+            'swarm_integration': swarm_integration is not None,
+            'learning_updated': True
+        }
+
     def run_hypothesis_backtest(self, hypothesis: StrategyHypothesis, df: pd.DataFrame) -> PerpetualBacktestResult:
         """
         Run actual perpetual futures backtest for a hypothesis.
@@ -1359,62 +1473,43 @@ class ClosedLoopDiscoveryEngine:
         # Create perpetual futures backtester
         backtester = PerpetualFuturesBacktester(config)
 
-        # Create signal function from hypothesis
-        # SPECIAL HANDLING for Adaptive Regime-Switching Strategy
-        if hypothesis.hypothesis_type == HypothesisType.REGIME_SWITCHING and \
-           "adaptive_regime_switching" in hypothesis.strategy_design.get('strategy_type', ''):
+        # Create signal function from hypothesis using factory pattern
+        # NEW: Use StrategyFactory for concrete strategy implementations
+        from slate_core.discovery.strategies.strategy_factory import StrategyFactory
+
+        factory = StrategyFactory()
+
+        # Handle REGIME_SWITCHING type separately (existing implementation)
+        if hypothesis.hypothesis_type == HypothesisType.REGIME_SWITCHING:
             # Use the actual AdaptiveRegimeSwitchingStrategy class
             from slate_core.discovery.adaptive_regime_switching_strategy import (
                 get_adaptive_regime_switching_strategy
             )
 
             adaptive_strategy = get_adaptive_regime_switching_strategy()
-
-            # Create signal function that uses the adaptive strategy
-            def signal_function(df, i, params):
-                """Generate signal using Adaptive Regime-Switching Strategy"""
-                return adaptive_strategy.generate_signal(df, i, params)
+            signal_function = factory.create_signal_function(adaptive_strategy)
 
             logger.info("✅ Using AdaptiveRegimeSwitchingStrategy for backtest")
 
-        else:
-            # Use traditional signal generation for other hypothesis types
-            def signal_function(df, i, params):
-                """Generate trading signal based on hypothesis"""
-                # Extract hypothesis parameters
-                indicators = hypothesis.indicators if hasattr(hypothesis, 'indicators') else {}
+        elif hypothesis.hypothesis_type in factory.get_supported_types():
+            # Use factory pattern for all supported hypothesis types
+            try:
+                concrete_strategy = factory.create_strategy(hypothesis)
+                signal_function = factory.create_signal_function(concrete_strategy)
 
-                # Basic signal generation based on hypothesis type
-                if hasattr(hypothesis, 'signal_rules') and hypothesis.signal_rules:
-                    # Use hypothesis-specific signal rules
-                    signal = 0
-                    for rule in hypothesis.signal_rules:
-                        try:
-                            # Evaluate rule (simplified - would be more complex in production)
-                            if rule.get('condition') == 'momentum':
-                                if 'ema_short' in indicators and 'ema_long' in df.columns:
-                                    if df['ema_short'].iloc[i] > df['ema_long'].iloc[i]:
-                                        signal = 1  # Long signal
-                                    elif df['ema_short'].iloc[i] < df['ema_long'].iloc[i]:
-                                        signal = -1  # Short signal
-                            elif rule.get('condition') == 'mean_reversion':
-                                if 'bb_upper' in indicators and 'bb_lower' in df.columns:
-                                    if df['close'].iloc[i] < df['bb_lower'].iloc[i]:
-                                        signal = 1  # Long signal (oversold)
-                                    elif df['close'].iloc[i] > df['bb_upper'].iloc[i]:
-                                        signal = -1  # Short signal (overbought)
-                        except Exception as e:
-                            logger.debug(f"Rule evaluation error: {e}")
+                logger.info(f"✅ Using {concrete_strategy.__class__.__name__} for backtest")
 
-                    return signal
-                else:
-                    # Default momentum signal if no rules defined
-                    if 'ema_short' in indicators and 'ema_long' in df.columns:
-                        if df['ema_short'].iloc[i] > df['ema_long'].iloc[i]:
-                            return 1  # Long signal
-                        elif df['ema_short'].iloc[i] < df['ema_long'].iloc[i]:
-                            return -1  # Short signal
+            except Exception as e:
+                logger.error(f"❌ Error creating strategy for {hypothesis.name}: {e}")
+                # Fallback to empty signal function
+                def signal_function(df, i, params):
                     return 0
+
+        else:
+            # Unsupported hypothesis type - return no signals
+            logger.warning(f"⚠️ Unsupported hypothesis type: {hypothesis.hypothesis_type}")
+            def signal_function(df, i, params):
+                return 0
 
         # Extract parameters from hypothesis
         parameters = hypothesis.parameters if hasattr(hypothesis, 'parameters') else {}

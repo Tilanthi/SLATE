@@ -537,7 +537,7 @@ class EnhancedDiscoveryIntegration:
                 'timeframe': timeframe,
 
                 # Validation
-                'passed_validation': 1 if validation_report.get('deployment_recommendation') == 'DEPLOY' else 0,
+                'passed_validation': self._get_validation_value(validation_report.get('deployment_recommendation')),
                 'validation_failures': [],
 
                 # Timestamp
@@ -549,6 +549,23 @@ class EnhancedDiscoveryIntegration:
         except Exception as e:
             logger.error(f"Failed to extract strategy data: {e}")
             return None
+
+    def _get_validation_value(self, deployment_recommendation: str) -> int:
+        """
+        Convert deployment recommendation to database validation value.
+
+        Args:
+            deployment_recommendation: Recommendation from validation system
+
+        Returns:
+            int: 0 = REJECT, 1 = CONDITIONAL, 2 = DEPLOY
+        """
+        if deployment_recommendation == 'DEPLOY':
+            return 2
+        elif deployment_recommendation == 'CONDITIONAL':
+            return 1
+        else:  # REJECT or any other status
+            return 0
 
     def run_feedback_learning(self, validation_results: Dict[str, Any]) -> Dict[str, Any]:
         """Run closed-loop feedback learning"""

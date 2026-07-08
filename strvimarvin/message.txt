@@ -1,0 +1,206 @@
+• Here’s a stronger handover message you can give another LLM:
+
+  You are helping run/reproduce a WFO backtest package named `rust_trend_tilanthi`.
+
+  Do not assume a fixed path or machine. First locate the project root: it is the folder containing:
+  - Cargo.toml
+  - pyproject.toml
+  - rust-toolchain.toml
+  - src/
+  - python/rust_trend_optuna/
+  - data/binance_um_1m/
+  - reference_results/
+  - repro/compare_rollup_summary.py
+
+  Run all commands from that project root.
+
+  Environment requirements:
+  - Rust toolchain 1.89. The repo includes `rust-toolchain.toml`.
+  - Python 3.11 or newer.
+  - `uv` installed.
+  - A working C/build toolchain:
+    - macOS: Xcode Command Line Tools.
+    - Linux: build-essential / gcc / clang equivalent.
+  - Enough disk for Rust build output and WFO artifacts. The repo is ~359 MB, but `target/` can add several GB.
+  - First setup may need internet to fetch Rust/Python dependencies unless caches are already populated.
+
+  Initial setup:
+  ```sh
+  uv sync
+  uv run --with maturin maturin develop --release
+  cargo build --release
+
+  Verify the packaged market data:
+
+  cargo run --release -- data verify \
+    --preset binance-um-top7-2025 \
+    --start 2024-01-01 \
+    --end 2026-01-01
+
+  Expected data verification:
+
+  - 7 symbols
+  - BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, SUIUSDT
+  - total rows: 7,368,480
+  - no synthetic/API backfill rows expected in the packaged data
+
+  Quick smoke test before running full WFO:
+
+  cargo run --release -- wfo daily-offset-ensemble \
+    --name smoke-pit \
+    --strategy-set frama-5m-confirm \
+    --symbols BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,DOGEUSDT,SUIUSDT \
+    --offsets 0 \
+    --trials 5 \
+    --seed 42 \
+    --min-profit-factor 1.10 \
+    --candidate-min-profit-factor 1.10 \
+    --tpe-consensus-min-passing-windows 4 \
+    --account-balance 10000 \
+    --is-weeks 2 \
+    --oos-weeks 1 \
+    --step-weeks 1 \
+    --gap-weeks 0 \
+    --fold-limit 1 \
+    --start-date 2024-01-01 \
+    --end-date 2025-01-01
+
+  The smoke test should create a folder under runs/wfo/ and prove Rust, Python, Optuna, the local Rust/Python extension, and data loading all work.
+
+  How the real WFO is supposed to work:
+
+  - Strategy set: frama-5m-confirm
+  - Symbols: BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, SUIUSDT
+  - Seven stacked daily-offset accounts: offsets 0,1,2,3,4,5,6
+  - Starting capital: $10,000 per offset, $70,000 stacked
+  - Optimizer mode: point_in_time_fold_local
+  - Each OOS fold gets a fresh Optuna study.
+  - Each fold optimizer may only use that fold’s IS/training data.
+  - Objective feedback must never aggregate future folds.
+  - After fold-local selection, selected params are run on that fold’s OOS window.
+  - Missing/failed selections stay unselected. Do not backfill with fallback candidates.
+  - IS/OOS structure: 2 weeks IS, 1 week OOS, 1 week step, 0 gap.
+  - TPE trials: 500
+  - Seed: 42
+  - PF gates: 1.10
+  - IS consensus: 4/7
+  - Final artifacts land under runs/wfo/*_daily_offset/.
+
+  Run 2024:
+
+  cargo run --release -- wfo daily-offset-ensemble \
+    --name frama-5m-7offset-stacked-consensus-pit-2024-immediate \
+    --strategy-set frama-5m-confirm \
+    --symbols BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,DOGEUSDT,SUIUSDT \
+    --offsets 0,1,2,3,4,5,6 \
+    --trials 500 \
+    --seed 42 \
+    --min-profit-factor 1.10 \
+    --candidate-min-profit-factor 1.10 \
+    --tpe-consensus-min-passing-windows 4 \
+    --account-balance 10000 \
+    --is-weeks 2 \
+    --oos-weeks 1 \
+    --step-weeks 1 \
+    --gap-weeks 0 \
+    --start-date 2024-01-01 \
+    --end-date 2025-01-01
+
+  Run 2025:
+
+  cargo run --release -- wfo daily-offset-ensemble \
+    --name frama-5m-7offset-stacked-consensus-pit-full \
+    --strategy-set frama-5m-confirm \
+    --symbols BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,DOGEUSDT,SUIUSDT \
+    --offsets 0,1,2,3,4,5,6 \
+    --trials 500 \
+    --seed 42 \
+    --min-profit-factor 1.10 \
+    --candidate-min-profit-factor 1.10 \
+    --tpe-consensus-min-passing-windows 4 \
+    --account-balance 10000 \
+    --is-weeks 2 \
+    --oos-weeks 1 \
+    --step-weeks 1 \
+    --gap-weeks 0 \
+    --start-date 2025-01-01 \
+    --end-date 2026-01-01
+
+  Compare new results to references:
+
+  python3 repro/compare_rollup_summary.py \
+    reference_results/2024_immediate_touch/rollup_summary.json \
+    runs/wfo/<new_2024_daily_offset_dir>/rollup_summary.json
+
+  python3 repro/compare_rollup_summary.py \
+    reference_results/2025_full/rollup_summary.json \
+    runs/wfo/<new_2025_daily_offset_dir>/rollup_summary.json
+
+  Expected 2024 reference:
+
+  - final balance: about $158,659.00
+  - total OOS PnL: about $88,659.00
+  - net return: about 126.66%
+  - max DD: about 3.86%
+  - PF: about 1.220
+  - trades: 71,449
+  - provenance: PASS point-in-time optimizer boundary
+
+  Expected 2025 reference:
+
+  - final balance: about $183,024.63
+  - total OOS PnL: about $113,024.63
+  - net return: about 161.46%
+  - max DD: about 4.19%
+  - PF: about 1.270
+  - trades: 80,011
+  - provenance: PASS point-in-time optimizer boundary
+
+  Important correctness constraints:
+
+  - Do not change optimizer mode to retrospective/global.
+  - Do not treat global-TPE artifacts as clean OOS validation.
+  - Do not fabricate missing symbol/fold selections.
+  - Do not backfill rejected/failed candidates into primary OOS artifacts.
+  - Validity depends on fold-local point-in-time optimization and selected-fold-only OOS stitching.
+
+  Troubleshooting:
+
+  - If Python import of rust_trend_optuna._rust fails, rerun:
+    uv run --with maturin maturin develop --release
+
+  - If generate_institutional_quant_report.py fails due to missing pandas/numpy, rerun:
+    uv sync
+
+  - If data verify fails, inspect data/binance_um_1m/v1/_meta/coverage.json.
+  - Full 500-trial WFOs can take a while. Use the smoke test first to verify the environment.
+
+
+
+› what is this point about global tpe artifacts?
+
+
+• That line is about an earlier, invalid-for-validation run style.
+
+  There were two concepts:
+
+  retrospective_global_research_only
+
+  - One Optuna/TPE process could learn from a broader/global set of folds.
+  - That is useful for parameter-family research.
+  - But it is not clean live-style OOS validation, because optimizer state can be influenced by future folds relative to an earlier fold.
+  - Any artifacts from that mode should be treated as research-only.
+
+  point_in_time_fold_local
+
+  - This is the repaired mode.
+  - Every fold gets a fresh Optuna study.
+  - The optimizer only sees that fold’s IS/training window.
+  - Then the selected candidate is tested on that fold’s OOS window.
+  - This is the mode used for the packaged 2024/2025 results.
+
+  So the warning means: if the other LLM finds older run folders or code paths labeled global/retrospective, don’t use them as proof of clean OOS performance. For this handoff, they should run only:
+
+  --optimizer-mode point_in_time_fold_local
+
+  or rely on the default, which should be that mode.

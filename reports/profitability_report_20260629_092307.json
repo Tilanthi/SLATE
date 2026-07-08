@@ -1,0 +1,104 @@
+{
+  "generated_at": "2026-06-29T09:23:07.744615",
+  "analysis_period_days": 54,
+  "overall_metrics": "ProfitabilityMetrics(total_strategies=53209, profitable_strategies=1859, unprofitable_strategies=51350, success_rate=3.4937698509650623, avg_profit_per_strategy=-1817.2492247592209, avg_trades_profitable=79.21678321678321, avg_trades_unprofitable=1814.466893865628, avg_drawdown_profitable=0.01027482070390033, avg_drawdown_unprofitable=0.19145120634687632, avg_win_rate_profitable=0.5101858335249572, avg_win_rate_unprofitable=0.39665712399772035, avg_fees_profitable=37.395553162752535, avg_fees_unprofitable=652.3432493008012)",
+  "timeframe_analysis": [
+    "TimeframeAnalysis(timeframe='1d', total_count=5887, profitable_count=1813, success_rate=30.79667063020214, avg_profit=-710.2247900837974, avg_trades=631.4508238491592, avg_fees=274.9730274314799, avg_drawdown=0.08010481427080751, avg_win_rate=0.4486363027269053)",
+    "TimeframeAnalysis(timeframe='12h', total_count=5727, profitable_count=34, success_rate=0.5936790640824167, avg_profit=-873.7079890683056, avg_trades=701.8559455212153, avg_fees=307.73043996548245, avg_drawdown=0.09078424898646795, avg_win_rate=0.41265495151996107)",
+    "TimeframeAnalysis(timeframe='8h', total_count=5751, profitable_count=12, success_rate=0.20865936358894105, avg_profit=-919.057723522393, avg_trades=778.5870283428969, avg_fees=342.55985193329525, avg_drawdown=0.09512075167021662, avg_win_rate=0.42192873576671797)",
+    "TimeframeAnalysis(timeframe='4h', total_count=5757, profitable_count=0, success_rate=0.0, avg_profit=-1095.4090910032232, avg_trades=882.8068438422789, avg_fees=387.67465733275816, avg_drawdown=0.11265296900779802, avg_win_rate=0.42057984149452643)",
+    "TimeframeAnalysis(timeframe='1h', total_count=5904, profitable_count=0, success_rate=0.0, avg_profit=-1573.3939727218935, avg_trades=1258.3777100271002, avg_fees=544.2743705171597, avg_drawdown=0.15932890315740303, avg_win_rate=0.3996614933987902)",
+    "TimeframeAnalysis(timeframe='30m', total_count=5934, profitable_count=0, success_rate=0.0, avg_profit=-1711.853328193633, avg_trades=1451.3208628244017, avg_fees=626.8774811634551, avg_drawdown=0.17371110228583558, avg_win_rate=0.39898603142102024)",
+    "TimeframeAnalysis(timeframe='15m', total_count=5991, profitable_count=0, success_rate=0.0, avg_profit=-1915.8218314435649, avg_trades=1660.0996494742112, avg_fees=704.9404628924358, avg_drawdown=0.19501912729178106, avg_win_rate=0.3927856334171069)",
+    "TimeframeAnalysis(timeframe='5m', total_count=5955, profitable_count=0, success_rate=0.0, avg_profit=-2523.053995825787, avg_trades=2121.073047858942, avg_fees=845.1088396136607, avg_drawdown=0.2550023875509889, avg_win_rate=0.3798875310428385)",
+    "TimeframeAnalysis(timeframe='1m', total_count=5964, profitable_count=0, success_rate=0.0, avg_profit=-4932.020958864021, avg_trades=6200.508215962442, avg_fees=1611.5526209696116, avg_drawdown=0.4943874022753417, avg_win_rate=0.33286904029935144)"
+  ],
+  "strategy_type_analysis": [
+    "StrategyTypeAnalysis(strategy_type='momentum_mean_reversion', total_count=7586, profitable_count=294, success_rate=3.8755602425520697, avg_profit=-1853.581628109275)",
+    "StrategyTypeAnalysis(strategy_type='volatility_regime', total_count=1953, profitable_count=14, success_rate=0.7168458781362007, avg_profit=-1772.1526869058885)"
+  ],
+  "frequency_impact": {
+    "low_frequency": {
+      "total_count": 3120,
+      "profitable_count": 1813,
+      "success_rate": 58.108974358974365,
+      "avg_profit": 11.802788349331099,
+      "avg_fees": 35.6994953826175,
+      "avg_trades": 75.91121794871795
+    },
+    "medium_frequency": {
+      "total_count": 6246,
+      "profitable_count": 46,
+      "success_rate": 0.7364713416586616,
+      "avg_profit": -360.99465314234675,
+      "avg_fees": 136.30642510204686,
+      "avg_trades": 295.36007044508483
+    },
+    "high_frequency": {
+      "total_count": 2925,
+      "profitable_count": 0,
+      "success_rate": 0.0,
+      "avg_profit": -716.0859085521256,
+      "avg_fees": 247.50416289434835,
+      "avg_trades": 548.3001709401709
+    },
+    "excessive_frequency": {
+      "total_count": 40918,
+      "profitable_count": 0,
+      "success_rate": 0.0,
+      "avg_profit": -2257.723124635154,
+      "avg_fees": 779.1349076611413,
+      "avg_trades": 2190.5933574466003
+    }
+  },
+  "drawdown_impact": {
+    "tight_control": {
+      "total_count": 53209,
+      "profitable_count": 1859,
+      "success_rate": 3.4937698509650623,
+      "avg_profit": -1817.2492247592209,
+      "avg_drawdown": 0.18512132040821386
+    }
+  },
+  "cost_impact": {
+    "low_costs": {
+      "total_count": 3120,
+      "profitable_count": 1813,
+      "success_rate": 58.108974358974365,
+      "avg_profit": 11.802788349331099,
+      "avg_fees": 35.6994953826175,
+      "avg_trades": 75.91121794871795
+    },
+    "moderate_costs": {
+      "total_count": 6128,
+      "profitable_count": 46,
+      "success_rate": 0.7506527415143603,
+      "avg_profit": -355.9399396365388,
+      "avg_fees": 134.63510419994415,
+      "avg_trades": 291.6054177545692
+    },
+    "high_costs": {
+      "total_count": 3044,
+      "profitable_count": 0,
+      "success_rate": 0.0,
+      "avg_profit": -712.7780141586132,
+      "avg_fees": 246.64027782473102,
+      "avg_trades": 546.2628120893561
+    },
+    "excessive_costs": {
+      "total_count": 40917,
+      "profitable_count": 0,
+      "success_rate": 0.0,
+      "avg_profit": -2257.73987522721,
+      "avg_fees": 779.1417952219417,
+      "avg_trades": 2190.617933866119
+    }
+  },
+  "recommendations": [
+    "\u2713 Daily timeframes dominate profitability: 97.5% of profitable strategies",
+    "\u274c Excessive trading frequency (>1000 trades) has 0.0% success rate - REJECT",
+    "\u274c Excessive transaction costs (>$500) has 0.0% success rate - REJECT",
+    "\u26a0\ufe0f Low overall success rate (3.5%) - consider tightening validation criteria"
+  ],
+  "generation_time_seconds": 0.276615
+}

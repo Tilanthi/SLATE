@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Point-In-Time WFO Portfolio Equity</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #070d0c;
+  --panel: #0d1715;
+  --panel2: #101d1a;
+  --line: #243b36;
+  --text: #e7f1ed;
+  --muted: #91a39d;
+  --accent: #62d99f;
+  --warn: #f4c35d;
+  --bad: #ff7a75;
+  --blue: #7ba9ff;
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 12px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+.shell {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+}
+header {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: 0; }
+.sub { margin-top: 3px; color: var(--muted); }
+.summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(90px, auto));
+  gap: 6px;
+  justify-content: end;
+}
+.metric {
+  border: 1px solid rgba(46, 74, 67, 0.9);
+  border-radius: 6px;
+  background: var(--panel2);
+  padding: 6px 8px;
+  min-width: 96px;
+}
+.metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.metric b {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+main {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(220px, 0.42fr);
+  gap: 8px;
+}
+.chart-panel {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #081110;
+  padding: 8px;
+}
+.chart-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  align-items: baseline;
+}
+.chart-title strong {
+  color: var(--text);
+  font-size: 13px;
+}
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 1px solid rgba(36, 59, 54, 0.75);
+  border-radius: 6px;
+  background: #050b0a;
+}
+footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+  gap: 8px;
+  min-height: 118px;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(92px, 1fr));
+  gap: 6px;
+}
+.table-wrap {
+  min-height: 0;
+  max-height: 150px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+table { width: 100%; border-collapse: collapse; }
+th, td {
+  padding: 6px 7px;
+  border-bottom: 1px solid rgba(36, 59, 54, 0.75);
+  text-align: left;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #12211e;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.num { text-align: right; }
+.pos { color: var(--accent); }
+.neg { color: var(--bad); }
+.warn { color: var(--warn); }
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+}
+.swatch {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  margin-right: 5px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+@media (max-width: 1100px) {
+  body { overflow: auto; }
+  .shell { height: auto; min-height: 100vh; }
+  header { grid-template-columns: 1fr; }
+  .summary { justify-content: stretch; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  main { grid-template-rows: 70vh 320px; }
+  footer { grid-template-columns: 1fr; }
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div>
+      <h1>Point-in-time 7-offset WFO portfolio equity</h1>
+      <div id="subtitle" class="sub">Loading completed rollup artifacts...</div>
+    </div>
+    <div class="summary">
+      <div class="metric"><span>Final</span><b id="finalBalance">-</b></div>
+      <div class="metric"><span>PnL</span><b id="totalPnl">-</b></div>
+      <div class="metric"><span>Return</span><b id="returnPct">-</b></div>
+      <div class="metric"><span>Max DD</span><b id="maxDd">-</b></div>
+      <div class="metric"><span>PF</span><b id="profitFactor">-</b></div>
+      <div class="metric"><span>Gate</span><b id="gate">-</b></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="chart-panel">
+      <div class="chart-title">
+        <strong>Combined stacked equity</strong>
+        <span id="combinedRange">-</span>
+      </div>
+      <canvas id="combinedChart"></canvas>
+    </section>
+    <section class="chart-panel">
+      <div class="chart-title">
+        <strong>Individual offset account equity</strong>
+        <span class="legend" id="offsetLegend"></span>
+      </div>
+      <canvas id="offsetChart"></canvas>
+    </section>
+  </main>
+
+  <footer>
+    <div class="cards">
+      <div class="metric"><span>Trades</span><b id="trades">-</b></div>
+      <div class="metric"><span>No-Entry Days</span><b id="noEntry">-</b></div>
+      <div class="metric"><span>Max No-Entry</span><b id="maxNoEntry">-</b></div>
+      <div class="metric"><span>Longest Stag.</span><b id="longestStag">-</b></div>
+      <div class="metric"><span>Stag. &gt; 7d</span><b id="stagCount">-</b></div>
+      <div class="metric"><span>Return/DD</span><b id="returnDd">-</b></div>
+      <div class="metric"><span>Exposure</span><b id="exposure">-</b></div>
+      <div class="metric"><span>Provenance</span><b id="provenance">-</b></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th class="num">#</th><th>Start</th><th>End</th><th class="num">Days</th><th>Recovered</th><th class="num">Peak</th><th class="num">Trough</th><th class="num">DD</th></tr>
+        </thead>
+        <tbody id="stagnationRows"><tr><td colspan="8">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </footer>
+</div>
+
+<script>
+const OFFSET_COLORS = ["#62d99f", "#7ba9ff", "#efc75e", "#ff8278", "#b791ff", "#55d6d2", "#f28ac0"];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const PLOT_INTERVAL_MS = 60 * 60 * 1000;
+const STAGNATION_THRESHOLD_DAYS = 7;
+const STARTING_BALANCE = 70000;
+
+function parseCsv(text) {
+  const rows = text.trim().split(/\r?\n/).filter(Boolean);
+  if (!rows.length) return [];
+  const headers = rows.shift().split(",");
+  return rows.map(line => {
+    const values = line.split(",");
+    const row = {};
+    headers.forEach((header, index) => row[header] = values[index]);
+    return row;
+  });
+}
+
+async function text(path) {
+  const response = await fetch(path + "?v=" + Date.now(), { cache: "no-store" });
+  if (!response.ok) throw new Error(`${path} ${response.status}`);
+  return response.text();
+}
+
+async function json(path) {
+  const response = await fetch(path + "?v=" + Date.now(), { cache: "no-store" });
+  if (!response.ok) throw new Error(`${path} ${response.status}`);
+  return response.json();
+}
+
+function toPoint(row, fallbackBalance = 0) {
+  const timestamp = Number(row.timestamp_ms);
+  const balance = Number(row.balance);
+  const pnl = Number(row.pnl);
+  return {
+    t: timestamp,
+    balance: Number.isFinite(balance) ? balance : fallbackBalance + (Number.isFinite(pnl) ? pnl : 0),
+    pnl: Number.isFinite(pnl) ? pnl : balance - fallbackBalance,
+    drawdown: Number(row.drawdown || 0)
+  };
+}
+
+function money(value, digits = 0) {
+  return "$" + Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function pct(value, digits = 2) {
+  return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits }) + "%";
+}
+
+function date(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function monthLabel(ms) {
+  const d = new Date(ms);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function resize(canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+  canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  return { ctx, width: rect.width, height: rect.height };
+}
+
+function range(values, padding = 0.07) {
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return [0, 1];
+  if (Math.abs(max - min) < 1e-9) {
+    min -= 1;
+    max += 1;
+  }
+  const extra = (max - min) * padding;
+  return [min - extra, max + extra];
+}
+
+function xFor(t, xMin, xMax, plot) {
+  return plot.x + (t - xMin) / Math.max(1, xMax - xMin) * plot.w;
+}
+
+function yFor(value, yMin, yMax, plot) {
+  return plot.y + plot.h - (value - yMin) / Math.max(1e-9, yMax - yMin) * plot.h;
+}
+
+function drawAxes(ctx, plot, xMin, xMax, yMin, yMax) {
+  ctx.strokeStyle = "#20332f";
+  ctx.lineWidth = 1;
+  ctx.fillStyle = "#91a39d";
+  ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
+
+  for (let i = 0; i <= 4; i++) {
+    const y = plot.y + plot.h * i / 4;
+    ctx.beginPath();
+    ctx.moveTo(plot.x, y);
+    ctx.lineTo(plot.x + plot.w, y);
+    ctx.stroke();
+    const value = yMax - (yMax - yMin) * i / 4;
+    ctx.fillText(money(value), 8, y - 4);
+  }
+
+  const ticks = Math.max(5, Math.min(10, Math.floor(plot.w / 130)));
+  ctx.textAlign = "center";
+  for (let i = 0; i <= ticks; i++) {
+    const t = xMin + (xMax - xMin) * i / ticks;
+    const x = plot.x + plot.w * i / ticks;
+    ctx.beginPath();
+    ctx.moveTo(x, plot.y);
+    ctx.lineTo(x, plot.y + plot.h + 4);
+    ctx.stroke();
+    ctx.fillText(monthLabel(t), x, plot.y + plot.h + 18);
+  }
+  ctx.textAlign = "left";
+}
+
+function drawLine(ctx, series, color, xMin, xMax, yMin, yMax, plot, width = 1.6) {
+  if (series.length < 2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  series.forEach((point, index) => {
+    const x = xFor(point.t, xMin, xMax, plot);
+    const y = yFor(point.balance, yMin, yMax, plot);
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+function drawCombined(series, stagnations) {
+  const { ctx, width, height } = resize(document.getElementById("combinedChart"));
+  ctx.clearRect(0, 0, width, height);
+  const plot = { x: 70, y: 18, w: width - 88, h: height - 48 };
+  const xMin = series[0].t;
+  const xMax = series[series.length - 1].t;
+  const [yMin, yMax] = range(series.map(point => point.balance));
+  drawAxes(ctx, plot, xMin, xMax, yMin, yMax);
+
+  for (const period of stagnations) {
+    const x1 = xFor(period.start, xMin, xMax, plot);
+    const x2 = xFor(period.end, xMin, xMax, plot);
+    ctx.fillStyle = period.recovered ? "rgba(244, 195, 93, 0.16)" : "rgba(255, 122, 117, 0.18)";
+    ctx.fillRect(x1, plot.y, Math.max(1, x2 - x1), plot.h);
+    if (x2 - x1 > 46) {
+      ctx.fillStyle = period.recovered ? "#f4c35d" : "#ff9b96";
+      ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.fillText(period.days.toFixed(1) + "d", x1 + 5, plot.y + 14);
+    }
+  }
+
+  drawLine(ctx, series, "#62d99f", xMin, xMax, yMin, yMax, plot, 2.2);
+}
+
+function drawOffsets(offsets) {
+  const { ctx, width, height } = resize(document.getElementById("offsetChart"));
+  ctx.clearRect(0, 0, width, height);
+  const plot = { x: 70, y: 18, w: width - 88, h: height - 48 };
+  const all = offsets.flatMap(offset => offset.points);
+  const xMin = Math.min(...all.map(point => point.t));
+  const xMax = Math.max(...all.map(point => point.t));
+  const [yMin, yMax] = range(all.map(point => point.balance));
+  drawAxes(ctx, plot, xMin, xMax, yMin, yMax);
+  offsets.forEach(offset => drawLine(ctx, offset.points, offset.color, xMin, xMax, yMin, yMax, plot, 1.45));
+}
+
+function resampleSeries(series, xMin, xMax, intervalMs) {
+  const out = [];
+  let index = 0;
+  let current = series[0];
+  for (let t = xMin; t <= xMax; t += intervalMs) {
+    while (index < series.length && series[index].t <= t) {
+      current = series[index];
+      index += 1;
+    }
+    out.push({ t, balance: current.balance, pnl: current.pnl, drawdown: current.drawdown });
+  }
+  const last = series[series.length - 1];
+  if (out.length && out[out.length - 1].t !== xMax) {
+    out.push({ t: xMax, balance: last.balance, pnl: last.pnl, drawdown: last.drawdown });
+  }
+  return out;
+}
+
+function combineOffsetSeries(offsets) {
+  if (!offsets.length || !offsets[0].points.length) return [];
+  return offsets[0].points.map((point, index) => {
+    let balance = 0;
+    let pnl = 0;
+    for (const offset of offsets) {
+      balance += offset.points[index].balance;
+      pnl += offset.points[index].pnl;
+    }
+    return { t: point.t, balance, pnl };
+  });
+}
+
+function computeStagnations(series) {
+  const periods = [];
+  let peakEquity = 0;
+  let peakTime = series[0]?.t || 0;
+  let active = null;
+
+  for (const point of series) {
+    const equity = point.pnl;
+    if (equity >= peakEquity) {
+      if (active) {
+        periods.push({
+          peakTime: active.peakTime,
+          start: active.start,
+          end: point.t,
+          recovered: true,
+          peakEquity: active.peakEquity,
+          troughEquity: active.troughEquity,
+          maxDrawdown: active.peakEquity - active.troughEquity,
+          days: (point.t - active.start) / DAY_MS
+        });
+        active = null;
+      }
+      peakEquity = equity;
+      peakTime = point.t;
+    } else if (active) {
+      active.troughEquity = Math.min(active.troughEquity, equity);
+    } else {
+      active = { start: point.t, peakTime, peakEquity, troughEquity: equity };
+    }
+  }
+
+  if (active && series.length) {
+    const last = series[series.length - 1];
+    periods.push({
+      peakTime: active.peakTime,
+      start: active.start,
+      end: last.t,
+      recovered: false,
+      peakEquity: active.peakEquity,
+      troughEquity: active.troughEquity,
+      maxDrawdown: active.peakEquity - active.troughEquity,
+      days: (last.t - active.start) / DAY_MS
+    });
+  }
+
+  return periods
+    .filter(period => period.days > STAGNATION_THRESHOLD_DAYS)
+    .sort((left, right) => left.start - right.start);
+}
+
+function renderTable(stagnations) {
+  const body = document.getElementById("stagnationRows");
+  if (!stagnations.length) {
+    body.innerHTML = '<tr><td colspan="8">No stagnation periods longer than 7 days.</td></tr>';
+    return;
+  }
+  body.innerHTML = stagnations.map((period, index) => `
+    <tr>
+      <td class="num">${index + 1}</td>
+      <td>${date(period.start)}</td>
+      <td>${date(period.end)}</td>
+      <td class="num">${period.days.toFixed(2)}</td>
+      <td>${period.recovered ? "yes" : "no"}</td>
+      <td class="num">${money(STARTING_BALANCE + period.peakEquity, 0)}</td>
+      <td class="num">${money(STARTING_BALANCE + period.troughEquity, 0)}</td>
+      <td class="num">${money(period.maxDrawdown, 0)}</td>
+    </tr>
+  `).join("");
+}
+
+function setText(id, value, className = "") {
+  const el = document.getElementById(id);
+  el.textContent = value;
+  el.className = className;
+}
+
+async function init() {
+  try {
+    const [summary, rollupText, ...offsetTexts] = await Promise.all([
+      json("rollup_summary.json"),
+      text("rollup_equity.csv"),
+      ...[0, 1, 2, 3, 4, 5, 6].map(offset => text(`offset_${offset}_equity.csv`))
+    ]);
+    const combinedRaw = parseCsv(rollupText).map(row => toPoint(row, STARTING_BALANCE)).filter(point => Number.isFinite(point.t) && Number.isFinite(point.balance));
+    const offsetsRaw = offsetTexts.map((contents, index) => ({
+      offset: index,
+      color: OFFSET_COLORS[index],
+      points: parseCsv(contents).map(row => toPoint(row, 10000)).filter(point => Number.isFinite(point.t) && Number.isFinite(point.balance))
+    }));
+    const xMin = combinedRaw[0].t;
+    const xMax = combinedRaw[combinedRaw.length - 1].t;
+    const offsets = offsetsRaw.map(offset => ({
+      ...offset,
+      points: resampleSeries(offset.points, xMin, xMax, PLOT_INTERVAL_MS)
+    }));
+    const combined = combineOffsetSeries(offsets);
+    const stagnations = computeStagnations(combinedRaw);
+
+    setText("finalBalance", money(summary.final_balance, 0));
+    setText("totalPnl", money(summary.total_pnl, 0), summary.total_pnl >= 0 ? "pos" : "neg");
+    setText("returnPct", pct(summary.net_return_pct), summary.net_return_pct >= 0 ? "pos" : "neg");
+    setText("maxDd", pct(summary.max_drawdown_pct));
+    setText("profitFactor", Number(summary.profit_factor || 0).toFixed(3));
+    setText("gate", summary.pass_status, summary.pass_status === "pass" ? "pos" : "neg");
+    setText("trades", Number(summary.trades || 0).toLocaleString());
+    setText("noEntry", String(summary.no_entry_days ?? "-"));
+    setText("maxNoEntry", `${summary.longest_no_entry_gap_days ?? "-"}d`);
+    setText("longestStag", `${Number(summary.longest_stagnation_days || 0).toFixed(2)}d`);
+    setText("stagCount", String(stagnations.length), stagnations.length ? "warn" : "");
+    setText("returnDd", Number(summary.return_to_drawdown_ratio || 0).toFixed(2));
+    setText("exposure", pct(summary.exposure_pct));
+    setText("provenance", summary.provenance_validation_status?.startsWith("PASS") ? "PASS" : "RESEARCH ONLY", summary.provenance_validation_status?.startsWith("PASS") ? "pos" : "neg");
+
+    document.getElementById("combinedRange").textContent = `${date(combined[0].t)} to ${date(combined[combined.length - 1].t)}; synced hourly marks, stagnation > ${STAGNATION_THRESHOLD_DAYS}d shaded`;
+    document.getElementById("subtitle").textContent = `${summary.offset_count} stacked offset accounts, ${money(summary.account_balance_per_offset, 0)} each. ${summary.pass_reason}`;
+    document.getElementById("offsetLegend").innerHTML = offsets.map(offset => `<span><span class="swatch" style="background:${offset.color}"></span>offset ${offset.offset}</span>`).join("");
+
+    renderTable(stagnations);
+    drawCombined(combined, stagnations);
+    drawOffsets(offsets);
+    window.addEventListener("resize", () => {
+      drawCombined(combined, stagnations);
+      drawOffsets(offsets);
+    });
+  } catch (error) {
+    document.getElementById("subtitle").textContent = "Chart load failed: " + error.message;
+    console.error(error);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

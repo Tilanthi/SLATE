@@ -1,0 +1,11 @@
+/target/
+/.venv/
+/runs/
+/.DS_Store
+*.log
+*.tmp
+__pycache__/
+*.pyc
+python/rust_trend_optuna/*.so
+python/rust_trend_optuna/*.pyd
+python/rust_trend_optuna/*.dylib

@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "symbols": [
+    {
+      "symbol": "BTCUSDT",
+      "rows": 1052640,
+      "archive_rows": 1052640,
+      "api_rows": 0,
+      "synthetic_rows": 0,
+      "expected_rows": 1052640,
+      "start": "2024-01-01",
+      "end": "2026-01-01"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "rows": 1052640,
+      "archive_rows": 1052640,
+      "api_rows": 0,
+      "synthetic_rows": 0,
+      "expected_rows": 1052640,
+      "start": "2024-01-01",
+      "end": "2026-01-01"
+    },
+    {
+      "symbol": "SOLUSDT",
+      "rows": 1052640,
+      "archive_rows": 1052640,
+      "api_rows": 0,
+      "synthetic_rows": 0,
+      "expected_rows": 1052640,
+      "start": "2024-01-01",
+      "end": "2026-01-01"
+    },
+    {
+      "symbol": "XRPUSDT",
+      "rows": 1052640,
+      "archive_rows": 1052640,
+      "api_rows": 0,
+      "synthetic_rows": 0,
+      "expected_rows": 1052640,
+      "start": "2024-01-01",
+      "end": "2026-01-01"
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "rows": 1052640,
+      "archive_rows": 1052640,
+      "api_rows": 0,
+      "synthetic_rows": 0,
+      "expected_rows": 1052640,
+      "start": "2024-01-01",
+      "end": "2026-01-01"
+    },
+    {
+      "symbol": "BNBUSDT",
+      "rows": 1052640,
+      "archive_rows": 1052640,
+      "api_rows": 0,
+      "synthetic_rows": 0,
+      "expected_rows": 1052640,
+      "start": "2024-01-01",
+      "end": "2026-01-01"
+    },
+    {
+      "symbol": "SUIUSDT",
+      "rows": 1052640,
+      "archive_rows": 1052640,
+      "api_rows": 0,
+      "synthetic_rows": 0,
+      "expected_rows": 1052640,
+      "start": "2024-01-01",
+      "end": "2026-01-01"
+    }
+  ]
+}

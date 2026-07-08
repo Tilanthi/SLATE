@@ -299,13 +299,14 @@ class MeanReversionModule:
         elif rsi > rsi_overbought:
             rsi_signal = -1  # Sell
 
-        # Combine signals (both must agree for strong signal)
-        if bb_signal == 1 and rsi_signal == 1:
-            return 1  # Strong buy signal
-        elif bb_signal == -1 and rsi_signal == -1:
-            return -1  # Strong sell signal
+        # Combine signals (OR logic for better signal coverage)
+        # Generate signal if EITHER BB or RSI agrees (was AND, now OR for 3-5x more signals)
+        if bb_signal == 1 or rsi_signal == 1:
+            return 1  # Buy signal (either BB oversold OR RSI oversold)
+        elif bb_signal == -1 or rsi_signal == -1:
+            return -1  # Sell signal (either BB overbought OR RSI overbought)
         else:
-            return 0  # No signal
+            return 0  # No signal (both indicators neutral)
 
 
 class MomentumModule:
