@@ -79,6 +79,7 @@ class StrategyHypothesis:
     regime_applicability: List[str]           # Which regimes this applies to
     confidence_level: float = 0.5             # Initial confidence in hypothesis
     created_at: datetime = field(default_factory=datetime.now)
+    parameters: Dict[str, Any] = field(default_factory=dict)  # Strategy parameters
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert hypothesis to dictionary for storage"""
@@ -367,7 +368,7 @@ class StrategyHypothesisGenerator:
             HypothesisType.MOMENTUM: self.generate_momentum_hypothesis,
             HypothesisType.MEAN_REVERSION: self.generate_mean_reversion_hypothesis,
             HypothesisType.BREAKOUT: self.generate_breakout_hypothesis,
-            HypothesisType.ARBITRAGE: self.generate_arbitrage_hypothesis,
+            HypothesisType.FUNDING_ARBITRAGE: self.generate_arbitrage_hypothesis,  # FIXED: Use FUNDING_ARBITRAGE, not ARBITRAGE
             HypothesisType.REGIME_SWITCHING: self.generate_regime_switching_hypothesis
         }
 
@@ -467,7 +468,7 @@ class StrategyHypothesisGenerator:
         regime_mapping = {
             'sideways': [
                 HypothesisType.MEAN_REVERSION,
-                HypothesisType.ARBITRAGE,
+                HypothesisType.FUNDING_ARBITRAGE,  # FIXED: Use FUNDING_ARBITRAGE, not ARBITRAGE
                 HypothesisType.REGIME_SWITCHING
             ],
             'trending_up': [
@@ -482,12 +483,12 @@ class StrategyHypothesisGenerator:
             ],
             'high_volatility': [
                 HypothesisType.BREAKOUT,
-                HypothesisType.ARBITRAGE,
+                HypothesisType.FUNDING_ARBITRAGE,  # FIXED: Use FUNDING_ARBITRAGE, not ARBITRAGE
                 HypothesisType.REGIME_SWITCHING
             ],
             'low_volatility': [
                 HypothesisType.MEAN_REVERSION,
-                HypothesisType.ARBITRAGE
+                HypothesisType.FUNDING_ARBITRAGE  # FIXED: Use FUNDING_ARBITRAGE, not ARBITRAGE
             ]
         }
 

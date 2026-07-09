@@ -55,6 +55,7 @@ class StrategyFactory:
             'factory': create_funding_arbitrage_strategy,
             'name': 'funding_arbitrage'
         },
+        # Note: REGIME_SWITCHING is handled separately in backtest due to special AdaptiveRegimeSwitchingStrategy
     }
 
     def __init__(self):
@@ -214,6 +215,10 @@ class StrategyFactory:
     def get_supported_types(self) -> list:
         """Get list of supported hypothesis types."""
         return list(self.STRATEGY_MAP.keys())
+
+    def supports_regime_switching(self) -> bool:
+        """Check if factory supports regime switching (special handling)."""
+        return True  # Regime switching is handled separately in backtest system
 
     def get_factory_summary(self) -> Dict[str, Any]:
         """Get summary of factory activity."""

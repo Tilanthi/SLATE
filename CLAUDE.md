@@ -31,6 +31,20 @@ curl -X POST "http://127.0.0.1:8788/api/closed-loop/discovery/start" | jq '.summ
 
 ---
 
+## 🚨 CRITICAL BUGS & FIXES
+
+### **🐛 Zero-Trade Bug (FIXED 2026-07-09)**
+
+**Issue:** Discovery pipeline validated strategies with 0 trades due to type mismatch between hypothesis generation and strategy factory.
+
+**Root Cause:** `HypothesisType.ARBITRAGE` vs `HypothesisType.FUNDING_ARBITRAGE` type mismatch caused signal generation to fail completely.
+
+**Status:** ✅ **FIXED** - Signal generation now working (54 signals vs 0)
+
+**For Details:** See [CLAUDE_CRITICAL_BUG_FIX.md](CLAUDE_CRITICAL_BUG_FIX.md)
+
+---
+
 ## 🎯 Quick System Overview
 
 ### **Perpetual Futures Trading**
