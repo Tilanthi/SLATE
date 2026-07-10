@@ -43,6 +43,16 @@ curl -X POST "http://127.0.0.1:8788/api/closed-loop/discovery/start" | jq '.summ
 
 **For Details:** See [CLAUDE_CRITICAL_BUG_FIX.md](CLAUDE_CRITICAL_BUG_FIX.md)
 
+### **💰 Funding Arbitrage Bug (FIXED 2026-07-10)**
+
+**Issue:** Funding arbitrage strategy generated 0 trades due to string vs numeric parameter comparison.
+
+**Root Cause:** Hypothesis created `funding_threshold: '0.01%'` (string) causing TypeError in numeric comparison.
+
+**Status:** ✅ **FIXED** - Funding arbitrage now generating 54 trades per cycle
+
+**For Details:** See [CLAUDE_FUNDING_ARBITRAGE_FIX.md](CLAUDE_FUNDING_ARBITRAGE_FIX.md)
+
 ---
 
 ## 🎯 Quick System Overview

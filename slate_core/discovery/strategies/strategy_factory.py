@@ -204,11 +204,27 @@ class StrategyFactory:
         }
 
     def _extract_funding_arbitrage_parameters(self, design: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract parameters for funding arbitrage strategy."""
+        """
+        Extract parameters for funding arbitrage strategy.
+
+        CRITICAL FIX: Convert percentage strings to numeric values to prevent
+        TypeError in signal generation comparisons.
+        """
+        # Handle percentage strings like '0.01%' → 0.0001
+        funding_threshold = design.get('funding_threshold', design.get('entry_threshold', '0.01%'))
+
+        # Convert percentage string to numeric if needed
+        if isinstance(funding_threshold, str):
+            if '%' in funding_threshold:
+                # Remove % and convert to decimal (e.g., '0.01%' → 0.0001)
+                funding_threshold = float(funding_threshold.rstrip('%')) / 100
+            else:
+                funding_threshold = float(funding_threshold)
+
         return {
-            'funding_threshold': design.get('funding_threshold', design.get('entry_threshold', 0.0001)),
-            'holding_period_hours': design.get('holding_period', design.get('holding_period_hours', 8)),
-            'max_holding_periods': design.get('max_holding_periods', 3),
+            'funding_threshold': funding_threshold,  # Now guaranteed to be numeric
+            'holding_period_hours': design.get('holding_period', design.get('holding_period_hours', '8')),
+            'max_holding_periods': int(design.get('max_holding_periods', design.get('max_periods', 3))),
             'rate_threshold': design.get('rate_threshold', 0.02)
         }
 
