@@ -10,12 +10,18 @@ Public surface (added incrementally across Tasks 0.2-0.4):
 """
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+from slate_core.discovery.perpetual_futures_backtest import (
+    PerpetualBacktestConfig,
+    PerpetualFuturesBacktester,
+)
 
 SignalFn = Callable[[pd.DataFrame, int, Dict[str, Any]], float]
 VALID_SIGNALS = {-1, 0, 1}
@@ -65,3 +71,44 @@ def check_signal_correctness(
         if sig not in VALID_SIGNALS:
             return False, f"signal {sig!r} at bar {i} not bounded to {{-1,0,1}}"
     return True, ""
+
+
+def split_is_oos(df: pd.DataFrame, is_fraction: float = 0.6):
+    """Chronological in-sample / out-of-sample split. Never shuffles.
+
+    Shuffling would leak the future into the past and defeat the whole point
+    of the overfit check. Both halves are kept tradeable (>= 30 bars).
+    """
+    n = len(df)
+    cut = int(n * is_fraction)
+    cut = max(cut, 30)        # keep IS tradeable
+    cut = min(cut, n - 30)    # keep OOS tradeable
+    return df.iloc[:cut].copy(), df.iloc[cut:].copy()
+
+
+def run_backtest(signal_fn: SignalFn, parameters: Dict[str, Any],
+                 df: pd.DataFrame, edge_type: str, seed: int) -> Dict[str, Any]:
+    """Run one brutal-realism backtest deterministically; return a metrics dict.
+
+    Seeds numpy's global RNG so a given (candidate, seed) is reproducible —
+    evolution needs stable comparisons. Works on a copy so the caller's frame
+    (e.g. a shared session fixture) is not mutated by the backtester's
+    indicator columns.
+    """
+    np.random.seed(seed)
+    work = df.copy()
+    if "timestamp" in work.columns:                 # ensure a DatetimeIndex
+        work["timestamp"] = pd.to_datetime(work["timestamp"])
+        work = work.set_index("timestamp").sort_index()
+    bt = PerpetualFuturesBacktester(PerpetualBacktestConfig())
+    result = bt.backtest_strategy(
+        df=work,
+        strategy_name="eval_candidate",
+        strategy_description="fitness evaluation",
+        edge_type=edge_type,
+        signal_function=signal_fn,
+        parameters=parameters or {},
+    )
+    d = dataclasses.asdict(result)
+    d["beat_market"] = bool(d.get("beat_market", False))
+    return d
