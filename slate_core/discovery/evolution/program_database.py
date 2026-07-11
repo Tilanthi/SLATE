@@ -9,6 +9,7 @@ sample() -> (parent, inspirations) is added in Task 1.3.
 from __future__ import annotations
 
 import random
+import sqlite3
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -91,3 +92,50 @@ class ProgramDatabase:
 
     def occupied_niches(self) -> List[Niche]:
         return list(self._elites.keys())
+
+    def seed_from_discoveries(self, db_path: str, limit: Optional[int] = None) -> int:
+        """Seed the population from existing perpetual_discoveries rows.
+
+        Legacy rows carry metrics but no signal code, so seeded Programs are
+        usable as fitness/niche references and inspirations, not as
+        re-executable parents (code=None). Only validated rows with a positive
+        OOS-style edge (vs_buy_hold_usdt > 0) are kept — they add real niche
+        value; non-edges are skipped.
+        """
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        query = (
+            "SELECT strategy_name, edge_type, volatility_regime, total_profit_usdt, "
+            "vs_buy_hold_usdt, sharpe_ratio, beat_market, passed_validation, total_trades "
+            "FROM perpetual_discoveries WHERE passed_validation = 1 "
+            "ORDER BY vs_buy_hold_usdt DESC"
+        )
+        rows = conn.execute(query).fetchall()
+        conn.close()
+        if limit:
+            rows = rows[:limit]
+        count = 0
+        for row in rows:
+            vs_bh = float(row["vs_buy_hold_usdt"]) if row["vs_buy_hold_usdt"] is not None else 0.0
+            if vs_bh <= 0:
+                continue
+            niche = (
+                str(row["edge_type"] or "unknown").lower(),
+                str(row["volatility_regime"] or "unknown").lower(),
+            )
+            self.add(Program(
+                candidate_id=f"seed:{row['strategy_name']}",
+                niche=niche,
+                family=niche[0],
+                regime=niche[1],
+                fitness_score=vs_bh,
+                source="seed",
+                metrics={
+                    "total_profit_usdt": float(row["total_profit_usdt"] or 0),
+                    "sharpe_ratio": float(row["sharpe_ratio"] or 0),
+                    "total_trades": int(row["total_trades"] or 0),
+                    "beat_market": bool(row["beat_market"]),
+                },
+            ))
+            count += 1
+        return count
