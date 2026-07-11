@@ -17,7 +17,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional
 
-from slate_core.discovery.evolution.evolvable_strategy import BASE_SIGNAL_CODE, apply_diff
+from slate_core.discovery.evolution.evolvable_strategy import BASE_SIGNAL_CODE, apply_diff, extract_code_block
 from slate_core.discovery.evolution.fitness_evaluator import (
     FitnessConfig, evaluate_fitness_two_window,
 )
@@ -64,6 +64,7 @@ async def evolution_step(
 
     prompt = sampler.build(parent_prog, inspirations, objective)
     diff = await loop.run_in_executor(None, lambda: pool.generate(prompt, tier="auto"))
+    diff = extract_code_block(diff or "")   # strip markdown fences from live models
 
     try:
         new_code = apply_diff(parent_code, diff or "")

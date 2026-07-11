@@ -30,6 +30,25 @@ def signal_fn(df, i, params):
 '''
 
 
+_FENCE_RE = re.compile(r"```(?:[a-zA-Z0-9_+-]*)?\n(.*?)```", re.DOTALL)
+
+
+def extract_code_block(text: str) -> str:
+    """Strip markdown fences / surrounding prose from an LLM response.
+
+    - If the text contains a fenced block, return the first fence's contents.
+    - Otherwise return the text unchanged (covers SEARCH/REPLACE blocks and
+      plain code). This makes the live model path usable: real LLMs wrap code
+      in ```python fences, which would otherwise break ast.parse.
+    """
+    if not text:
+        return text
+    m = _FENCE_RE.search(text)
+    if m:
+        return m.group(1).strip() + "\n"
+    return text
+
+
 def apply_diff(code: str, diff: str) -> str:
     """Apply SEARCH/REPLACE blocks from an LLM proposal to the current code.
 
