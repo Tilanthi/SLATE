@@ -46,6 +46,18 @@ class FitnessConfig:
     random_seed: int = 12345                 # determinism per evaluation
     probe_window: int = 30                   # bars used by the correctness gate
 
+    @classmethod
+    def strict(cls) -> "FitnessConfig":
+        """Deployment-grade: full overfit protection (the field defaults)."""
+        return cls()
+
+    @classmethod
+    def exploration(cls) -> "FitnessConfig":
+        """Looser preset for the running loop so it produces survivors to learn
+        from. Keeps the core defenses (both OOS windows must be profitable) but
+        lowers the min-trade floor and the overfit penalty weight."""
+        return cls(min_trades=5, overfit_penalty_weight=0.5)
+
 
 def check_signal_correctness(
     signal_fn: SignalFn,
