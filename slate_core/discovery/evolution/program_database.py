@@ -8,6 +8,7 @@ sample() -> (parent, inspirations) is added in Task 1.3.
 """
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -67,6 +68,26 @@ class ProgramDatabase:
         if not self._elites:
             return None
         return max(self._elites.values(), key=lambda p: p.fitness_score)
+
+    def sample(self, rng: Optional[random.Random] = None):
+        """AlphaEvolve controller primitive: return (parent, inspirations).
+
+        70% exploit the global best, 30% explore a random niche elite.
+        Inspirations are drawn from OTHER niches for diversity. Deterministic
+        when rng is seeded. Returns (None, []) on an empty database.
+        """
+        r = rng or random.Random()
+        if not self._elites:
+            return None, []
+        niches = list(self._elites.keys())
+        if r.random() < 0.7:
+            parent = self.best()
+        else:
+            parent = self._elites[r.choice(niches)]
+        others = [self._elites[n] for n in niches if n != parent.niche]
+        r.shuffle(others)
+        inspirations = others[: self.config.inspiration_count]
+        return parent, inspirations
 
     def occupied_niches(self) -> List[Niche]:
         return list(self._elites.keys())
