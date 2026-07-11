@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import random
 import sqlite3
+import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -136,6 +137,80 @@ class ProgramDatabase:
                     "total_trades": int(row["total_trades"] or 0),
                     "beat_market": bool(row["beat_market"]),
                 },
+            ))
+            count += 1
+        return count
+
+    def _all_programs(self) -> List[Program]:
+        """Deduplicated elites ∪ pool, keyed by candidate_id (elites win ties)."""
+        seen: Dict[str, Program] = {}
+        for p in list(self._elites.values()) + self._pool:
+            seen.setdefault(p.candidate_id, p)
+        return list(seen.values())
+
+    def save(self) -> None:
+        """Persist the population to sqlite (evolution_population table).
+
+        Idempotent via INSERT OR REPLACE on candidate_id. Path comes from
+        config.persist_path; skipped silently if None.
+        """
+        if not self.config.persist_path:
+            return
+        conn = sqlite3.connect(self.config.persist_path)
+        c = conn.cursor()
+        c.execute("""CREATE TABLE IF NOT EXISTS evolution_population (
+            candidate_id TEXT PRIMARY KEY,
+            niche_family TEXT NOT NULL,
+            niche_regime TEXT NOT NULL,
+            fitness_score REAL NOT NULL,
+            source TEXT,
+            parameters_json TEXT,
+            code TEXT,
+            metrics_json TEXT,
+            parent_id TEXT,
+            generation INTEGER,
+            timestamp TEXT)""")
+        for p in self._all_programs():
+            c.execute(
+                "INSERT OR REPLACE INTO evolution_population "
+                "(candidate_id, niche_family, niche_regime, fitness_score, source, "
+                " parameters_json, code, metrics_json, parent_id, generation, timestamp) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    p.candidate_id, p.family, p.regime, p.fitness_score, p.source,
+                    json.dumps(p.parameters), p.code, json.dumps(p.metrics),
+                    p.parent_id, p.generation, p.timestamp,
+                ),
+            )
+        conn.commit()
+        conn.close()
+
+    def load(self) -> int:
+        """Load the population from sqlite. Returns the number of programs loaded."""
+        if not self.config.persist_path:
+            return 0
+        conn = sqlite3.connect(self.config.persist_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute("SELECT * FROM evolution_population").fetchall()
+        except sqlite3.OperationalError:
+            rows = []
+        conn.close()
+        count = 0
+        for row in rows:
+            self.add(Program(
+                candidate_id=row["candidate_id"],
+                niche=(row["niche_family"], row["niche_regime"]),
+                family=row["niche_family"],
+                regime=row["niche_regime"],
+                fitness_score=float(row["fitness_score"]),
+                source=row["source"] or "evolved",
+                parameters=json.loads(row["parameters_json"] or "{}"),
+                code=row["code"],
+                metrics=json.loads(row["metrics_json"] or "{}"),
+                parent_id=row["parent_id"],
+                generation=int(row["generation"] or 0),
+                timestamp=row["timestamp"] or "",
             ))
             count += 1
         return count
