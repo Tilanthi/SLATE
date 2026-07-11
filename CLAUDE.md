@@ -67,24 +67,36 @@ rigid single-format code path.
 object+dict formats with corrected field names; startup coordinator hardened against duplicate
 discovery-loop/watchdog tasks; DB saves now verified by read-back.
 
-### **🐕 launchd Auto-Restart (OPERATIONAL NOTE)**
+### **🐕 launchd Auto-Restart (OPERATIONAL NOTE — corrected 2026-07-11)**
 
-The server is kept alive by **two launchd jobs**, both `KeepAlive=true`:
-- `com.slate.auto` → runs `start_slate.sh`
-- `com.slate.autoserver` → runs `python3 -m slate_core.server` directly
+The server is kept alive by the **`com.slate.autoserver`** launchd job (`KeepAlive=true`), which
+runs the server **as its main process** (so launchd restarts it directly on crash — no watchdog
+script in between).
+
+- **`com.slate.autoserver`** → `ProgramArguments: /Users/gjw255/.local/bin/python3 -m slate_core.server`
+  (the uv-managed Python 3.14 that has numpy/pandas/anthropic/fastapi). Its `EnvironmentVariables`
+  embed `PYTHONPATH`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_BASE_URL` (Z.ai proxy) so the evolution
+  layer uses the **real GLM LLM**, not Mock. **This is the job to load.**
+- **`com.slate.auto`** → `start_slate.sh`. **Leave UNLOADED.** It backgrounds the server then
+  health-checks after only 5 s; because evolution **autostarts during boot** and takes >5 s, the
+  check always fails and launchd kills the still-booting server — a death loop. (The plists live in
+  `~/Library/LaunchAgents/`, outside the repo.)
 
 **Consequence:** A bare `pkill -f "python3 -m slate_core.server"` does **NOT** stop the server —
 launchd respawns it within seconds. To fully stop it (e.g. to work on the DB safely):
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.slate.auto.plist
 launchctl unload ~/Library/LaunchAgents/com.slate.autoserver.plist
 pkill -9 -f "slate_core.server"; lsof -ti:8788 | xargs kill -9 2>/dev/null
 
-# Bring it back (auto-restart resumes):
-launchctl load ~/Library/LaunchAgents/com.slate.auto.plist
+# Bring it back (auto-restart resumes); server runs as the job's main process:
 launchctl load ~/Library/LaunchAgents/com.slate.autoserver.plist
+# Health takes ~15-20 s to come up (evolution autostart is heavy) — don't give up early.
 ```
+
+If the server is repeatedly failing to start, check `/tmp/slate_server_error.log` — a
+`ModuleNotFoundError: No module named 'numpy'` means the plist is pointing at the wrong Python
+(should be `/Users/gjw255/.local/bin/python3`, NOT `/usr/bin/python3`).
 
 ---
 
@@ -195,7 +207,7 @@ git branch --show-current  # Should show: main
 
 ## 🟢 Current System Status
 
-**Server**: ✅ Running on port 8788 (launchd-managed, `com.slate.auto` + `com.slate.autoserver`)
+**Server**: ✅ Running on port 8788 (launchd-managed, `com.slate.autoserver` — server runs as the job's main process under direct `KeepAlive`)
 **Database**: ✅ **Fresh — discovery tables cleared 2026-07-11** (`perpetual_discoveries` = 0, `edge_discoveries` = 0). Backup at `slate_core/slate_realistic_discoveries_backup_20260711_121642.db`.
 **Discovery**: Active with realistic validation thresholds, restarted fresh after the 2026-07-11 data-structure fix
 **Evolution Layer**: Active (autostart); population preserved (52 evolved programs in `slate_evolution.db`)
@@ -312,4 +324,4 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*
-*Last Updated: 2026-07-11 (discovery DB cleared + fresh restart; closed-loop data-structure fix; launchd auto-restart documented; evolution layer + /api/evolution endpoints; GLM-via-Z.ai LLM; daily-data loader)*
+*Last Updated: 2026-07-11 (discovery DB cleared + fresh restart; closed-loop data-structure fix; launchd auto-restart fixed → `com.slate.autoserver` runs server as main process on `/Users/gjw255/.local/bin/python3` with embedded ANTHROPIC/Z.ai env; evolution layer + /api/evolution endpoints; GLM-via-Z.ai LLM; daily-data loader)*
