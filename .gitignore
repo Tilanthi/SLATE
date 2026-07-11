@@ -77,7 +77,6 @@ coverage.xml
 *_iter*.py
 run_*.py
 check_*.py
-test_*.py
 implement_*.py
 fetch_*.py
 analyze_*.py
