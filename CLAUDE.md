@@ -119,24 +119,34 @@ the numbers trustworthy (120 tests, TDD). All verified live.
    comprehensive; integration reads canonical `*_usdt` names) — buy-hold, funding,
    per-trade stats, real prices/period no longer default to 0. Fixes the
    `max_drawdown_usdt`-stored-as-ratio bug.
-5. **Validation gate rejects losers** (`rigorous_validation.py`) — hard
-   profitability floor (`total_profit <= 0` → REJECT) + consensus raised to a
-   true majority (50%, was 33%). Money-losing strategies can no longer pass.
+5. **Validation gate rejects losers** (`rigorous_validation.py` + `closed_loop_discovery.py`)
+   — hard profitability floor (`total_profit <= 0` → REJECT) on **both** gates
+   (the pluralistic gate AND the hypothesis `is_successful` check, which could
+   otherwise score 0.8 from the other four components) + consensus raised to a
+   true majority (50%, was 33%). Money-losing strategies can no longer be saved.
 6. **No more `-inf` elites** (`controller.py`) — gate-rejected candidates are not
    stored (was: first reject became the niche elite).
 7. **Sandbox hardened** (`signal_sandbox.py`) — AST-gates DataFrame write/export
    methods (`to_csv`/`to_pickle`/… ; closes the filesystem leak) and rejects
-   unconditional `while True` loops at compile (closes the obvious DoS).
-   *Residual:* non-obvious infinite loops in executor threads still need
-   subprocess isolation (follow-up).
+   unconditional `while True` loops at compile. **Fitness eval now runs in an
+   isolated subprocess** (`subprocess_eval.py`) with `RLIMIT_CPU` + wall-clock
+   kill, so a non-obvious infinite loop in evolved code can't hang an executor
+   thread (the worker-thread DoS hole).
 
-**Known follow-up (not a fix bug):** on the daily timeframe the regime filter
-leaves only ~47 bars (~27 tradeable), and the closed-loop's hourly-calibrated
-strategy templates generate 0 trades there → the closed-loop currently saves
-nothing. This is honest (no fake edge) but means strategy/regime-filter tuning
-for the daily timeframe is the next step. The evolution layer is unaffected.
+**Follow-ups completed:** test suite un-ignored and committed (24 modules, 124
+tests, was wrongly gitignored); regime filter floors small datasets
+(`MIN_BARS_FOR_DISCOVERY=120`) so the closed-loop gets enough daily bars to trade
+(was 47 → strategies fired 0 trades).
+
+**Current honest state:** with the gates now truthful, the closed-loop saves
+**nothing** because every current strategy template loses money on daily SOL
+perps after brutal costs — i.e. the system correctly refuses to record fake
+edges. The infrastructure is sound; finding a genuinely profitable daily-timeframe
+strategy is the remaining research task. The evolution layer (searching signal
+*code* rather than parameters) is the more promising path to that edge.
 
 ---
+
 
 ## 🎯 Quick System Overview
 
