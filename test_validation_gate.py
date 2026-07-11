@@ -57,3 +57,19 @@ def test_profitable_strategy_is_not_rejected_by_floor():
     # floor itself passed -> overall score > 0 and not the zeroed floor report.)
     assert report.overall_validation_score > 0.0 or report.deployment_recommendation != "REJECT" \
         or "profitability_floor" not in report.individual_validations
+
+
+def test_gate1_is_successful_rejects_money_losing_hypothesis():
+    """Fix 5 (gate 1): a money-losing strategy must not pass HypothesisValidation
+    even when trades/win_rate/sharpe/drawdown push the component score to 0.8."""
+    from slate_core.discovery.closed_loop_discovery import HypothesisTestResult
+
+    res = HypothesisTestResult(
+        hypothesis=None,
+        backtest_result={"total_profit": -15.75, "total_return": -0.001},
+        validation_score=0.8, statistical_tests={}, surprises=[],
+        failure_reasons=[], success_factors=[], regime_performance={}, cost_impact={},
+    )
+    assert res.is_successful() is False, (
+        "money-losing hypothesis passed gate 1 (component score 0.8 >= 0.3)"
+    )

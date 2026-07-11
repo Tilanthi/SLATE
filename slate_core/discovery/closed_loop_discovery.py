@@ -121,6 +121,15 @@ class HypothesisTestResult:
         - CONDITIONAL: score >= 0.3
         - REJECT: score < 0.3
         """
+        # Fix 5 (gate 1): hard profitability floor. calculate_validation_score
+        # can reach 0.8 from the other four components even with negative
+        # returns (returns is only worth 0.2), so a money-losing strategy would
+        # otherwise pass at 0.8 >= 0.3. A non-profitable strategy is not successful.
+        profit = float(self.backtest_result.get("total_profit",
+                      self.backtest_result.get("total_profit_usdt", 0.0)) or 0.0)
+        if profit <= 0:
+            logger.info(f"   🚫 Rejected at gate-1 profitability floor (total_profit={profit:.2f} <= 0)")
+            return False
         success = self.validation_score >= 0.3  # Relaxed from 0.5 to match new thresholds
         logger.info(f"   🎯 Validation Success Check: score {self.validation_score:.2f} >= 0.3 = {'✅' if success else '❌'}")
         return success
