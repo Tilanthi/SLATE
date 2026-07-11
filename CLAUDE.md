@@ -210,7 +210,7 @@ git branch --show-current  # Should show: main
 **Server**: ✅ Running on port 8788 (launchd-managed, `com.slate.autoserver` — server runs as the job's main process under direct `KeepAlive`)
 **Database**: ✅ **Fresh — discovery tables cleared 2026-07-11** (`perpetual_discoveries` = 0, `edge_discoveries` = 0). Backup at `slate_core/slate_realistic_discoveries_backup_20260711_121642.db`.
 **Discovery**: Active with realistic validation thresholds, restarted fresh after the 2026-07-11 data-structure fix
-**Evolution Layer**: Active (autostart); population preserved (52 evolved programs in `slate_evolution.db`)
+**Evolution Layer**: Active (autostart, real GLM/Z.ai LLM); population **cleared to a clean slate 2026-07-11** (0 legacy programs) and re-seeded from fresh closed-loop discoveries — evolving again (`slate_evolution.db`; pre-clear backups at `slate_evolution_backup_*.db`)
 **Market Data**: 4,182 hourly bars ≈ 175 days of SOLUSDT perpetual futures data (resampled to daily by the evolution loader)
 
 **Recent Architectural Changes Applied (2026-07-11):**
