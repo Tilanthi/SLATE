@@ -40,6 +40,7 @@ class FitnessConfig:
     overfit_penalty_weight: float = 1.0
     min_trades: int = 10                     # gate: enough activity to be meaningful
     require_beat_buyhold_oos: bool = True
+    require_absolute_oos_profit: bool = True  # gate: must actually make money OOS
     run_pluralistic_validation: bool = False
     validation_score_floor: float = 0.4      # only applied when validation is ON
     random_seed: int = 12345                 # determinism per evaluation
@@ -204,6 +205,10 @@ def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
         reasons.append(f"oos_trades={base.n_trades_oos}<{cfg.min_trades}")
     if cfg.require_beat_buyhold_oos and base.oos_vs_buyhold <= 0:
         reasons.append("oos_does_not_beat_buyhold")
+    if cfg.require_absolute_oos_profit:
+        oos_profit = float(oos_m.get("total_profit_usdt", 0.0))
+        if oos_profit <= 0:
+            reasons.append(f"oos_total_profit={oos_profit:.2f}<=0 (not profitable)")
     if cfg.run_pluralistic_validation and base.validation_score < cfg.validation_score_floor:
         reasons.append(
             f"validation_score={base.validation_score:.2f}<{cfg.validation_score_floor}"
