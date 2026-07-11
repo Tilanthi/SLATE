@@ -71,6 +71,14 @@ class ProgramDatabase:
             return None
         return max(self._elites.values(), key=lambda p: p.fitness_score)
 
+    def pareto_archive(self, objectives=None):
+        """Non-dominated elite programs across multiple objectives (Phase 3).
+
+        Imports pareto lazily to avoid a circular import (pareto -> Program).
+        """
+        from slate_core.discovery.evolution.pareto import pareto_front, DEFAULT_OBJECTIVES
+        return pareto_front(list(self._elites.values()), objectives or DEFAULT_OBJECTIVES)
+
     def sample(self, rng: Optional[random.Random] = None):
         """AlphaEvolve controller primitive: return (parent, inspirations).
 
