@@ -77,10 +77,44 @@ MAP-Elites grid (niche = strategy-family × regime) keeping the best program per
 cell, plus a bounded island pool for exploration. Seeded from the existing
 `perpetual_discoveries` table so accumulated knowledge instantly populates the
 grid. Exposes the AlphaEvolve controller primitive
-`sample() -> (parent, inspirations)`. Persisted to sqlite.
+`sample() -> (parent, inspirations)`. Persisted to sqlite (`slate_core/slate_evolution.db`).
+
+### API
+
+```python
+db = ProgramDatabase(ProgramDBConfig(persist_path="slate_core/slate_evolution.db"))
+db.seed_from_discoveries("slate_core/slate_realistic_discoveries.db",
+                         limit=2000, require_validated=False)
+parent, inspirations = db.sample(rng=random.Random(0))   # AlphaEvolve primitive
+db.add(evolved_program); db.save()
+```
+
+`seed_from_discoveries`: a row is kept if it shows an edge — `vs_buy_hold_usdt
+> 0`, else `total_profit_usdt > 0`. `require_validated` defaults **False**
+because historically SLATE's `passed_validation` column is unreliable (the
+118k-row backup is entirely `passed_validation=0`).
+
+### Smoke results (real data, 2026-07-11)
+
+- Production DB (`slate_realistic_discoveries.db`): 3 rows, 1 seeded.
+- Backup (`..._backup_20260705_161518.db`, 118k rows): 2000 seeded, but all land
+  in a single niche `('enhanced_ema', 'unknown')`.
+
+### Known characteristics (not bugs)
+
+- **Legacy data is a monoculture.** The historical discoveries are almost all
+  `edge_type='enhanced_ema'` with `volatility_regime='unknown'`, so they occupy
+  one MAP-Elites cell and `sample()` returns no inspirations. Grid diversity
+  emerges once new evolved programs (Phase 2+) with distinct families/regimes
+  enter, and when niche dimensions expand (Phase 3).
+- **Seed fitness is approximate.** The backup's `vs_buy_hold_usdt` is inflated
+  (a $16-profit row claims +$5156 vs buy-hold). Seeds are therefore starting
+  material / inspirations, clearly marked `source="seed"`, **not trusted
+  elites**. Phase 0's `evaluate_fitness` governs what actually survives going
+  forward.
 
 ## Status
 
 - Phase 0: ✅ complete (11 tests green, smoke verified on real data).
-- Phase 1: in progress.
+- Phase 1: ✅ complete (11 tests green; seeding + sample verified on real data).
 - Phases 2–5: design-complete in the plan; not yet implemented.

@@ -94,22 +94,26 @@ class ProgramDatabase:
     def occupied_niches(self) -> List[Niche]:
         return list(self._elites.keys())
 
-    def seed_from_discoveries(self, db_path: str, limit: Optional[int] = None) -> int:
+    def seed_from_discoveries(self, db_path: str, limit: Optional[int] = None,
+                              require_validated: bool = False) -> int:
         """Seed the population from existing perpetual_discoveries rows.
 
         Legacy rows carry metrics but no signal code, so seeded Programs are
         usable as fitness/niche references and inspirations, not as
-        re-executable parents (code=None). Only validated rows with a positive
-        OOS-style edge (vs_buy_hold_usdt > 0) are kept — they add real niche
-        value; non-edges are skipped.
+        re-executable parents (code=None). A row is kept if it shows an edge
+        (vs_buy_hold_usdt > 0, else total_profit_usdt > 0).
+
+        require_validated: historically SLATE's validation column is unreliable
+        (entire 118k-row backup has passed_validation=0), so it defaults False.
+        Set True to only seed rows that passed rigorous validation.
         """
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
+        where = "WHERE passed_validation = 1" if require_validated else ""
         query = (
             "SELECT strategy_name, edge_type, volatility_regime, total_profit_usdt, "
             "vs_buy_hold_usdt, sharpe_ratio, beat_market, passed_validation, total_trades "
-            "FROM perpetual_discoveries WHERE passed_validation = 1 "
-            "ORDER BY vs_buy_hold_usdt DESC"
+            f"FROM perpetual_discoveries {where} ORDER BY vs_buy_hold_usdt DESC"
         )
         rows = conn.execute(query).fetchall()
         conn.close()
@@ -118,7 +122,15 @@ class ProgramDatabase:
         count = 0
         for row in rows:
             vs_bh = float(row["vs_buy_hold_usdt"]) if row["vs_buy_hold_usdt"] is not None else 0.0
-            if vs_bh <= 0:
+            profit = float(row["total_profit_usdt"]) if row["total_profit_usdt"] is not None else 0.0
+            # Prefer the evolved-fitness proxy (edge vs buy-hold); fall back to
+            # absolute profit when vs_buy_hold is unpopulated (the production DB
+            # currently stores 0.0 there). Skip rows with no edge at all.
+            if vs_bh > 0:
+                fitness = vs_bh
+            elif profit > 0:
+                fitness = profit
+            else:
                 continue
             niche = (
                 str(row["edge_type"] or "unknown").lower(),
@@ -129,10 +141,11 @@ class ProgramDatabase:
                 niche=niche,
                 family=niche[0],
                 regime=niche[1],
-                fitness_score=vs_bh,
+                fitness_score=fitness,
                 source="seed",
                 metrics={
-                    "total_profit_usdt": float(row["total_profit_usdt"] or 0),
+                    "total_profit_usdt": profit,
+                    "vs_buy_hold_usdt": vs_bh,
                     "sharpe_ratio": float(row["sharpe_ratio"] or 0),
                     "total_trades": int(row["total_trades"] or 0),
                     "beat_market": bool(row["beat_market"]),
