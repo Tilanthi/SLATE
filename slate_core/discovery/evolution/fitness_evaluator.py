@@ -221,3 +221,81 @@ def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
     base.evaluated = True
     base.fitness_score = base.oos_vs_buyhold - base.overfit_penalty
     return base
+
+
+def evaluate_fitness_two_window(signal_fn: SignalFn, parameters: Dict[str, Any],
+                                df: pd.DataFrame, edge_type: str,
+                                config: Optional[FitnessConfig] = None,
+                                candidate_id: str = "") -> FitnessResult:
+    """Stricter fitness for evolved-code programs: must profit on TWO OOS windows.
+
+    Splits chronologically into IS (50%) / OOS1 (30%) / OOS2 (20%). A candidate
+    passes only if BOTH OOS windows are independently profitable (and trade
+    enough). The fitness is the WORST window's edge minus the overfit penalty
+    (IS edge vs average OOS edge) — conservative, exactly the extra insurance
+    Phase 4's maximally-expressive search needs.
+    """
+    cfg = config or FitnessConfig()
+    base = FitnessResult(
+        evaluated=False, fitness_score=float("-inf"),
+        oos_vs_buyhold=0.0, is_vs_buyhold=0.0, overfit_gap=0.0,
+        overfit_penalty=0.0, n_trades_is=0, n_trades_oos=0,
+        validation_score=1.0, candidate_id=candidate_id,
+    )
+
+    ok, reason = check_signal_correctness(signal_fn, df, parameters or {},
+                                          probe_window=cfg.probe_window)
+    if not ok:
+        base.rejection_reason = f"correctness: {reason}"
+        return base
+
+    n = len(df)
+    cut1 = int(n * 0.5)
+    cut2 = int(n * 0.8)
+    is_df = df.iloc[:cut1]
+    oos1_df = df.iloc[cut1:cut2]
+    oos2_df = df.iloc[cut2:]
+
+    seed = cfg.random_seed
+    is_m = run_backtest(signal_fn, parameters, is_df, edge_type, seed=seed)
+    o1 = run_backtest(signal_fn, parameters, oos1_df, edge_type, seed=seed + 1)
+    o2 = run_backtest(signal_fn, parameters, oos2_df, edge_type, seed=seed + 2)
+
+    is_edge = float(is_m.get("vs_buy_hold_usdt", 0.0))
+    o1_edge = float(o1.get("vs_buy_hold_usdt", 0.0))
+    o2_edge = float(o2.get("vs_buy_hold_usdt", 0.0))
+    o1_profit = float(o1.get("total_profit_usdt", 0.0))
+    o2_profit = float(o2.get("total_profit_usdt", 0.0))
+    o1_trades = int(o1.get("total_trades", 0))
+    o2_trades = int(o2.get("total_trades", 0))
+
+    base.is_vs_buyhold = is_edge
+    base.oos_vs_buyhold = min(o1_edge, o2_edge)            # conservative
+    base.n_trades_is = int(is_m.get("total_trades", 0))
+    base.n_trades_oos = min(o1_trades, o2_trades)
+
+    avg_oos = (o1_edge + o2_edge) / 2.0
+    base.overfit_gap = max(0.0, is_edge - avg_oos)
+    base.overfit_penalty = base.overfit_gap * cfg.overfit_penalty_weight
+    base.metrics_is = is_m
+    base.metrics_oos = {"oos1": o1, "oos2": o2}
+
+    # Gates on BOTH windows
+    reasons = []
+    if cfg.require_absolute_oos_profit and o1_profit <= 0:
+        reasons.append(f"oos1_total_profit={o1_profit:.2f}<=0")
+    if cfg.require_absolute_oos_profit and o2_profit <= 0:
+        reasons.append(f"oos2_total_profit={o2_profit:.2f}<=0")
+    if o1_trades < cfg.min_trades:
+        reasons.append(f"oos1_trades={o1_trades}<{cfg.min_trades}")
+    if o2_trades < cfg.min_trades:
+        reasons.append(f"oos2_trades={o2_trades}<{cfg.min_trades}")
+    if cfg.require_beat_buyhold_oos and (o1_edge <= 0 or o2_edge <= 0):
+        reasons.append("oos_edge_not_positive_on_both_windows")
+    if reasons:
+        base.rejection_reason = "; ".join(reasons)
+        return base
+
+    base.evaluated = True
+    base.fitness_score = base.oos_vs_buyhold - base.overfit_penalty
+    return base
