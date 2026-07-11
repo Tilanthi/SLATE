@@ -53,6 +53,39 @@ curl -X POST "http://127.0.0.1:8788/api/closed-loop/discovery/start" | jq '.summ
 
 **For Details:** See [CLAUDE_FUNDING_ARBITRAGE_FIX.md](CLAUDE_FUNDING_ARBITRAGE_FIX.md)
 
+### **🔧 Discovery-Pipeline Data-Structure Fix (FIXED 2026-07-11)**
+
+**Issue:** `closed_loop_integration.py` only handled the legacy `raw_results` wrapper and object-format
+backtest results, so when the validation system returned a *direct* `validated_strategies` list of
+*dict-format* results, strategies could not be matched/saved correctly (wrong field names like
+`total_profit_usdt` vs `total_profit`, `max_drawdown_usdt` vs `max_drawdown`, etc.).
+
+**Root Cause:** Field-name drift between the validation dict output and the DB-mapping code, plus a
+rigid single-format code path.
+
+**Status:** ✅ **FIXED** — integration now handles both direct+wrapped structures and both
+object+dict formats with corrected field names; startup coordinator hardened against duplicate
+discovery-loop/watchdog tasks; DB saves now verified by read-back.
+
+### **🐕 launchd Auto-Restart (OPERATIONAL NOTE)**
+
+The server is kept alive by **two launchd jobs**, both `KeepAlive=true`:
+- `com.slate.auto` → runs `start_slate.sh`
+- `com.slate.autoserver` → runs `python3 -m slate_core.server` directly
+
+**Consequence:** A bare `pkill -f "python3 -m slate_core.server"` does **NOT** stop the server —
+launchd respawns it within seconds. To fully stop it (e.g. to work on the DB safely):
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.slate.auto.plist
+launchctl unload ~/Library/LaunchAgents/com.slate.autoserver.plist
+pkill -9 -f "slate_core.server"; lsof -ti:8788 | xargs kill -9 2>/dev/null
+
+# Bring it back (auto-restart resumes):
+launchctl load ~/Library/LaunchAgents/com.slate.auto.plist
+launchctl load ~/Library/LaunchAgents/com.slate.autoserver.plist
+```
+
 ---
 
 ## 🎯 Quick System Overview
@@ -162,19 +195,21 @@ git branch --show-current  # Should show: main
 
 ## 🟢 Current System Status
 
-**Server**: ✅ Running on port 8788
-**Database**: Ready for discoveries
-**Discovery**: Active with realistic validation thresholds
-**Market Data**: 4,182 days of SOLUSDT perpetual futures data
+**Server**: ✅ Running on port 8788 (launchd-managed, `com.slate.auto` + `com.slate.autoserver`)
+**Database**: ✅ **Fresh — discovery tables cleared 2026-07-11** (`perpetual_discoveries` = 0, `edge_discoveries` = 0). Backup at `slate_core/slate_realistic_discoveries_backup_20260711_121642.db`.
+**Discovery**: Active with realistic validation thresholds, restarted fresh after the 2026-07-11 data-structure fix
+**Evolution Layer**: Active (autostart); population preserved (52 evolved programs in `slate_evolution.db`)
+**Market Data**: 4,182 hourly bars ≈ 175 days of SOLUSDT perpetual futures data (resampled to daily by the evolution loader)
 
-**Recent Fixes Applied (2026-07-09):**
-- ✅ Validation thresholds fixed for realistic perpetual futures performance
-- ✅ Diagnostic logging added to validation process
-- ✅ Server restart requirement documented
+**Recent Architectural Changes Applied (2026-07-11):**
+- ✅ `closed_loop_integration.py` — handles direct + wrapped structures, object + dict formats, corrected field names (strategies now save with real backtest values)
+- ✅ `startup_coordinator.py` — guards against duplicate discovery-loop / watchdog tasks; correct restart-after-hang
+- ✅ `perpetual_database.py` — save verified by read-back
+- ✅ Discovery DB cleared for a clean run under the corrected code path
 
 **Expected Going Forward:**
-- 5-10% validation success rate (vs previous 0%)
-- Continuous discovery with 24/7 autonomous operation
+- 5-10% validation success rate with realistic thresholds
+- Continuous discovery (closed-loop) + code evolution (AlphaEvolve-style) running 24/7
 - Automatic strategy lifecycle management
 
 ---
@@ -270,11 +305,11 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 - **Startup Coordinator**: `slate_core/startup_coordinator.py` (auto-restart, watchdog)
 
 ### **Database & Market Data**
-- **Database**: `slate_core/slate_realistic_discoveries.db` (production, 3 rows) · rich history in `slate_realistic_discoveries_backup_20260705_161518.db` (118k rows)
+- **Database**: `slate_core/slate_realistic_discoveries.db` (production, **fresh — cleared 2026-07-11**) · rich history in `slate_realistic_discoveries_backup_20260705_161518.db` (118k rows)
 - **Evolution DB**: `slate_core/slate_evolution.db` (persisted population)
 - **Market Data**: `sol_data_cache/SOLUSDT_perpetual_1d_12m.csv` — JSON array of ~4,182 **hourly** bars ≈ 175 days (load with `pd.read_json`; evolution resamples to daily)
 
 ---
 
-*For detailed information on any topic, see the modular documentation files listed above*  
-*Last Updated: 2026-07-11 (AlphaEvolve-style evolution layer, /api/evolution endpoints, GLM-via-Z.ai LLM, daily-data loader)*
+*For detailed information on any topic, see the modular documentation files listed above*
+*Last Updated: 2026-07-11 (discovery DB cleared + fresh restart; closed-loop data-structure fix; launchd auto-restart documented; evolution layer + /api/evolution endpoints; GLM-via-Z.ai LLM; daily-data loader)*

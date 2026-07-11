@@ -355,20 +355,53 @@ class EnhancedDiscoveryIntegration:
         Extract and format strategy data for database storage.
         """
         try:
-            # Get backtest result from discovery
-            discovered_strategies = discovery_results.get('raw_results', {}).get('validated_strategies', [])
+            # Extract strategy name first (needed for logging)
             strategy_name = validation_report.get('strategy_name', 'unknown')
+
+            # Get backtest result from discovery
+            # CRITICAL FIX: Handle both direct and wrapped data structures
+            if 'raw_results' in discovery_results:
+                # Old wrapped structure
+                discovered_strategies = discovery_results.get('raw_results', {}).get('validated_strategies', [])
+            else:
+                # Direct structure (current implementation)
+                discovered_strategies = discovery_results.get('validated_strategies', [])
+
+            # DEBUG: Log what we're working with
+            logger.info(f"🔍 DEBUG: Looking for strategy: {strategy_name}")
+            logger.info(f"   Available strategies in discovery: {[s.hypothesis.name if hasattr(s, 'hypothesis') else 'unknown' for s in discovered_strategies[:5]]}")
 
             # Find matching strategy result
             backtest_result = None
             for strategy_result in discovered_strategies:
-                if strategy_result.hypothesis.name == strategy_name:
-                    backtest_result = strategy_result.backtest_result
-                    break
+                # Handle both objects and dicts
+                if hasattr(strategy_result, 'hypothesis'):
+                    # Object format: HypothesisTestResult
+                    current_name = strategy_result.hypothesis.name
+                    logger.debug(f"   Checking: {current_name} vs {strategy_name}")
+                    if current_name == strategy_name:
+                        backtest_result = strategy_result.backtest_result
+                        logger.info(f"   ✅ Found match for {strategy_name}")
+                        break
+                elif isinstance(strategy_result, dict) and 'hypothesis' in strategy_result:
+                    # Dict format with embedded hypothesis
+                    current_name = strategy_result['hypothesis']['name']
+                    logger.debug(f"   Checking dict: {current_name} vs {strategy_name}")
+                    if current_name == strategy_name:
+                        backtest_result = strategy_result.get('backtest_result')
+                        logger.info(f"   ✅ Found match for {strategy_name}")
+                        break
 
             if not backtest_result:
-                logger.warning(f"No backtest result found for {strategy_name}")
+                logger.warning(f"❌ No backtest result found for {strategy_name}")
+                logger.warning(f"   Searched through {len(discovered_strategies)} strategies")
                 return None
+
+            # Add diagnostic logging for database save
+            logger.info(f"💾 Preparing to save strategy: {strategy_name}")
+            logger.info(f"   Backtest trades: {backtest_result.total_trades if hasattr(backtest_result, 'total_trades') else backtest_result.get('total_trades', 'N/A')}")
+            logger.info(f"   Sharpe ratio: {backtest_result.sharpe_ratio if hasattr(backtest_result, 'sharpe_ratio') else backtest_result.get('sharpe_ratio', 'N/A')}")
+            logger.info(f"   Win rate: {backtest_result.win_rate if hasattr(backtest_result, 'win_rate') else backtest_result.get('win_rate', 'N/A')}")
 
             # Convert to perpetual database format using ACTUAL backtest results
             # CRITICAL FIX: Use real backtest data instead of estimates
@@ -376,47 +409,60 @@ class EnhancedDiscoveryIntegration:
             # Handle both dict and object backtest results for compatibility
             if isinstance(backtest_result, dict):
                 # Dictionary format
+                logger.info(f"   📋 Using DICT format for {strategy_name}")
+                logger.info(f"   🔍 DICT keys: {list(backtest_result.keys())}")
+                logger.info(f"   🔍 DICT sample values: total_trades={backtest_result.get('total_trades')}, sharpe={backtest_result.get('sharpe_ratio')}, profit={backtest_result.get('total_profit')}")
+
+                # CRITICAL FIX: Use the actual field names from the validation system
                 initial_capital = backtest_result.get('initial_capital', 10000.0)
                 final_capital = backtest_result.get('final_capital', 10000.0)
-                total_profit_usdt = backtest_result.get('total_profit_usdt', 0.0)
-                total_return_pct = backtest_result.get('total_return_pct', 0.0)
+                total_profit_usdt = backtest_result.get('total_profit', 0.0)  # Fixed: was total_profit_usdt
+                total_return_pct = backtest_result.get('total_return', 0.0)  # Fixed: was total_return_pct
 
-                buy_hold_profit_usdt = backtest_result.get('buy_hold_profit_usdt', 0.0)
-                buy_hold_return_pct = backtest_result.get('buy_hold_return_pct', 0.0)
-                vs_buy_hold_usdt = backtest_result.get('vs_buy_hold_usdt', 0.0)
+                # Market comparison (not available in validation dict, use defaults)
+                buy_hold_profit_usdt = backtest_result.get('buy_hold_profit', 0.0)
+                buy_hold_return_pct = backtest_result.get('buy_hold_return', 0.0)
+                vs_buy_hold_usdt = backtest_result.get('vs_buy_hold', 0.0)
                 beat_market = backtest_result.get('beat_market', False)
 
+                # Trading statistics
                 total_trades = backtest_result.get('total_trades', 0)
                 winning_trades = backtest_result.get('winning_trades', 0)
                 losing_trades = backtest_result.get('losing_trades', 0)
                 win_rate = backtest_result.get('win_rate', 0.0) * 100
 
+                # Risk metrics
                 max_drawdown_pct = backtest_result.get('max_drawdown_pct', 0.0)
-                max_drawdown_usdt = backtest_result.get('max_drawdown_usdt', 0.0)
+                max_drawdown_usdt = backtest_result.get('max_drawdown', 0.0)  # Fixed: was max_drawdown_usdt
                 sharpe_ratio = backtest_result.get('sharpe_ratio', 0.0)
 
-                total_fees_usdt = backtest_result.get('total_fees_usdt', 0.0)
-                total_slippage_usdt = backtest_result.get('total_slippage_usdt', 0.0)
-                total_transaction_costs_usdt = backtest_result.get('total_transaction_costs_usdt', 0.0)
+                # Cost breakdown (using actual field names)
+                total_fees_usdt = backtest_result.get('total_fees', 0.0)  # Fixed: was total_fees_usdt
+                total_slippage_usdt = backtest_result.get('total_slippage', 0.0)  # Fixed: was total_slippage_usdt
+                total_transaction_costs_usdt = total_fees_usdt + total_slippage_usdt
 
-                total_funding_paid_usdt = backtest_result.get('total_funding_paid_usdt', 0.0)
-                total_funding_received_usdt = backtest_result.get('total_funding_received_usdt', 0.0)
-                net_funding_usdt = backtest_result.get('net_funding_usdt', 0.0)
-                avg_funding_daily_usdt = backtest_result.get('avg_funding_daily_usdt', 0.0)
+                # Funding stats (not available in simplified validation dict)
+                total_funding_paid_usdt = backtest_result.get('total_funding_paid', 0.0)
+                total_funding_received_usdt = backtest_result.get('total_funding_received', 0.0)
+                net_funding_usdt = backtest_result.get('net_funding', 0.0)
+                avg_funding_daily_usdt = backtest_result.get('avg_funding_daily', 0.0)
 
+                # Realism metrics (use defaults if not available)
                 avg_slippage_bps = backtest_result.get('avg_slippage_bps', 15.0)
                 avg_fill_rate = backtest_result.get('avg_fill_rate', 0.8)
-                total_signals = backtest_result.get('total_signals', 0)
-                filled_signals = backtest_result.get('filled_signals', 0)
+                total_signals = backtest_result.get('total_signals', total_trades)  # Estimate
+                filled_signals = backtest_result.get('filled_signals', int(total_trades * avg_fill_rate))
                 partial_fills = backtest_result.get('partial_fills', 0)
 
+                # Performance metrics
                 profit_factor = backtest_result.get('profit_factor', 0.0)
-                avg_trade_pnl_usdt = backtest_result.get('avg_trade_pnl_usdt', 0.0)
-                avg_win_usdt = backtest_result.get('avg_win_usdt', 0.0)
-                avg_loss_usdt = backtest_result.get('avg_loss_usdt', 0.0)
-                largest_win_usdt = backtest_result.get('largest_win_usdt', 0.0)
-                largest_loss_usdt = backtest_result.get('largest_loss_usdt', 0.0)
+                avg_trade_pnl_usdt = backtest_result.get('avg_trade_pnl', 0.0)  # Fixed: was avg_trade_pnl_usdt
+                avg_win_usdt = backtest_result.get('avg_win', 0.0)  # Fixed: was avg_win_usdt
+                avg_loss_usdt = backtest_result.get('avg_loss', 0.0)  # Fixed: was avg_loss_usdt
+                largest_win_usdt = backtest_result.get('largest_win', 0.0)  # Fixed: was largest_win_usdt
+                largest_loss_usdt = backtest_result.get('largest_loss', 0.0)  # Fixed: was largest_loss_usdt
 
+                # Market data (use defaults)
                 period_start = backtest_result.get('period_start', '2025-11-01')
                 period_end = backtest_result.get('period_end', '2026-07-01')
                 start_price = backtest_result.get('start_price', 150.0)
@@ -426,6 +472,7 @@ class EnhancedDiscoveryIntegration:
 
             else:
                 # Object format (PerpetualBacktestResult)
+                logger.info(f"   🎯 Using OBJECT format for {strategy_name}")
                 initial_capital = backtest_result.initial_capital
                 final_capital = backtest_result.final_capital
                 total_profit_usdt = backtest_result.total_profit_usdt
@@ -543,6 +590,17 @@ class EnhancedDiscoveryIntegration:
                 # Timestamp
                 'timestamp': datetime.now().isoformat()
             }
+
+            # DEBUG: Log final strategy data before database save
+            current_time = datetime.now().isoformat()
+            logger.info(f"   🕐 Current time when creating strategy_data: {current_time}")
+            logger.info(f"   🕐 Timestamp in strategy_data: {strategy_data['timestamp']}")
+            logger.info(f"   🕐 Time difference: {abs((datetime.fromisoformat(current_time) - datetime.fromisoformat(strategy_data['timestamp'])).total_seconds())} seconds")
+            logger.info(f"   🎯 Final strategy_data for {strategy_name}:")
+            logger.info(f"      total_trades={strategy_data.get('total_trades')}")
+            logger.info(f"      sharpe_ratio={strategy_data.get('sharpe_ratio')}")
+            logger.info(f"      total_profit_usdt={strategy_data.get('total_profit_usdt')}")
+            logger.info(f"      win_rate={strategy_data.get('win_rate')}")
 
             return strategy_data
 

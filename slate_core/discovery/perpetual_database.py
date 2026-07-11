@@ -135,8 +135,26 @@ class PerpetualDatabaseManager:
     def save_discovery(self, result: Dict[str, Any]) -> bool:
         """Save perpetual futures backtest result to database."""
         try:
+            # DEBUG: Log input values with full context
+            import traceback
+            logger.info(f"🔍 save_discovery called with:")
+            logger.info(f"   strategy_name: {result.get('strategy_name')}")
+            logger.info(f"   total_trades: {result.get('total_trades')}")
+            logger.info(f"   sharpe_ratio: {result.get('sharpe_ratio')}")
+            logger.info(f"   total_profit_usdt: {result.get('total_profit_usdt')}")
+            logger.info(f"   win_rate: {result.get('win_rate')}")
+            logger.info(f"   Call stack:")
+            for line in traceback.format_stack()[-4:]:
+                logger.info(f"     {line.strip()}")
+
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+
+            # CRITICAL DEBUG: Check if entry already exists before save
+            cursor.execute("SELECT timestamp, total_trades, sharpe_ratio, total_profit_usdt FROM perpetual_discoveries WHERE strategy_name = ? AND period_start = ? AND period_end = ?", (result['strategy_name'], result.get('period_start', '2025-11-01'), result.get('period_end', '2026-07-01')))
+            existing = cursor.fetchone()
+            if existing:
+                logger.info(f"⚠️ Existing entry found: timestamp={existing[0]}, trades={existing[1]}, sharpe={existing[2]}, profit={existing[3]}")
 
             # Calculate rank score (USDT profit is PRIMARY, accounting for costs)
             rank_score = (
@@ -181,8 +199,45 @@ class PerpetualDatabaseManager:
                 rank_score, result['timestamp']
             ))
 
+            # CRITICAL DEBUG: Log before commit
+            logger.info(f"🔍 Before commit: {result['strategy_name']} with timestamp {result['timestamp']}")
+
+            # DEBUG: Log SQL execution
+            logger.info(f"🔍 SQL executed for {result['strategy_name']}")
+            logger.info(f"   Parameters bound: total_trades={int(result['total_trades'])}, sharpe={result['sharpe_ratio']:.6f}, profit={result['total_profit_usdt']:.2f}")
+            logger.info(f"   Timestamp used: {result['timestamp']}")
+
+            # CRITICAL DEBUG: Check commit status
+            logger.info(f"🔍 About to commit transaction for {result['strategy_name']}")
             conn.commit()
+            logger.info(f"✅ Transaction committed successfully")
             conn.close()
+            logger.info(f"✅ Database connection closed")
+
+            # Verify save by reading back
+            import os
+            logger.info(f"   🔍 Database path: {self.db_path}")
+            logger.info(f"   🔍 Absolute path: {os.path.abspath(self.db_path)}")
+            logger.info(f"   🔍 Working dir: {os.getcwd()}")
+
+            # CRITICAL FIX: Use the exact timestamp to verify the specific row we just inserted
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT total_trades, sharpe_ratio, total_profit_usdt FROM perpetual_discoveries WHERE strategy_name = ? AND timestamp = ?", (result['strategy_name'], result['timestamp']))
+            saved_values = cursor.fetchone()
+            conn.close()
+
+            logger.info(f"   Verification from DB: total_trades={saved_values[0] if saved_values else 'NOT_FOUND'}, sharpe={saved_values[1] if saved_values and len(saved_values) > 1 else 'NOT_FOUND'}, profit={saved_values[2] if saved_values and len(saved_values) > 2 else 'NOT_FOUND'}")
+
+            # CRITICAL: Second verification from FRESH connection to ensure data is actually persisted
+            import time
+            time.sleep(0.1)  # Small delay to ensure flush to disk
+            fresh_conn = sqlite3.connect(self.db_path)
+            fresh_cursor = fresh_conn.cursor()
+            fresh_cursor.execute("SELECT total_trades, sharpe_ratio, total_profit_usdt FROM perpetual_discoveries WHERE strategy_name = ? AND timestamp = ?", (result['strategy_name'], result['timestamp']))
+            fresh_values = fresh_cursor.fetchone()
+            fresh_conn.close()
+            logger.info(f"   🔍 FRESH connection verification: total_trades={fresh_values[0] if fresh_values else 'NOT_FOUND'}, sharpe={fresh_values[1] if fresh_values and len(fresh_values) > 1 else 'NOT_FOUND'}, profit={fresh_values[2] if fresh_values and len(fresh_values) > 2 else 'NOT_FOUND'}")
 
             logger.info(f"✓ Saved perpetual discovery: {result['strategy_name']} | Profit: ${result['total_profit_usdt']:.2f} | Costs: ${result['total_transaction_costs_usdt']:.2f}")
             return True

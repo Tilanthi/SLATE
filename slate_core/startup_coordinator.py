@@ -62,6 +62,9 @@ class StartupCoordinator:
         self.consecutive_hangs = 0
         self.max_consecutive_hangs = 3
 
+        # Watchdog task tracking
+        self.watchdog_task: Optional[asyncio.Task] = None
+
         # Configuration
         self.idle_timeout_minutes = 0.1  # Resume discovery after 6 seconds of inactivity
         self.discovery_cycle_interval_seconds = 5  # Run discovery every 5 seconds when active
@@ -101,13 +104,21 @@ class StartupCoordinator:
             logger.error("Cannot start discovery loop - engine not initialized")
             return
 
+        # Check if discovery is already running
+        if self.discovery_task and not self.discovery_task.done():
+            logger.info("Discovery loop already running - skipping duplicate start")
+            return
+
         logger.info("Starting discovery loop in background...")
         self.discovery_task = asyncio.create_task(self._discovery_loop())
         logger.info("Discovery loop started successfully")
 
-        # Start watchdog to monitor and auto-restart if needed
-        logger.info("🐕 Starting discovery watchdog...")
-        asyncio.create_task(self.watchdog_check_discovery())
+        # Start watchdog to monitor and auto-restart if needed (only if not already running)
+        if self.watchdog_task is None or self.watchdog_task.done():
+            logger.info("🐕 Starting discovery watchdog...")
+            self.watchdog_task = asyncio.create_task(self.watchdog_check_discovery())
+        else:
+            logger.info("Watchdog already running - skipping duplicate start")
 
     def record_user_activity(self):
         """
@@ -362,6 +373,9 @@ class StartupCoordinator:
                                     await self.discovery_task
                                 except asyncio.CancelledError:
                                     logger.info("✅ Hung discovery task cancelled")
+                            # Restart discovery WITHOUT creating new watchdog
+                            logger.info("🔄 Restarting discovery after hang")
+                            self.discovery_task = asyncio.create_task(self._discovery_loop())
                             self.consecutive_hangs = 0
                         else:
                             logger.warning(f"⚠️ Hang {self.consecutive_hangs}/{self.max_consecutive_hangs} - monitoring")
@@ -373,7 +387,12 @@ class StartupCoordinator:
                     # Check if we're not in user task mode
                     if self.state != SystemState.USER_TASK:
                         logger.info("🔄 Auto-restarting continuous discovery")
-                        await self.start_discovery_loop()
+                        # Cancel existing discovery task if needed
+                        if self.discovery_task and not self.discovery_task.done():
+                            self.discovery_task.cancel()
+                        # Restart discovery WITHOUT creating new watchdog
+                        self.discovery_task = asyncio.create_task(self._discovery_loop())
+                        logger.info("✅ Discovery restarted successfully")
                     else:
                         logger.debug("🎯 Discovery paused due to user task - will resume when task completes")
                 else:
