@@ -20,6 +20,7 @@
 - 🔄 **MANDATORY server restart after any code change:** `pkill -f "python3 -m slate_core.server" && sleep 2 && python3 -m slate_core.server`.
 - 🔁 **Determinism inside an evaluation:** seed `numpy.random` before each backtest so a given candidate's fitness is reproducible (evolution needs stable comparisons). Seed must be a function of the candidate id, not wall-clock.
 - 📄 **Commits:** frequent, one logical change each, conventional-commit messages. Push only to `main` of https://github.com/Tilanthi/SLATE.
+- 📄 **Test files are gitignored** (`.gitignore:80` → `test_*.py`; zero existing root tests are tracked). Do NOT `git add -f` test files — respect the convention. Tests live locally; all test code is reproduced inline in this plan so the suite is rebuildable on restart. Commit steps therefore commit the *implementation* file(s) only; `git add test_*.py` will be silently skipped.
 - 🧪 **TDD:** every Phase 0/1 deliverable is written test-first against a real-data slice.
 
 ## File Structure (new package: `slate_core/discovery/evolution/`)

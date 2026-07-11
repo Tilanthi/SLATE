@@ -1,0 +1,86 @@
+# Evolution Layer (AlphaEvolve-style)
+
+Implements the high-value, low-risk advances from the AlphaEvolve paper
+(Google DeepMind, 2025) as additive layers over SLATE's existing discovery
+pipeline. Full multi-phase plan:
+`docs/superpowers/plans/2026-07-11-alphaevolve-evolution.md`.
+
+## Why this exists
+
+SLATE's discoveries were *independent* — 28k+ rows that never bred, with no
+diversity maintenance and no accumulating memory. AlphaEvolve's two biggest
+ideas fix that: (1) an **overfit-resistant fitness evaluator** and (2) an
+**accumulating program database** (MAP-Elites + islands). The catch — and the
+reason the design is careful — is that AlphaEvolve's results rest on
+*ground-truth* evaluators, while SLATE's backtest is an *inductive* proxy.
+Overfitting is therefore the make-or-break risk, and Phase 0 exists to make
+the fitness function resistant to it before any evolution runs.
+
+## Phase 0 — fitness evaluator (`fitness_evaluator.py`)
+
+### Contract
+
+```python
+evaluate_fitness(signal_fn, parameters, df, edge_type,
+                 config=None, candidate_id="") -> FitnessResult
+```
+
+`signal_fn(df, i, parameters) -> int` must return `1` (long), `-1` (short), or
+`0` (flat) — the same interface the backtester already calls
+(`perpetual_futures_backtest.py:381`).
+
+### Pipeline
+
+1. **Correctness gate** — probe the signal over a short window; reject
+   candidates that raise, return non-finite values, or emit anything outside
+   `{-1, 0, 1}`. The safety envelope (sizing/leverage/execution) can never be
+   touched by evolved signal code.
+2. **Chronological IS/OOS split** (60/40, never shuffled) + deterministic
+   backtests on both halves (seeded for reproducibility).
+3. **Overfit penalty** = `max(0, is_vs_buyhold - oos_vs_buyhold) * weight`.
+   Only penalized when in-sample looks better than out-of-sample.
+4. **Optional pluralistic validation** (off by default — it runs
+   bootstrap 1000 + Monte Carlo 1000 sims and is too slow for the inner loop;
+   turn `run_pluralistic_validation=True` for finalists). Reads
+   `PluralisticValidationReport.overall_validation_score`.
+5. **Gates** — `oos_trades >= min_trades`; (default) OOS must beat buy-hold;
+   (optional) validation score ≥ floor. Any failure → `fitness_score = -inf`.
+6. **Score** = `oos_vs_buyhold - overfit_penalty` (USDT-vs-buy-hold units,
+   overfit-adjusted). Higher is better.
+
+### Smoke results (full real data, 2026-07-11)
+
+| signal | eval | fitness | oos_vs_bh | overfit_pen | trades is/oos |
+|---|---|---|---|---|---|
+| momentum | True | 1342.82 | 5458.34 | 4115.51 | 813 / 535 |
+| flat | False | -inf | — | — | 0 / 0 (rejected) |
+
+The penalty cutting momentum's raw +5458 OOS edge down to +1343 is the
+overfit defense doing its job (IS was far higher than OOS).
+
+### Known limitation — `vs_buy_hold` in downtrends
+
+`vs_buy_hold = strategy_profit - buyhold_profit`. In a down-trending OOS
+window, buy-hold loses money, so even "do nothing" (flat) records a positive
+`vs_buy_hold`. The `min_trades` gate rejects the pure-flat case, but a
+money-losing strategy that merely loses *less* than buy-hold can still pass.
+
+**Recommended first refinement** (not yet implemented): add a
+`require_absolute_oos_profit` gate (default True) so a candidate must actually
+*make* money OOS (`total_profit_usdt > 0`), not just beat a losing benchmark.
+This is small, well-tested, and squarely within Phase 0's intent; deferred only
+to respect the "Phase 0 + 1 as planned" scope.
+
+## Phase 1 — program database (`program_database.py`, `niche.py`)
+
+MAP-Elites grid (niche = strategy-family × regime) keeping the best program per
+cell, plus a bounded island pool for exploration. Seeded from the existing
+`perpetual_discoveries` table so accumulated knowledge instantly populates the
+grid. Exposes the AlphaEvolve controller primitive
+`sample() -> (parent, inspirations)`. Persisted to sqlite.
+
+## Status
+
+- Phase 0: ✅ complete (11 tests green, smoke verified on real data).
+- Phase 1: in progress.
+- Phases 2–5: design-complete in the plan; not yet implemented.
