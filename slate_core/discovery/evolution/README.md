@@ -115,6 +115,53 @@ because historically SLATE's `passed_validation` column is unreliable (the
 
 ## Status
 
-- Phase 0: ✅ complete (11 tests green, smoke verified on real data).
-- Phase 1: ✅ complete (11 tests green; seeding + sample verified on real data).
-- Phases 2–5: design-complete in the plan; not yet implemented.
+All phases complete. 66 tests green; verified end-to-end on real data with both
+the mock LLM and the live GLM (Z.ai proxy).
+
+- Phase 0: ✅ fitness evaluator (IS/OOS + overfit penalty + absolute-profit gate).
+- Phase 1: ✅ program database (MAP-Elites + islands, seeding, persistence).
+- Phase 2: ✅ rich-context prompt sampler + meta-prompt evolution.
+- Phase 3: ✅ Pareto front + return-correlation novelty.
+- Phase 4: ✅ AST-gated signal sandbox + evolvable template + two-window gate.
+- Phase 5: ✅ LLM ensemble pool + async controller.
+
+## LLM integration (no Anthropic key needed)
+
+The user runs GLM via Claude Code, which routes through Z.ai's
+Anthropic-protocol-compatible proxy (`ANTHROPIC_BASE_URL=https://api.z.ai`,
+`ANTHROPIC_AUTH_TOKEN=<key>`). `llm_client.py` reuses that exact proxy + token
+(verified: `claude-sonnet-5` via Z.ai returns OK), so SLATE needs **no separate
+key**. A deterministic Mock backend keeps all 66 tests offline. Optional
+OpenAI-compatible backend for other providers.
+
+## Running the loop
+
+```python
+import asyncio, pandas as pd
+from slate_core.discovery.evolution.controller import run_evolution, EvolutionConfig
+from slate_core.discovery.evolution.program_database import ProgramDatabase, ProgramDBConfig
+from slate_core.discovery.evolution.prompt_sampler import PromptSampler
+from slate_core.discovery.evolution.llm_pool import LLMPool
+from slate_core.discovery.evolution.llm_client import get_llm_client, LLMConfig
+
+df = pd.read_json("sol_data_cache/SOLUSDT_perpetual_1d_12m.csv")
+df["timestamp"] = pd.to_datetime(df["timestamp"]); df = df.set_index("timestamp").sort_index()
+
+db = ProgramDatabase(ProgramDBConfig(persist_path="slate_core/slate_evolution.db"))
+db.seed_from_discoveries("slate_core/slate_realistic_discoveries.db", limit=200)
+
+pool = LLMPool(get_llm_client(LLMConfig()), get_llm_client(LLMConfig()))  # GLM via Z.ai
+produced = asyncio.run(run_evolution(db, PromptSampler(), pool, df, n_steps=20))
+```
+
+### End-to-end verification (2026-07-11)
+
+- **Mock loop**: 5/5 steps produced Programs; the two-window gate rejected the
+  mock's non-edge signal (overfit defense working).
+- **Live GLM (Z.ai)**: 3/3 steps produced valid, sandbox-compiled signal
+  functions that ran through the backtester; all rejected by the profitability
+  gate on this data window — safety system functioning as designed.
+
+Most candidates will be rejected by the gates early on — that is the point. The
+loop accumulates the rare programs that are genuinely profitable OOS on two
+independent windows.

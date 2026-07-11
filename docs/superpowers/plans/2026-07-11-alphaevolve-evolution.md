@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **STATUS AS OF 2026-07-11:** Phase 0 + Phase 1 are being implemented now. Phases 2–5 are **design-complete and locked** (interfaces, files, algorithms, risks, validation gates) but their TDD micro-steps are intentionally not yet elaborated — they will be expanded into bite-sized tasks when activated, because their design should absorb what we learn building Phases 0–1. Do not treat Phases 2–5 as final code; treat them as a restartable design spec.
+> **STATUS AS OF 2026-07-11: ALL PHASES COMPLETE.** Phases 0–5 are implemented, 66 tests green, and the full loop is verified end-to-end on real data with both the mock LLM and the live GLM (Z.ai proxy, no Anthropic key needed). See `slate_core/discovery/evolution/README.md`. Phases 2–5 below are retained as the design rationale; the actual implementations live in the package (prompt_sampler, meta_prompt_db, pareto, novelty, signal_sandbox, evolvable_strategy, llm_client, llm_pool, controller). The LLM-key workaround is in `llm_client.py`: reuse `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN` (Z.ai) via the `anthropic` SDK, with a deterministic Mock backend for all tests.
 
 **Goal:** Bring the high-value, low-risk advances from the AlphaEvolve paper (Google DeepMind, 2025) into SLATE's discovery pipeline — an overfit-resistant fitness evaluator and an accumulating, diversity-maintained program database (MAP-Elites + islands) — without exposing the system to the overfitting failure mode that an inductive (backtest) evaluator creates.
 
