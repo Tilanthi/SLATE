@@ -69,7 +69,8 @@ curl -X POST "http://127.0.0.1:8788/api/closed-loop/discovery/start" | jq '.summ
 
 ### **Key Architecture**
 - **Discovery Method**: Hypothesis-driven scientific discovery (closed-loop AI)
-- **Market Data**: 4,182 days real SOLUSDT perpetual futures data
+- **Evolution Layer**: AlphaEvolve-style evolutionary code search (`slate_core/discovery/evolution/`) — runs alongside closed-loop discovery
+- **Market Data**: Real SOLUSDT perpetual futures. ⚠️ `SOLUSDT_perpetual_1d_12m.csv` is a JSON array (load with `pd.read_json`, not `read_csv`) of **~4,182 hourly bars ≈ 175 days** despite the "1d" name. The evolution layer resamples it to **daily** (`load_data.load_daily_data`) to match the documented daily-timeframe edge.
 - **Validation**: 6 pluralistic validation methods with realistic thresholds
 - **Learning**: Continuous feedback learning system
 - **Server**: Port 8788 with 24/7 autonomous operation
@@ -114,6 +115,21 @@ curl -X POST "http://127.0.0.1:8788/api/closed-loop/discovery/start" | jq '.'
 # System performance
 curl http://127.0.0.1:8788/api/closed-loop/performance | jq '.'
 ```
+
+### **Evolution Operations** (AlphaEvolve-style loop)
+```bash
+# Evolution status (running, niches, best fitness, cycle counts)
+curl http://127.0.0.1:8788/api/evolution/status | jq '.'
+
+# Start / stop the background evolution loop
+curl -X POST http://127.0.0.1:8788/api/evolution/start | jq '.'
+curl -X POST http://127.0.0.1:8788/api/evolution/stop  | jq '.'
+
+# Seed the population from existing discoveries
+curl -X POST "http://127.0.0.1:8788/api/evolution/seed?limit=200" | jq '.'
+```
+The loop **autostarts** with the server (disable with `SLATE_EVOLUTION_AUTOSTART=0`).
+It uses the `exploration` gate preset and GLM via the Z.ai proxy by default.
 
 ### **Database Operations**
 ```bash
@@ -160,6 +176,35 @@ git branch --show-current  # Should show: main
 - 5-10% validation success rate (vs previous 0%)
 - Continuous discovery with 24/7 autonomous operation
 - Automatic strategy lifecycle management
+
+---
+
+## 🧬 Evolution Layer (AlphaEvolve-style)
+
+A second discovery engine that **evolves executable signal code** via LLM-guided
+evolution, running alongside the hypothesis-driven closed-loop. Adapted from
+Google DeepMind's AlphaEvolve (2025).
+
+- **Why two engines:** the closed-loop searches *parameters* of fixed templates;
+  the evolution layer searches the *signal logic itself* (much larger space), but
+  inside a hard overfit-resistant cage.
+- **Overfitting is the crux.** Unlike AlphaEvolve's ground-truth evaluators,
+  SLATE's backtest is an inductive proxy, so the fitness function is built to
+  resist curve-fitting: correctness gate → IS/OOS split → overfit penalty →
+  absolute-profit gate → **two-window gate** (must profit on two independent OOS
+  windows). Evolved code runs in an AST sandbox (no imports/dunder/network),
+  clamped to `{-1,0,1}`, never touching the safety envelope.
+- **LLM with no Anthropic key:** the user runs GLM via Claude Code, which routes
+  through Z.ai's Anthropic-protocol-compatible proxy (`ANTHROPIC_BASE_URL` /
+  `ANTHROPIC_AUTH_TOKEN`). `evolution/llm_client.py` reuses that proxy via the
+  `anthropic` SDK (model `claude-sonnet-5`), so **no separate key is needed**.
+  A deterministic Mock backend keeps all 78 tests offline.
+- **Expected behavior:** most candidates are **rejected** by the gates — that is
+  the point. The loop accumulates the rare programs that are genuinely profitable
+  OOS on two windows.
+- **Endpoints:** `/api/evolution/{status,start,stop,seed}` (autostarts on boot;
+  disable with `SLATE_EVOLUTION_AUTOSTART=0`).
+- **Plan:** `docs/superpowers/plans/2026-07-11-alphaevolve-evolution.md` (all 6 phases).
 
 ---
 
@@ -210,16 +255,26 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 - **Feedback Learning**: `slate_core/discovery/feedback_learning.py` (650+ lines)
 - **Hybrid Strategies**: `slate_core/discovery/hybrid_neurosymbolic.py` (750+ lines)
 
+### **Evolution Layer** (AlphaEvolve-style, `slate_core/discovery/evolution/`)
+- **Fitness evaluator**: `fitness_evaluator.py` — IS/OOS split, overfit penalty, absolute-profit gate, two-window gate. Presets: `strict()` / `exploration()`.
+- **Program database**: `program_database.py` + `niche.py` — MAP-Elites + islands, `sample()`, seeding, sqlite persistence.
+- **Prompts**: `prompt_sampler.py` + `meta_prompt_db.py` — rich context + co-evolved meta-instructions.
+- **Selection**: `pareto.py` + `novelty.py` — multi-objective Pareto + return-correlation novelty.
+- **Code evolution**: `signal_sandbox.py` (AST-gated), `evolvable_strategy.py` (EVOLVE-BLOCK + apply_diff).
+- **Loop**: `llm_client.py` (GLM via Z.ai proxy), `llm_pool.py` (fast+strong ensemble), `controller.py` (async), `evolution_service.py` (server-hosted), `load_data.py` (daily resample).
+- **Plan**: `docs/superpowers/plans/2026-07-11-alphaevolve-evolution.md` · **Docs**: `slate_core/discovery/evolution/README.md` · **78 tests**.
+
 ### **Integration & Server**
 - **Integration Layer**: `slate_core/discovery/closed_loop_integration.py` (400+ lines)
 - **Server**: `slate_core/server.py` (API endpoints, health checks)
 - **Startup Coordinator**: `slate_core/startup_coordinator.py` (auto-restart, watchdog)
 
 ### **Database & Market Data**
-- **Database**: `slate_core/slate_realistic_discoveries.db`
-- **Market Data**: `sol_data_cache/SOLUSDT_perpetual_1d_12m.csv` (4,182 days)
+- **Database**: `slate_core/slate_realistic_discoveries.db` (production, 3 rows) · rich history in `slate_realistic_discoveries_backup_20260705_161518.db` (118k rows)
+- **Evolution DB**: `slate_core/slate_evolution.db` (persisted population)
+- **Market Data**: `sol_data_cache/SOLUSDT_perpetual_1d_12m.csv` — JSON array of ~4,182 **hourly** bars ≈ 175 days (load with `pd.read_json`; evolution resamples to daily)
 
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*  
-*Last Updated: 2026-07-09 (Server restart rule, validation fixes)*
+*Last Updated: 2026-07-11 (AlphaEvolve-style evolution layer, /api/evolution endpoints, GLM-via-Z.ai LLM, daily-data loader)*
