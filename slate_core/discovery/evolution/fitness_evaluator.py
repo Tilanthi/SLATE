@@ -112,3 +112,107 @@ def run_backtest(signal_fn: SignalFn, parameters: Dict[str, Any],
     d = dataclasses.asdict(result)
     d["beat_market"] = bool(d.get("beat_market", False))
     return d
+
+
+@dataclass
+class FitnessResult:
+    """Outcome of evaluate_fitness. fitness_score = -inf means rejected."""
+    evaluated: bool                  # passed the gate and produced a real score
+    fitness_score: float            # higher = better; -inf if rejected
+    oos_vs_buyhold: float
+    is_vs_buyhold: float
+    overfit_gap: float              # max(0, is - oos)
+    overfit_penalty: float
+    n_trades_is: int
+    n_trades_oos: int
+    validation_score: float
+    rejection_reason: str = ""
+    metrics_oos: Dict[str, Any] = field(default_factory=dict)
+    metrics_is: Dict[str, Any] = field(default_factory=dict)
+    candidate_id: str = ""
+
+
+def _validation_score(oos_metrics: Dict[str, Any], oos_df: pd.DataFrame = None,
+                      strategy_name: str = "eval_candidate") -> float:
+    """Run the existing pluralistic validators on the OOS result; return 0..1.
+
+    Reads PluralisticValidationReport.overall_validation_score
+    (rigorous_validation.py:721). Passes price_data so walk-forward works.
+    Never raises — a validation failure yields a neutral 0.0 so evolution
+    cannot crash on the validator.
+    """
+    try:
+        from slate_core.discovery.rigorous_validation import get_rigorous_validation_system
+        system = get_rigorous_validation_system()
+        additional = {"price_data": oos_df} if oos_df is not None else None
+        report = system.validate_strategy(strategy_name, oos_metrics, additional)
+        return float(getattr(report, "overall_validation_score", 0.0) or 0.0)
+    except Exception:  # noqa: BLE001 - validation must never crash evolution
+        return 0.0
+
+
+def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
+                     df: pd.DataFrame, edge_type: str,
+                     config: Optional[FitnessConfig] = None,
+                     candidate_id: str = "") -> FitnessResult:
+    """Overfit-resistant fitness for one candidate.
+
+    Pipeline: correctness gate -> chronological IS/OOS backtests -> overfit
+    penalty -> (optional) pluralistic validation -> gates. The final
+    fitness_score is an overfit-adjusted OOS edge in USDT-vs-buy-hold units.
+    """
+    cfg = config or FitnessConfig()
+    base = FitnessResult(
+        evaluated=False, fitness_score=float("-inf"),
+        oos_vs_buyhold=0.0, is_vs_buyhold=0.0, overfit_gap=0.0,
+        overfit_penalty=0.0, n_trades_is=0, n_trades_oos=0,
+        validation_score=0.0, candidate_id=candidate_id,
+    )
+
+    # 1) Correctness-by-construction gate
+    ok, reason = check_signal_correctness(signal_fn, df, parameters or {},
+                                          probe_window=cfg.probe_window)
+    if not ok:
+        base.rejection_reason = f"correctness: {reason}"
+        return base
+
+    # 2) Chronological split + deterministic backtests on both halves
+    is_df, oos_df = split_is_oos(df, cfg.is_fraction)
+    seed = cfg.random_seed
+    is_m = run_backtest(signal_fn, parameters, is_df, edge_type, seed=seed)
+    oos_m = run_backtest(signal_fn, parameters, oos_df, edge_type, seed=seed + 1)
+
+    base.metrics_is, base.metrics_oos = is_m, oos_m
+    base.is_vs_buyhold = float(is_m.get("vs_buy_hold_usdt", 0.0))
+    base.oos_vs_buyhold = float(oos_m.get("vs_buy_hold_usdt", 0.0))
+    base.n_trades_is = int(is_m.get("total_trades", 0))
+    base.n_trades_oos = int(oos_m.get("total_trades", 0))
+
+    # 3) Overfit gap & penalty (only penalize when IS looks better than OOS)
+    base.overfit_gap = max(0.0, base.is_vs_buyhold - base.oos_vs_buyhold)
+    base.overfit_penalty = base.overfit_gap * cfg.overfit_penalty_weight
+
+    # 4) Optional pluralistic validation on OOS (slow; off by default)
+    if cfg.run_pluralistic_validation:
+        base.validation_score = _validation_score(oos_m, oos_df=oos_df)
+    else:
+        base.validation_score = 1.0  # neutral; floor gate skipped below
+
+    # 5) Gates
+    reasons = []
+    if base.n_trades_oos < cfg.min_trades:
+        reasons.append(f"oos_trades={base.n_trades_oos}<{cfg.min_trades}")
+    if cfg.require_beat_buyhold_oos and base.oos_vs_buyhold <= 0:
+        reasons.append("oos_does_not_beat_buyhold")
+    if cfg.run_pluralistic_validation and base.validation_score < cfg.validation_score_floor:
+        reasons.append(
+            f"validation_score={base.validation_score:.2f}<{cfg.validation_score_floor}"
+        )
+    if reasons:
+        base.rejection_reason = "; ".join(reasons)
+        return base
+
+    # 6) Final overfit-adjusted OOS edge
+    base.evaluated = True
+    base.fitness_score = base.oos_vs_buyhold - base.overfit_penalty
+    return base
