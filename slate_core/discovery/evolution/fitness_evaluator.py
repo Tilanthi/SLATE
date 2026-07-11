@@ -121,6 +121,7 @@ def run_backtest(signal_fn: SignalFn, parameters: Dict[str, Any],
         edge_type=edge_type,
         signal_function=signal_fn,
         parameters=parameters or {},
+        seed=seed,
     )
     d = dataclasses.asdict(result)
     d["beat_market"] = bool(d.get("beat_market", False))

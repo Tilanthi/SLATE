@@ -1552,32 +1552,69 @@ class ClosedLoopDiscoveryEngine:
 
         return result
 
-    def convert_backtest_to_dict(self, backtest_result) -> Dict[str, Any]:
-        """
-        Convert PerpetualBacktestResult object to dictionary format for validation system.
+    @staticmethod
+    def convert_backtest_to_dict(backtest_result) -> Dict[str, Any]:
+        """Convert a PerpetualBacktestResult to a dict for validation + DB layers.
 
-        This handles the object-to-dict conversion needed by the validation methods.
+        Fix 4: carries EVERY field so nothing silently defaults to 0 downstream.
+        Includes both validation-friendly aliases (total_return as decimal,
+        max_drawdown as a ratio) AND canonical *_usdt/*_pct names. The DB layer
+        reads the canonical names to avoid the max_drawdown ratio-vs-USDT overload.
         """
         if isinstance(backtest_result, dict):
             return backtest_result
 
-        # Convert PerpetualBacktestResult object to dict
+        r = backtest_result
         return {
-            'sharpe_ratio': backtest_result.sharpe_ratio,
-            'total_return': backtest_result.total_return_pct / 100,  # Convert percentage to decimal
-            'win_rate': backtest_result.win_rate,
-            'total_trades': backtest_result.total_trades,
-            'max_drawdown': backtest_result.max_drawdown_pct / 100,  # Convert percentage to decimal
-            'profit_factor': backtest_result.profit_factor if hasattr(backtest_result, 'profit_factor') else 0,
-            'total_profit': backtest_result.total_profit_usdt,
-            'initial_capital': backtest_result.initial_capital,
-            'final_capital': backtest_result.final_capital,
-            'winning_trades': backtest_result.winning_trades,
-            'losing_trades': backtest_result.losing_trades,
-            'avg_trade_pnl': backtest_result.avg_trade_pnl_usdt if hasattr(backtest_result, 'avg_trade_pnl_usdt') else 0,
-            'total_fees': backtest_result.total_fees_usdt,
-            'total_slippage': backtest_result.total_slippage_usdt,
-            'max_drawdown_pct': backtest_result.max_drawdown_pct
+            # --- validation-friendly aliases (existing contract) ---
+            'sharpe_ratio': r.sharpe_ratio,
+            'total_return': r.total_return_pct / 100.0,      # decimal
+            'win_rate': r.win_rate,
+            'total_trades': r.total_trades,
+            'max_drawdown': r.max_drawdown_pct / 100.0,      # decimal ratio (validation scoring)
+            'profit_factor': r.profit_factor,
+            'total_profit': r.total_profit_usdt,
+            'initial_capital': r.initial_capital,
+            'final_capital': r.final_capital,
+            'winning_trades': r.winning_trades,
+            'losing_trades': r.losing_trades,
+            'avg_trade_pnl': r.avg_trade_pnl_usdt,
+            'total_fees': r.total_fees_usdt,
+            'total_slippage': r.total_slippage_usdt,
+            # --- canonical fields (carry the real values to the DB) ---
+            'total_profit_usdt': r.total_profit_usdt,
+            'total_return_pct': r.total_return_pct,
+            'buy_hold_profit_usdt': r.buy_hold_profit_usdt,
+            'buy_hold_return_pct': r.buy_hold_return_pct,
+            'vs_buy_hold_usdt': r.vs_buy_hold_usdt,
+            'beat_market': r.beat_market,
+            'max_drawdown_pct': r.max_drawdown_pct,
+            'max_drawdown_usdt': r.max_drawdown_usdt,
+            'sortino_ratio': r.sortino_ratio,
+            'calmar_ratio': r.calmar_ratio,
+            'avg_win_usdt': r.avg_win_usdt,
+            'avg_loss_usdt': r.avg_loss_usdt,
+            'largest_win_usdt': r.largest_win_usdt,
+            'largest_loss_usdt': r.largest_loss_usdt,
+            'total_funding_paid_usdt': r.total_funding_paid_usdt,
+            'total_funding_received_usdt': r.total_funding_received_usdt,
+            'net_funding_usdt': r.net_funding_usdt,
+            'avg_funding_daily_usdt': r.avg_funding_daily_usdt,
+            'total_fees_usdt': r.total_fees_usdt,
+            'total_slippage_usdt': r.total_slippage_usdt,
+            'total_transaction_costs_usdt': r.total_transaction_costs_usdt,
+            'avg_slippage_bps': r.avg_slippage_bps,
+            'avg_fill_rate': r.avg_fill_rate,
+            'total_signals': r.total_signals,
+            'filled_signals': r.filled_signals,
+            'partial_fills': r.partial_fills,
+            'period_start': r.period_start,
+            'period_end': r.period_end,
+            'start_price': r.start_price,
+            'end_price': r.end_price,
+            'timeframe': r.timeframe,
+            'bars_per_year': r.bars_per_year,
+            'passed_validation': r.passed_validation,
         }
 
     def update_learning_bias(self, validation_result: HypothesisTestResult, success: bool):

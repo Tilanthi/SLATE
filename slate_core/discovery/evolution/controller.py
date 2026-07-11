@@ -83,6 +83,13 @@ async def evolution_step(
                                             candidate_id=candidate_id),
     )
 
+    # Fix 6: do NOT store gate-rejected candidates. A -inf program would
+    # otherwise become a niche elite (first reject wins the empty niche) and
+    # pollute the population with non-trading junk.
+    if not fitness.evaluated:
+        logger.info("candidate rejected at gate: %s", (fitness.rejection_reason or "")[:120])
+        return None
+
     metrics = {
         "oos_vs_buyhold": fitness.oos_vs_buyhold,
         "is_vs_buyhold": fitness.is_vs_buyhold,

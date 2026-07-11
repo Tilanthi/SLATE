@@ -665,6 +665,34 @@ class PluralisticValidationSystem:
         """
         logger.info(f"🔍 Starting pluralistic validation for {strategy_name}")
 
+        # Fix 5: hard profitability floor. A strategy that does not actually make
+        # money cannot pass - regardless of the softer consensus scoring or the
+        # validators that auto-pass when their input data is absent. This is the
+        # gate that stops money-losing strategies from being saved as "validated".
+        _profit = float(backtest_result.get("total_profit",
+                      backtest_result.get("total_profit_usdt", 0.0)) or 0.0)
+        if _profit <= 0:
+            logger.info(f"🚫 {strategy_name} rejected at profitability floor "
+                        f"(total_profit={_profit:.2f} <= 0)")
+            return PluralisticValidationReport(
+                strategy_name=strategy_name,
+                overall_validation_score=0.0,
+                individual_validations={
+                    "profitability_floor": ValidationResult(
+                        ValidationMethod.BOOTSTRAP_CI, False, 0.0,
+                        {"reason": f"total_profit={_profit:.2f} <= 0"},
+                        warnings=["not profitable after costs"],
+                    )
+                },
+                consensus_result=False,
+                statistical_significance=0.0,
+                robustness_score=0.0,
+                risk_assessment={"risk_level": "HIGH",
+                                 "risk_factors": ["not profitable after costs"],
+                                 "total_warnings": 1},
+                deployment_recommendation="REJECT",
+            )
+
         individual_validations = {}
         validation_results = []
 
@@ -692,7 +720,8 @@ class PluralisticValidationSystem:
         passed_count = sum(1 for v in individual_validations.values() if v.passed)
         total_count = len(individual_validations)
         consensus = passed_count / total_count if total_count > 0 else 0
-        consensus_result = consensus >= 0.33  # 33% of methods must pass (relaxed from 40%) - allows 2/6 methods
+        # Fix 5: require a true majority (>= 50%) of validators to pass, not 33%.
+        consensus_result = consensus >= 0.5
 
         # Calculate statistical significance (bootstrap-based)
         bootstrap_result = individual_validations.get('bootstrap')

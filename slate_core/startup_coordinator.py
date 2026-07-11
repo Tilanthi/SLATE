@@ -226,12 +226,14 @@ class StartupCoordinator:
                     # Load market data for discovery
                     import pandas as pd
 
-                    # Load JSON data and set timestamp as index
-                    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
-                    df['timestamp'] = pd.to_datetime(df['timestamp'])
-                    df.set_index('timestamp', inplace=True)
+                    # Fix 2b: load DAILY bars. The source file is HOURLY despite
+                    # its "1d" name; SLATE's documented edge is on the daily
+                    # timeframe (sub-daily signals are not profitable), so
+                    # resample intraday->daily via the shared evolution loader.
+                    from slate_core.discovery.evolution.load_data import load_daily_data
+                    df = load_daily_data('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
 
-                    logger.info(f"✅ Market data loaded: {len(df)} days")
+                    logger.info(f"✅ Market data loaded: {len(df)} daily bars")
 
                     # Filter data for optimal volatility regime (Option 4: Test different market regimes)
                     from slate_core.discovery.market_regime_filter import get_market_regime_filter

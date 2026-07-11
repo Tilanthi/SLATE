@@ -100,6 +100,44 @@ If the server is repeatedly failing to start, check `/tmp/slate_server_error.log
 
 ---
 
+## 🔧 Correctness Fixes (2026-07-11) — the 7 force-multipliers
+
+A deep audit found the pipeline manufactured false confidence. These fixes make
+the numbers trustworthy (120 tests, TDD). All verified live.
+
+1. **Lookahead closed** (`perpetual_futures_backtest.py:381`) — the signal now
+   receives only `df.iloc[:i+1]`, so evolved code can no longer read future bars.
+   Defeatable overfit cage → sound.
+2. **Timeframe-aware backtester + daily data** (`perpetual_futures_backtest`,
+   `startup_coordinator`) — funding accrual and Sharpe annualization now scale to
+   the detected bar frequency (was hardcoded daily on hourly data → 24× funding
+   error). The closed-loop now loads **daily** bars via `load_daily_data`
+   (matches the documented daily-timeframe edge). Result carries `bars_per_year`.
+3. **Deterministic RNG** — backtests seed numpy (config `random_seed`, overridable
+   per-candidate via the `seed` param). Same strategy/seed → identical result.
+4. **Full backtest result carried to DB** (`convert_backtest_to_dict` now
+   comprehensive; integration reads canonical `*_usdt` names) — buy-hold, funding,
+   per-trade stats, real prices/period no longer default to 0. Fixes the
+   `max_drawdown_usdt`-stored-as-ratio bug.
+5. **Validation gate rejects losers** (`rigorous_validation.py`) — hard
+   profitability floor (`total_profit <= 0` → REJECT) + consensus raised to a
+   true majority (50%, was 33%). Money-losing strategies can no longer pass.
+6. **No more `-inf` elites** (`controller.py`) — gate-rejected candidates are not
+   stored (was: first reject became the niche elite).
+7. **Sandbox hardened** (`signal_sandbox.py`) — AST-gates DataFrame write/export
+   methods (`to_csv`/`to_pickle`/… ; closes the filesystem leak) and rejects
+   unconditional `while True` loops at compile (closes the obvious DoS).
+   *Residual:* non-obvious infinite loops in executor threads still need
+   subprocess isolation (follow-up).
+
+**Known follow-up (not a fix bug):** on the daily timeframe the regime filter
+leaves only ~47 bars (~27 tradeable), and the closed-loop's hourly-calibrated
+strategy templates generate 0 trades there → the closed-loop currently saves
+nothing. This is honest (no fake edge) but means strategy/regime-filter tuning
+for the daily timeframe is the next step. The evolution layer is unaffected.
+
+---
+
 ## 🎯 Quick System Overview
 
 ### **Perpetual Futures Trading**

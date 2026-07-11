@@ -409,66 +409,84 @@ class EnhancedDiscoveryIntegration:
             # Handle both dict and object backtest results for compatibility
             if isinstance(backtest_result, dict):
                 # Dictionary format
-                logger.info(f"   📋 Using DICT format for {strategy_name}")
-                logger.info(f"   🔍 DICT keys: {list(backtest_result.keys())}")
-                logger.info(f"   🔍 DICT sample values: total_trades={backtest_result.get('total_trades')}, sharpe={backtest_result.get('sharpe_ratio')}, profit={backtest_result.get('total_profit')}")
+                b = backtest_result
 
-                # CRITICAL FIX: Use the actual field names from the validation system
-                initial_capital = backtest_result.get('initial_capital', 10000.0)
-                final_capital = backtest_result.get('final_capital', 10000.0)
-                total_profit_usdt = backtest_result.get('total_profit', 0.0)  # Fixed: was total_profit_usdt
-                total_return_pct = backtest_result.get('total_return', 0.0)  # Fixed: was total_return_pct
+                def _pick(canonical, alias=None, default=0.0):
+                    """Read canonical name, falling back to a legacy alias ONLY when
+                    the two share semantics/units. Never cross units (e.g. ratio vs USDT)."""
+                    if canonical in b:
+                        return b[canonical]
+                    if alias is not None and alias in b:
+                        return b[alias]
+                    return default
 
-                # Market comparison (not available in validation dict, use defaults)
-                buy_hold_profit_usdt = backtest_result.get('buy_hold_profit', 0.0)
-                buy_hold_return_pct = backtest_result.get('buy_hold_return', 0.0)
-                vs_buy_hold_usdt = backtest_result.get('vs_buy_hold', 0.0)
-                beat_market = backtest_result.get('beat_market', False)
+                initial_capital = _pick('initial_capital', default=10000.0)
+                final_capital = _pick('final_capital', default=10000.0)
+                total_profit_usdt = _pick('total_profit_usdt', 'total_profit', 0.0)
+                # total_return_pct is a PERCENT; legacy 'total_return' is a decimal
+                if 'total_return_pct' in b:
+                    total_return_pct = b['total_return_pct']
+                elif 'total_return' in b:
+                    total_return_pct = b['total_return'] * 100.0
+                else:
+                    total_return_pct = 0.0
+
+                # Market comparison (Fix 4: now carried by convert_backtest_to_dict)
+                buy_hold_profit_usdt = _pick('buy_hold_profit_usdt', 'buy_hold_profit', 0.0)
+                buy_hold_return_pct = _pick('buy_hold_return_pct', 'buy_hold_return', 0.0)
+                vs_buy_hold_usdt = _pick('vs_buy_hold_usdt', 'vs_buy_hold', 0.0)
+                beat_market = _pick('beat_market', default=False)
 
                 # Trading statistics
-                total_trades = backtest_result.get('total_trades', 0)
-                winning_trades = backtest_result.get('winning_trades', 0)
-                losing_trades = backtest_result.get('losing_trades', 0)
-                win_rate = backtest_result.get('win_rate', 0.0) * 100
+                total_trades = _pick('total_trades', default=0)
+                winning_trades = _pick('winning_trades', default=0)
+                losing_trades = _pick('losing_trades', default=0)
+                _win_rate_raw = _pick('win_rate', default=0.0)
+                # win_rate is stored as a fraction (0..1) on the result -> percent
+                win_rate = _win_rate_raw * 100.0 if 0.0 <= _win_rate_raw <= 1.0 else _win_rate_raw
 
                 # Risk metrics
-                max_drawdown_pct = backtest_result.get('max_drawdown_pct', 0.0)
-                max_drawdown_usdt = backtest_result.get('max_drawdown', 0.0)  # Fixed: was max_drawdown_usdt
-                sharpe_ratio = backtest_result.get('sharpe_ratio', 0.0)
+                max_drawdown_pct = _pick('max_drawdown_pct', default=0.0)
+                # Fix 4: read the USDT value directly; do NOT fall back to the
+                # 'max_drawdown' ratio (different units - that was the ratio bug).
+                max_drawdown_usdt = _pick('max_drawdown_usdt', default=0.0)
+                sharpe_ratio = _pick('sharpe_ratio', default=0.0)
 
-                # Cost breakdown (using actual field names)
-                total_fees_usdt = backtest_result.get('total_fees', 0.0)  # Fixed: was total_fees_usdt
-                total_slippage_usdt = backtest_result.get('total_slippage', 0.0)  # Fixed: was total_slippage_usdt
-                total_transaction_costs_usdt = total_fees_usdt + total_slippage_usdt
+                # Cost breakdown
+                total_fees_usdt = _pick('total_fees_usdt', 'total_fees', 0.0)
+                total_slippage_usdt = _pick('total_slippage_usdt', 'total_slippage', 0.0)
+                total_transaction_costs_usdt = _pick(
+                    'total_transaction_costs_usdt', default=total_fees_usdt + total_slippage_usdt
+                )
 
-                # Funding stats (not available in simplified validation dict)
-                total_funding_paid_usdt = backtest_result.get('total_funding_paid', 0.0)
-                total_funding_received_usdt = backtest_result.get('total_funding_received', 0.0)
-                net_funding_usdt = backtest_result.get('net_funding', 0.0)
-                avg_funding_daily_usdt = backtest_result.get('avg_funding_daily', 0.0)
+                # Funding stats (Fix 4: now carried)
+                total_funding_paid_usdt = _pick('total_funding_paid_usdt', 'total_funding_paid', 0.0)
+                total_funding_received_usdt = _pick('total_funding_received_usdt', 'total_funding_received', 0.0)
+                net_funding_usdt = _pick('net_funding_usdt', 'net_funding', 0.0)
+                avg_funding_daily_usdt = _pick('avg_funding_daily_usdt', 'avg_funding_daily', 0.0)
 
-                # Realism metrics (use defaults if not available)
-                avg_slippage_bps = backtest_result.get('avg_slippage_bps', 15.0)
-                avg_fill_rate = backtest_result.get('avg_fill_rate', 0.8)
-                total_signals = backtest_result.get('total_signals', total_trades)  # Estimate
-                filled_signals = backtest_result.get('filled_signals', int(total_trades * avg_fill_rate))
-                partial_fills = backtest_result.get('partial_fills', 0)
+                # Realism metrics
+                avg_slippage_bps = _pick('avg_slippage_bps', default=15.0)
+                avg_fill_rate = _pick('avg_fill_rate', default=0.8)
+                total_signals = _pick('total_signals', default=total_trades)
+                filled_signals = _pick('filled_signals', default=int(total_trades * avg_fill_rate))
+                partial_fills = _pick('partial_fills', default=0)
 
                 # Performance metrics
-                profit_factor = backtest_result.get('profit_factor', 0.0)
-                avg_trade_pnl_usdt = backtest_result.get('avg_trade_pnl', 0.0)  # Fixed: was avg_trade_pnl_usdt
-                avg_win_usdt = backtest_result.get('avg_win', 0.0)  # Fixed: was avg_win_usdt
-                avg_loss_usdt = backtest_result.get('avg_loss', 0.0)  # Fixed: was avg_loss_usdt
-                largest_win_usdt = backtest_result.get('largest_win', 0.0)  # Fixed: was largest_win_usdt
-                largest_loss_usdt = backtest_result.get('largest_loss', 0.0)  # Fixed: was largest_loss_usdt
+                profit_factor = _pick('profit_factor', default=0.0)
+                avg_trade_pnl_usdt = _pick('avg_trade_pnl_usdt', 'avg_trade_pnl', 0.0)
+                avg_win_usdt = _pick('avg_win_usdt', 'avg_win', 0.0)
+                avg_loss_usdt = _pick('avg_loss_usdt', 'avg_loss', 0.0)
+                largest_win_usdt = _pick('largest_win_usdt', 'largest_win', 0.0)
+                largest_loss_usdt = _pick('largest_loss_usdt', 'largest_loss', 0.0)
 
-                # Market data (use defaults)
-                period_start = backtest_result.get('period_start', '2025-11-01')
-                period_end = backtest_result.get('period_end', '2026-07-01')
-                start_price = backtest_result.get('start_price', 150.0)
-                end_price = backtest_result.get('end_price', 145.0)
-                volatility_regime = backtest_result.get('volatility_regime', 'unknown')
-                timeframe = backtest_result.get('timeframe', '1d')
+                # Market data (Fix 4: real period/prices now carried)
+                period_start = _pick('period_start', default='2025-11-01')
+                period_end = _pick('period_end', default='2026-07-01')
+                start_price = _pick('start_price', default=150.0)
+                end_price = _pick('end_price', default=145.0)
+                volatility_regime = _pick('volatility_regime', default='unknown')
+                timeframe = _pick('timeframe', default='1d')
 
             else:
                 # Object format (PerpetualBacktestResult)

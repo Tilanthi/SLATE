@@ -36,6 +36,15 @@ FORBIDDEN_NAMES = {
     "type", "object", "super", "eval", "help",
 }
 
+# Object/DataFrame methods that write/export to disk, clipboard, or a DB - the
+# demonstrated filesystem leak (df.to_csv wrote a file). Indexing/iloc/etc. stay
+# allowed. (Fix 7.)
+FORBIDDEN_ATTRS = {
+    "to_csv", "to_pickle", "to_parquet", "to_hdf", "to_json", "to_excel",
+    "to_sql", "to_stata", "to_feather", "to_orc", "to_xml", "to_markdown",
+    "to_latex", "to_clipboard", "save", "savefig",
+}
+
 # Curated builtins only (use the builtins module directly — always a module).
 import builtins as _builtins
 
@@ -66,6 +75,8 @@ def _validate(tree: ast.AST) -> None:
             attr = node.attr
             if isinstance(attr, str) and attr.startswith("_"):
                 raise SandboxError(f"private/dunder attribute access forbidden: {attr!r}")
+            if isinstance(attr, str) and attr in FORBIDDEN_ATTRS:
+                raise SandboxError(f"forbidden attribute/method (write/export): {attr!r}")
         if isinstance(node, ast.Name) and node.id in FORBIDDEN_NAMES:
             raise SandboxError(f"forbidden name: {node.id!r}")
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
@@ -73,6 +84,15 @@ def _validate(tree: ast.AST) -> None:
                 raise SandboxError(f"forbidden call: {node.func.id!r}")
         if isinstance(node, (ast.Global, ast.Nonlocal)):
             raise SandboxError("global/nonlocal are forbidden")
+        # Fix 7: reject unconditional infinite loops (while True / while 1) at
+        # compile time so they never reach the (threaded) backtest. Non-obvious
+        # loops (e.g. `while x < 1`) still slip through; safe_eval_signal handles
+        # those on the main thread, and full worker-thread isolation needs a
+        # subprocess (documented TODO).
+        if isinstance(node, ast.While):
+            test = node.test
+            if isinstance(test, ast.Constant) and bool(test.value):
+                raise SandboxError("infinite loop rejected: `while <constant-truthy>`")
 
 
 def _clamp(v: Any) -> int:
