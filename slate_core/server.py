@@ -106,6 +106,20 @@ start_time = datetime.now()
 discovery_running = False
 last_user_activity = datetime.now()
 
+# Evolution service (AlphaEvolve-style evolutionary discovery loop). Runs
+# alongside the closed-loop discovery. Constructed eagerly but does no network
+# I/O until a step runs; the LLM client is auto (GLM via Z.ai proxy if a token
+# is present, else the offline Mock).
+EVOLUTION_AVAILABLE = False
+EVOLUTION_SERVICE = None
+try:
+    from slate_core.discovery.evolution.evolution_service import EvolutionService
+    EVOLUTION_SERVICE = EvolutionService()
+    EVOLUTION_AVAILABLE = True
+    logger.info("🧬 Evolution service available (AlphaEvolve-style loop)")
+except Exception as e:
+    logger.warning(f"⚠️ Evolution service not available: {e}")
+
 # ============================================================================
 # API Routes - Health & Status
 # ============================================================================
@@ -273,6 +287,45 @@ async def start_closed_loop_discovery():
 
 
 # ============================================================================
+# API Routes - Evolution (AlphaEvolve-style loop) — runs alongside closed-loop
+# ============================================================================
+
+@app.get("/api/evolution/status")
+async def evolution_status():
+    """Status of the evolutionary strategy-discovery loop."""
+    if not EVOLUTION_AVAILABLE:
+        return {"status": "unavailable", "message": "Evolution service not initialized"}
+    return {"status": "available", **EVOLUTION_SERVICE.status()}
+
+
+@app.post("/api/evolution/start")
+async def evolution_start():
+    """Start the evolution loop in the background."""
+    if not EVOLUTION_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Evolution service not available")
+    started = await EVOLUTION_SERVICE.start()
+    return {"started": started, "status": EVOLUTION_SERVICE.status()}
+
+
+@app.post("/api/evolution/stop")
+async def evolution_stop():
+    """Stop the evolution loop."""
+    if not EVOLUTION_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Evolution service not available")
+    await EVOLUTION_SERVICE.stop()
+    return {"stopped": True, "status": EVOLUTION_SERVICE.status()}
+
+
+@app.post("/api/evolution/seed")
+async def evolution_seed(limit: int = 200):
+    """Seed the evolution population from existing discoveries."""
+    if not EVOLUTION_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Evolution service not available")
+    n = EVOLUTION_SERVICE.seed(limit=limit)
+    return {"seeded": n, "status": EVOLUTION_SERVICE.status()}
+
+
+# ============================================================================
 # Startup Event - World-Class Discovery Only
 # ============================================================================
 
@@ -328,6 +381,19 @@ async def startup_event():
     # Start periodic health check
     asyncio.create_task(periodic_discovery_health_check())
     logger.info("✅ Closed-Loop AI System Initialized with auto-restart protection")
+
+    # Start the evolution loop alongside closed-loop discovery (env-gated).
+    # SLATE_EVOLUTION_AUTOSTART=0 disables it. Uses 'exploration' gates by default.
+    import os as _os
+    if _os.getenv("SLATE_EVOLUTION_AUTOSTART", "1") == "1" and EVOLUTION_AVAILABLE:
+        try:
+            EVOLUTION_SERVICE.seed(limit=200)
+            await EVOLUTION_SERVICE.start()
+            logger.info("🧬 Evolution loop started alongside closed-loop discovery "
+                        "(preset=%s, llm=%s)", EVOLUTION_SERVICE.gate_preset,
+                        EVOLUTION_SERVICE.llm.name)
+        except Exception as e:
+            logger.warning(f"⚠️ Evolution autostart failed: {e}")
 
 
 async def start_continuous_discovery():
