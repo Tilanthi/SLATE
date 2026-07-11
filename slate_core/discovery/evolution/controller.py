@@ -18,13 +18,12 @@ from dataclasses import dataclass
 from typing import Optional
 
 from slate_core.discovery.evolution.evolvable_strategy import BASE_SIGNAL_CODE, apply_diff, extract_code_block
-from slate_core.discovery.evolution.fitness_evaluator import (
-    FitnessConfig, evaluate_fitness_two_window,
-)
+from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
 from slate_core.discovery.evolution.llm_pool import LLMPool
 from slate_core.discovery.evolution.program_database import Program, ProgramDatabase
 from slate_core.discovery.evolution.prompt_sampler import PromptSampler, PromptObjective
 from slate_core.discovery.evolution.signal_sandbox import compile_signal
+from slate_core.discovery.evolution.subprocess_eval import eval_fitness_subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,7 @@ async def evolution_step(
 
     try:
         new_code = apply_diff(parent_code, diff or "")
-        fn = compile_signal(new_code)
+        compile_signal(new_code)  # validate it compiles under the sandbox
     except Exception as exc:  # noqa: BLE001 - bad code => skip this candidate
         logger.info("candidate rejected at compile: %s", str(exc)[:120])
         return None
@@ -76,11 +75,15 @@ async def evolution_step(
     edge_type = parent_prog.family or cfg.edge_type_default
     candidate_id = f"evo:{uuid.uuid4().hex[:8]}"
 
+    # Fix #1: evaluate in an isolated subprocess (RLIMIT_CPU + wall-clock kill)
+    # so a non-obvious infinite loop in evolved code cannot hang an executor
+    # thread - the worker-thread DoS hole. The signal source is recompiled
+    # inside the worker (a compiled closure isn't picklable across processes).
     fitness = await loop.run_in_executor(
         None,
-        lambda: evaluate_fitness_two_window(fn, {}, df, edge_type=edge_type,
-                                            config=fitness_config,
-                                            candidate_id=candidate_id),
+        lambda: eval_fitness_subprocess(new_code, {}, df, edge_type=edge_type,
+                                        config=fitness_config,
+                                        candidate_id=candidate_id),
     )
 
     # Fix 6: do NOT store gate-rejected candidates. A -inf program would

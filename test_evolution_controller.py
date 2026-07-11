@@ -41,10 +41,10 @@ def test_evolution_step_runs_and_adds_program(sol_slice, monkeypatch):
     db = _seed_db()
     sampler = PromptSampler()
     pool = _mock_pool()
-    # Mock the (stochastic, gate-dependent) fitness so this plumbing test
-    # exercises sample -> compile -> store deterministically.
+    # Mock the subprocess-isolated fitness so this plumbing test exercises
+    # sample -> compile -> store deterministically (no subprocess spawn).
     monkeypatch.setattr(
-        "slate_core.discovery.evolution.controller.evaluate_fitness_two_window",
+        "slate_core.discovery.evolution.controller.eval_fitness_subprocess",
         _passing_fitness,
     )
     prog = asyncio.run(evolution_step(db, sampler, pool, sol_slice))
@@ -70,7 +70,7 @@ def test_evolution_step_works_with_empty_database(sol_slice, monkeypatch):
     sampler = PromptSampler()
     pool = _mock_pool()
     monkeypatch.setattr(
-        "slate_core.discovery.evolution.controller.evaluate_fitness_two_window",
+        "slate_core.discovery.evolution.controller.eval_fitness_subprocess",
         _passing_fitness,
     )
     prog = asyncio.run(evolution_step(db, sampler, pool, sol_slice,
