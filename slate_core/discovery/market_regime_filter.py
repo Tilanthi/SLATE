@@ -16,6 +16,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Fix #2: a regime filter must not starve a small dataset. If the optimal regime
+# leaves fewer than this many bars, the closed loop widens to all regimes - on a
+# scarce daily dataset the regime focus isn't worth losing the bars (it was
+# cutting 175 -> 47 bars, leaving too few to generate any trades).
+MIN_BARS_FOR_DISCOVERY = 120
+
 
 class MarketRegimeFilter:
     """
@@ -156,6 +162,16 @@ class MarketRegimeFilter:
         """
         optimal_regime = self.get_optimal_regime_for_strategy(strategy_type)
         filtered_df = self.filter_by_regime(df, optimal_regime)
+
+        # Fix #2: if the optimal regime leaves too few bars to backtest
+        # meaningfully, widen to all regimes. The regime focus is only worth
+        # keeping on datasets large enough to trade after the cut.
+        if len(filtered_df) < MIN_BARS_FOR_DISCOVERY:
+            logger.info(
+                f"⚠️ {strategy_type}: regime '{optimal_regime}' left only "
+                f"{len(filtered_df)} bars (< {MIN_BARS_FOR_DISCOVERY}); using all regimes"
+            )
+            filtered_df = self.filter_by_regime(df, 'all')
 
         logger.info(f"✅ Optimized data for {strategy_type}: {len(filtered_df)} days in {optimal_regime.upper()} volatility regime")
 

@@ -149,6 +149,23 @@ def test_closed_loop_market_data_is_daily():
     assert 100 < len(df) < 400, f"expected ~175 daily bars, got {len(df)}"
 
 
+def test_regime_filter_does_not_starve_small_daily_dataset():
+    """Fix #2: the regime filter must not cut a small daily dataset below a
+    viable backtest size (it was cutting 175 -> 47 bars -> 0 trades)."""
+    from slate_core.discovery.market_regime_filter import (
+        get_market_regime_filter, MIN_BARS_FOR_DISCOVERY,
+    )
+    from slate_core.discovery.evolution.load_data import load_daily_data
+
+    df = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1d_12m.csv")
+    rf = get_market_regime_filter()
+    filtered = rf.filter_for_discovery(df, strategy_type="adaptive_regime_switching")
+    assert len(filtered) >= MIN_BARS_FOR_DISCOVERY, (
+        f"regime filter left {len(filtered)} bars (< {MIN_BARS_FOR_DISCOVERY} floor) "
+        "-> strategies will starve"
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Fix 4: carry PerpetualBacktestResult fields through to the DB
 # --------------------------------------------------------------------------- #
