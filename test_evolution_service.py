@@ -35,7 +35,12 @@ def test_service_start_stop_runs_a_cycle(tmp_path):
     async def go():
         ok = await svc.start()
         assert ok is True
-        await asyncio.sleep(1.0)        # let one cycle run
+        # Poll for at least one cycle. Each step spawns a subprocess for fitness
+        # eval, so under CI/CPU contention a fixed sleep is flaky.
+        for _ in range(30):
+            await asyncio.sleep(0.5)
+            if svc.status()["stats"]["cycles"] >= 1:
+                break
         await svc.stop()
 
     asyncio.run(go())
