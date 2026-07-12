@@ -114,14 +114,12 @@ def aggregate_ohlcv_daily(rows: List[list]) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(columns=["open", "high", "low", "close", "volume"],
                             index=pd.DatetimeIndex([], name="date"))
-    df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(max(len(rows[0]), 12))])
-    out = pd.DataFrame({
-        "open": df["c1"].astype(float),
-        "high": df["c2"].astype(float),
-        "low": df["c3"].astype(float),
-        "close": df["c4"].astype(float),
-        "volume": df["c5"].astype(float),
-    })
-    out.index = pd.DatetimeIndex(pd.to_datetime(df["c0"].astype("int64"), unit="ms").dt.floor("D"),
-                                 name="date")
-    return out[~out.index.duplicated(keep="last")].sort_index()
+    # Binance klines: [0]=openTime [1]=open [2]=high [3]=low [4]=close [5]=volume
+    # (real rows have 12 trailing fields we don't need). Read only the first six.
+    data = [{
+        "openTime": int(r[0]), "open": float(r[1]), "high": float(r[2]),
+        "low": float(r[3]), "close": float(r[4]), "volume": float(r[5]),
+    } for r in rows]
+    df = pd.DataFrame(data)
+    df.index = pd.DatetimeIndex(pd.to_datetime(df["openTime"], unit="ms").dt.floor("D"), name="date")
+    return df[~df.index.duplicated(keep="last")].sort_index().drop(columns=["openTime"])
