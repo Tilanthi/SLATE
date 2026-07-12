@@ -135,6 +135,22 @@ class PerpetualDatabaseManager:
     def save_discovery(self, result: Dict[str, Any]) -> bool:
         """Save perpetual futures backtest result to database."""
         try:
+            # Fix (a): hard profitability floor at the PERSISTENCE choke point.
+            # This is the last line of defense behind the validation gates (gate-1
+            # is_successful, gate-2 rigorous_validation). The swarm path and any
+            # other engine that builds a strategy_data dict and calls save_discovery
+            # bypass those gates - so a money-losing result must be refused here
+            # regardless of source. (A -$15.75 swarm momentum_mean_reversion row
+            # was previously saved with rank_score 1508 because vs_buy_hold is huge
+            # during a crash - downside avoidance, not alpha.)
+            profit = float(result.get("total_profit_usdt", 0.0) or 0.0)
+            if profit <= 0:
+                logger.info(
+                    f"🚫 save_discovery refused non-profitable result "
+                    f"{result.get('strategy_name')} (total_profit_usdt={profit:.2f} <= 0)"
+                )
+                return False
+
             # DEBUG: Log input values with full context
             import traceback
             logger.info(f"🔍 save_discovery called with:")

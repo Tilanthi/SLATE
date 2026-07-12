@@ -73,3 +73,55 @@ def test_gate1_is_successful_rejects_money_losing_hypothesis():
     assert res.is_successful() is False, (
         "money-losing hypothesis passed gate 1 (component score 0.8 >= 0.3)"
     )
+
+
+def _valid_result(**overrides):
+    """A complete, valid strategy_data dict for the persistence layer."""
+    base = {
+        "strategy_name": "t", "strategy_description": "d", "edge_type": "momentum",
+        "total_profit_usdt": 100.0, "total_return_pct": 0.01,
+        "final_capital": 10100.0, "initial_capital": 10000.0,
+        "buy_hold_profit_usdt": -5000.0, "buy_hold_return_pct": -0.5,
+        "vs_buy_hold_usdt": 5100.0, "beat_market": True,
+        "max_drawdown_pct": 0.05, "max_drawdown_usdt": 500.0, "sharpe_ratio": 1.2,
+        "total_trades": 50, "winning_trades": 28, "losing_trades": 22,
+        "win_rate": 56.0, "total_funding_paid_usdt": 5.0, "total_funding_received_usdt": 2.0,
+        "net_funding_usdt": -3.0, "avg_funding_daily_usdt": -0.1,
+        "total_fees_usdt": 20.0, "total_slippage_usdt": 30.0, "total_transaction_costs_usdt": 53.0,
+        "total_signals": 50, "filled_signals": 40, "partial_fills": 5,
+        "period_start": "2026-01-01T00:00:00", "period_end": "2026-07-01T00:00:00",
+        "start_price": 134.0, "end_price": 74.0, "timeframe": "1d",
+        "passed_validation": 1, "timestamp": "2026-07-12T00:00:00",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_save_discovery_refuses_money_loser(tmp_path):
+    """Fix (a): the persistence choke point must refuse a money-losing result no
+    matter which engine produced it (closes the swarm-path bypass that let a
+    -$15.75 momentum_mean_reversion row be saved)."""
+    import sqlite3
+    from slate_core.discovery.perpetual_database import PerpetualDatabaseManager
+
+    db = str(tmp_path / "t.db")
+    mgr = PerpetualDatabaseManager(db)
+    losing = _valid_result(strategy_name="swarm_loser", total_profit_usdt=-15.75,
+                            vs_buy_hold_usdt=5123.69, beat_market=True)  # the mirage case
+    saved = mgr.save_discovery(losing)
+    assert saved is False, "money-losing discovery was persisted"
+    n = sqlite3.connect(db).execute("SELECT COUNT(*) FROM perpetual_discoveries").fetchone()[0]
+    assert n == 0, f"{n} money-losing row(s) persisted"
+
+
+def test_save_discovery_persists_profitable_result(tmp_path):
+    """Sanity: the floor must not block a genuinely profitable result."""
+    import sqlite3
+    from slate_core.discovery.perpetual_database import PerpetualDatabaseManager
+
+    db = str(tmp_path / "t.db")
+    mgr = PerpetualDatabaseManager(db)
+    saved = mgr.save_discovery(_valid_result(strategy_name="winner", total_profit_usdt=100.0))
+    assert saved is True
+    n = sqlite3.connect(db).execute("SELECT COUNT(*) FROM perpetual_discoveries").fetchone()[0]
+    assert n == 1
