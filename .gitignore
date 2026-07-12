@@ -94,3 +94,6 @@ momentum_volatility_estimator.py
 
 # PID files (runtime state)
 *.pid
+
+# Regime multi-stream data (fetched, not committed)
+data/multi_stream/
