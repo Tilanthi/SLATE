@@ -94,3 +94,35 @@ def test_gate_rejected_candidate_is_not_stored(sol_slice):
     ))
     assert prog is None, "gate-rejected candidate was returned"
     assert len(db.island_pool()) == before, "gate-rejected candidate was stored as an elite"
+
+
+def _labelled_fitness(*_a, **_kw):
+    """A gate-passing FitnessResult that ALSO carries behavioural niche labels,
+    to prove the controller places the child by its OWN behaviour, not lineage."""
+    return FitnessResult(
+        evaluated=True, fitness_score=12.0,
+        oos_vs_buyhold=12.0, is_vs_buyhold=20.0,
+        overfit_gap=8.0, overfit_penalty=4.0,
+        n_trades_is=30, n_trades_oos=15,
+        validation_score=1.0, candidate_id="test",
+        family_label="mean_reversion", regime_label="low_vol",
+    )
+
+
+def test_child_niche_is_behavioral_not_inherited(sol_slice, monkeypatch):
+    """Phase 3: the child's niche must come from its OWN evaluated behaviour
+    (family_label/regime_label), not the parent's lineage. Without this,
+    MAP-Elites collapses every descendant onto the parent's single cell - the
+    original 'all momentum / unknown' monoculture."""
+    db = _seed_db()                       # parent elite is ('momentum', 'high')
+    sampler = PromptSampler()
+    pool = _mock_pool()
+    monkeypatch.setattr(
+        "slate_core.discovery.evolution.controller.eval_fitness_subprocess",
+        _labelled_fitness,
+    )
+    prog = asyncio.run(evolution_step(db, sampler, pool, sol_slice))
+    assert prog is not None
+    assert prog.family == "mean_reversion", "child inherited parent family instead of its own"
+    assert prog.regime == "low_vol", "child inherited parent regime instead of its own"
+    assert prog.niche == ("mean_reversion", "low_vol")

@@ -1,12 +1,17 @@
 """Tests for the Phase 0 fitness evaluator (slate_core.discovery.evolution.fitness_evaluator)."""
 import math
 
+import numpy as np
+import pandas as pd
+
 from slate_core.discovery.evolution.fitness_evaluator import (
     FitnessConfig,
     check_signal_correctness,
     split_is_oos,
     run_backtest,
     evaluate_fitness,
+    classify_signal_family,
+    classify_active_regime,
     FitnessResult,
 )
 
@@ -243,3 +248,75 @@ def test_exploration_preset_is_looser_but_keeps_core_defenses():
     # Core overfit defenses must remain on even in exploration mode.
     assert c.require_absolute_oos_profit is True
     assert c.require_beat_buyhold_oos is True
+
+
+# ---------------------------------------------------------------------------
+# Behavioral niche labels: family + regime derived from the candidate's OWN
+# behaviour (not inherited). Lets MAP-Elites diversify across >1 cell.
+# ---------------------------------------------------------------------------
+
+def test_classify_signal_family_momentum(sol_slice):
+    """A signal that goes long after up moves aligns with recent returns."""
+    def mom(df, i, p):
+        return 1 if df["close"].iloc[i] > df["close"].iloc[i - 1] else -1
+    assert classify_signal_family(mom, sol_slice, {}) == "momentum"
+
+
+def test_classify_signal_family_mean_reversion(sol_slice):
+    """A signal that goes long after down moves opposes recent returns."""
+    def mr(df, i, p):
+        return -1 if df["close"].iloc[i] > df["close"].iloc[i - 1] else 1
+    assert classify_signal_family(mr, sol_slice, {}) == "mean_reversion"
+
+
+def test_classify_signal_family_flat_is_other(sol_slice):
+    """A signal that never trades has no directional timing bias."""
+    def flat(df, i, p):
+        return 0
+    assert classify_signal_family(flat, sol_slice, {}) == "other"
+
+
+def _vol_regime_df(n_each=60):
+    """Synthetic close path for the vol-bucketing UNIT TEST only: first half
+    calm, second half wild. NOT market data (no trading uses this) — it exists
+    so the regime classifier can be exercised deterministically, which real
+    sol_slice (one fixed vol profile) does not allow."""
+    rng = np.random.RandomState(0)
+    calm = 100.0 + np.cumsum(rng.normal(0, 0.05, n_each))        # low vol
+    wild = calm[-1] + np.cumsum(rng.normal(0, 3.0, n_each))      # high vol
+    return pd.DataFrame({"close": np.concatenate([calm, wild])})
+
+
+def test_classify_active_regime_trades_in_wild_half():
+    df = _vol_regime_df()
+    def wild_only(d, i, p):
+        return 1 if 70 <= i < 110 else 0      # deep in the high-vol region
+    assert classify_active_regime(wild_only, df, {}) == "high_vol"
+
+
+def test_classify_active_regime_trades_in_calm_half():
+    df = _vol_regime_df()
+    def calm_only(d, i, p):
+        return 1 if 20 <= i < 50 else 0       # deep in the low-vol region
+    assert classify_active_regime(calm_only, df, {}) == "low_vol"
+
+
+def test_classify_active_regime_never_trades_is_unknown():
+    df = _vol_regime_df()
+    def flat(d, i, p):
+        return 0
+    assert classify_active_regime(flat, df, {}) == "unknown"
+
+
+def test_two_window_result_carries_behavioral_labels(monkeypatch, sol_slice):
+    """An evaluated candidate must carry family/regime labels so the controller
+    can place it in a behavioural niche instead of inheriting the parent's."""
+    from slate_core.discovery.evolution import fitness_evaluator as fe
+    monkeypatch.setattr(fe, "run_backtest", _two_window_run_factory(45.0, 28.0))
+    res = evaluate_fitness_two_window(
+        lambda df, i, p: (1 if df["close"].iloc[i] > df["close"].iloc[i - 1] else -1),
+        {}, sol_slice, edge_type="momentum", candidate_id="labelled",
+    )
+    assert res.evaluated is True
+    assert res.family_label == "momentum"
+    assert res.regime_label in {"low_vol", "med_vol", "high_vol"}

@@ -128,6 +128,104 @@ def run_backtest(signal_fn: SignalFn, parameters: Dict[str, Any],
     return d
 
 
+# ---------------------------------------------------------------------------
+# Behavioural niche labels (Phase 3): family + regime derived from the
+# candidate's OWN behaviour so MAP-Elites can place each program in a distinct
+# cell. Pure functions of (signal_fn, df) — they re-probe the signal series,
+# so they do not depend on backtest internals and survive the subprocess
+# boundary via FitnessResult.asdict().
+# ---------------------------------------------------------------------------
+
+_WARMUP = 20  # bars the backtester needs before it will call the signal
+
+
+def classify_signal_family(signal_fn: SignalFn, df: pd.DataFrame,
+                           parameters: Dict[str, Any], lookback: int = 5,
+                           momentum_thresh: float = 0.15) -> str:
+    """Strategy family from how the signal relates to recent returns.
+
+    momentum       — signal aligns with the recent move (corr > +thresh)
+    mean_reversion — signal opposes the recent move  (corr < -thresh)
+    other          — weak/flat/noisy relationship, or never trades
+
+    Diversifies the *family* axis of the niche grid across candidates on the
+    same data (a pure-data label could not do this).
+    """
+    close = df["close"].astype(float).values
+    n = len(close)
+    start = max(lookback, _WARMUP)
+    signals: list = []
+    rets: list = []
+    for i in range(start, n):
+        try:
+            sig = signal_fn(df, i, parameters)
+        except Exception:  # noqa: BLE001 - a flaky bar shouldn't crash labelling
+            continue
+        if sig not in VALID_SIGNALS:
+            continue
+        signals.append(float(sig))
+        rets.append(close[i] / close[i - lookback] - 1.0)
+    if len(signals) < 10 or float(np.std(signals)) == 0.0:
+        return "other"
+    corr = float(np.corrcoef(signals, rets)[0, 1])
+    if math.isnan(corr):
+        return "other"
+    if corr > momentum_thresh:
+        return "momentum"
+    if corr < -momentum_thresh:
+        return "mean_reversion"
+    return "other"
+
+
+def classify_active_regime(signal_fn: SignalFn, df: pd.DataFrame,
+                           parameters: Dict[str, Any], window: int = 20) -> str:
+    """The realized-vol regime in which this candidate actually holds a position.
+
+    Buckets every bar low_vol / med_vol / high_vol by the tercile of the whole
+    window's rolling realized vol, then takes the modal bucket across the bars
+    where the candidate is in the market (signal != 0). Candidate-dependent, so
+    two strategies on the same data can land in different regime cells. Returns
+    'unknown' if the candidate never trades or the series is too short.
+    """
+    close = df["close"].astype(float).values
+    n = len(close)
+    if n <= window + 3:
+        return "unknown"
+    logret = np.zeros(n)
+    logret[1:] = np.log(close[1:] / close[:-1])
+    rv = np.full(n, np.nan)
+    for i in range(window, n):
+        rv[i] = float(np.std(logret[i - window + 1: i + 1], ddof=0))
+    valid = rv[~np.isnan(rv)]
+    if len(valid) < 3:
+        return "unknown"
+    t1, t2 = (float(x) for x in np.percentile(valid, [33.333, 66.667]))
+
+    def _bucket(v: float) -> Optional[str]:
+        if math.isnan(v):
+            return None
+        if v <= t1:
+            return "low_vol"
+        if v <= t2:
+            return "med_vol"
+        return "high_vol"
+
+    in_market: list = []
+    for i in range(_WARMUP, n):
+        try:
+            sig = signal_fn(df, i, parameters)
+        except Exception:  # noqa: BLE001
+            continue
+        if sig in (1, -1):
+            b = _bucket(rv[i])
+            if b is not None:
+                in_market.append(b)
+    if not in_market:
+        return "unknown"
+    from collections import Counter
+    return Counter(in_market).most_common(1)[0][0]
+
+
 @dataclass
 class FitnessResult:
     """Outcome of evaluate_fitness. fitness_score = -inf means rejected."""
@@ -144,6 +242,12 @@ class FitnessResult:
     metrics_oos: Dict[str, Any] = field(default_factory=dict)
     metrics_is: Dict[str, Any] = field(default_factory=dict)
     candidate_id: str = ""
+    # Behavioural niche labels (Phase 3): derived from the candidate's OWN
+    # behaviour, not inherited. Let MAP-Elites diversify across cells instead
+    # of collapsing every descendant onto the parent's niche. Empty when the
+    # candidate was rejected (rejected candidates are never stored anyway).
+    family_label: str = ""
+    regime_label: str = ""
 
 
 def _validation_score(oos_metrics: Dict[str, Any], oos_df: pd.DataFrame = None,
@@ -231,6 +335,8 @@ def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
         return base
 
     # 6) Final overfit-adjusted OOS edge
+    base.family_label = classify_signal_family(signal_fn, df, parameters or {})
+    base.regime_label = classify_active_regime(signal_fn, df, parameters or {})
     base.evaluated = True
     base.fitness_score = base.oos_vs_buyhold - base.overfit_penalty
     return base
@@ -309,6 +415,11 @@ def evaluate_fitness_two_window(signal_fn: SignalFn, parameters: Dict[str, Any],
         base.rejection_reason = "; ".join(reasons)
         return base
 
+    # Behavioural niche labels: from this candidate's own signal, so the
+    # controller places it in a behavioural niche instead of inheriting the
+    # parent's. (Only computed for candidates that pass the gates and get stored.)
+    base.family_label = classify_signal_family(signal_fn, df, parameters or {})
+    base.regime_label = classify_active_regime(signal_fn, df, parameters or {})
     base.evaluated = True
     base.fitness_score = base.oos_vs_buyhold - base.overfit_penalty
     return base

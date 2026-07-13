@@ -101,13 +101,19 @@ async def evolution_step(
         "total_trades": fitness.n_trades_oos,
         "stability": max(0.0, 1.0 / (1.0 + fitness.overfit_gap)) if fitness.overfit_gap else 1.0,
     }
-    niche = (parent_prog.family or cfg.edge_type_default,
-             parent_prog.regime or cfg.regime_default)
+    # Behavioural niche (Phase 3): place the child by its OWN evaluated signal
+    # behaviour, not the parent's lineage. Without this every descendant lands
+    # on the parent's single MAP-Elites cell (the 'all momentum/unknown'
+    # monoculture). Falls back to the parent niche, then the config default,
+    # only when the evaluator produced no label.
+    family = fitness.family_label or parent_prog.family or cfg.edge_type_default
+    regime = fitness.regime_label or parent_prog.regime or cfg.regime_default
+    niche = (family, regime)
     child = Program(
         candidate_id=candidate_id,
         niche=niche,
-        family=niche[0],
-        regime=niche[1],
+        family=family,
+        regime=regime,
         fitness_score=fitness.fitness_score,
         source="evolved",
         code=new_code,
