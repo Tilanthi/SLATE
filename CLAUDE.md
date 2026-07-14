@@ -147,6 +147,58 @@ strategy is the remaining research task. The evolution layer (searching signal
 
 ---
 
+## 🔧 Correctness, Search & Hygiene Updates (2026-07-14)
+
+**🔴 P0 repo-integrity fix — the core backtester was never committed.** An
+over-broad `.gitignore` rule (`*_backtest.py`, line 72) matched
+`slate_core/discovery/perpetual_futures_backtest.py`, and `fetch_*.py` (line 81)
+matched `fetch_binance_futures.py`, so **neither core file was tracked**. On a
+fresh clone the backtester is absent → every `from ...perpetual_futures_backtest
+import …` fails and the suite cannot be collected (this is the real cause of the
+"test suite can't collect" symptom an external review flagged — true on a fresh
+checkout, false only on a machine with the file locally). Fixed by un-ignoring
+both (`!path` negation in `.gitignore`) and tracking them. The backtester lands
+with its full current content, so all the 2026-07-11 correctness fixes above are
+finally in git (they'd been made to an ignored file). **Lesson: claims below are
+now reproducible from a clean clone; before this commit they were machine-local.**
+
+**Behavioural MAP-Elites niches (closes the deferred Phase-3 gap).** The old
+controller *inherited* the niche from the parent, so with the closed-loop DB
+empty every program collapsed onto one cell (`momentum/unknown`, top-10 tied at
+fitness −1776). Added `classify_signal_family` (momentum/mean_reversion/other via
+signal↔recent-return correlation) and `classify_active_regime`
+(low/med/high_vol = modal rolling-vol tercile of in-market bars) in
+`fitness_evaluator.py`; `FitnessResult` carries `family_label`/`regime_label`;
+the controller now places each child by its **own** behaviour. **Gotcha that bit
+us once:** the classifiers must probe the signal on the **backtester-enriched**
+frame (`add_signal_indicators(df)` — the shared EMA injector in
+`perpetual_futures_backtest.py`), not the raw df, or every real signal (which
+reads `ema_20` etc.) KeyErrors into the `other/unknown` fallback. Verified on the
+real mislabelled elite → `momentum/high_vol`.
+
+**Tightened fitness gate (`min_fitness`, default 0.0).** The two-window gate only
+required absolute OOS profit > 0, so overfit survivors (IS ~4400 vs OOS ~100,
+overfit_gap ~3850) could PASS with fitness −1826 and become niche elites. Now a
+candidate is rejected unless its overfit-adjusted fitness (oos_edge −
+overfit_penalty) ≥ the floor. With daily-SOL's honest no-edge state this will
+likely keep the population near-empty until a real edge appears — that is the
+point (stop storing overfit junk as elites).
+
+**Repo hygiene:** added `LICENSE` (MIT, matches the README badge) and
+`requirements.txt` / `requirements-dev.txt` pinning the runtime + test deps
+(Python 3.14; numpy/pandas/anthropic/fastapi/uvicorn/pyarrow/…). Removed the dead
+legacy tests (`slate_core/tests/test_{connectors,languages,strategies}.py` and
+`slate_core/test_integration.py`) that imported a defunct layer
+(`slate_core.engine`/`connectors.binance`/`languages.haas_script`/`risk.manager`)
+and failed every run — **the full suite is now green: 150 passed, 0 failed**
+(was 152 passed + 13 dead failures, masked). The mislabelled cache file
+(`SOLUSDT_perpetual_1d_12m.csv` is actually 4,182 hourly bars) was **not** renamed
+— 30+ references across code/tests/scripts/docs + the live server path, and
+`load_data.py` already handles the content correctly (detects intraday,
+resamples to daily); the churn/risk was judged not worth the cosmetic gain.
+
+---
+
 
 ## 🎯 Quick System Overview
 
@@ -258,7 +310,7 @@ git branch --show-current  # Should show: main
 **Server**: ✅ Running on port 8788 (launchd-managed, `com.slate.autoserver` — server runs as the job's main process under direct `KeepAlive`)
 **Database**: ✅ **Fresh — discovery tables cleared 2026-07-11** (`perpetual_discoveries` = 0, `edge_discoveries` = 0). Backup at `slate_core/slate_realistic_discoveries_backup_20260711_121642.db`.
 **Discovery**: Active with realistic validation thresholds, restarted fresh after the 2026-07-11 data-structure fix
-**Evolution Layer**: Active (autostart, real GLM/Z.ai LLM); population **cleared to a clean slate 2026-07-11** (0 legacy programs) and re-seeded from fresh closed-loop discoveries — evolving again (`slate_evolution.db`; pre-clear backups at `slate_evolution_backup_*.db`)
+**Evolution Layer**: Active (autostart, real GLM/Z.ai LLM). **Behavioural MAP-Elites niches** (family × regime, derived per-candidate) + **`min_fitness` gate** (rejects overfit-adjusted-fitness < 0) landed 2026-07-14; population **cleared to a clean slate 2026-07-14** for those fixes — niches diversify correctly now and overfit `−1800s` survivors are no longer stored (`slate_evolution.db`; pre-clear backups at `slate_evolution_backup_*.db`).
 **Market Data**: 4,182 hourly bars ≈ 175 days of SOLUSDT perpetual futures data (resampled to daily by the evolution loader)
 
 **Recent Architectural Changes Applied (2026-07-11):**
@@ -293,7 +345,7 @@ Google DeepMind's AlphaEvolve (2025).
   through Z.ai's Anthropic-protocol-compatible proxy (`ANTHROPIC_BASE_URL` /
   `ANTHROPIC_AUTH_TOKEN`). `evolution/llm_client.py` reuses that proxy via the
   `anthropic` SDK (model `claude-sonnet-5`), so **no separate key is needed**.
-  A deterministic Mock backend keeps all 78 tests offline.
+  A deterministic Mock backend keeps the evolution tests offline (part of the 150-test green suite).
 - **Expected behavior:** most candidates are **rejected** by the gates — that is
   the point. The loop accumulates the rare programs that are genuinely profitable
   OOS on two windows.
@@ -357,7 +409,7 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 - **Selection**: `pareto.py` + `novelty.py` — multi-objective Pareto + return-correlation novelty.
 - **Code evolution**: `signal_sandbox.py` (AST-gated), `evolvable_strategy.py` (EVOLVE-BLOCK + apply_diff).
 - **Loop**: `llm_client.py` (GLM via Z.ai proxy), `llm_pool.py` (fast+strong ensemble), `controller.py` (async), `evolution_service.py` (server-hosted), `load_data.py` (daily resample).
-- **Plan**: `docs/superpowers/plans/2026-07-11-alphaevolve-evolution.md` · **Docs**: `slate_core/discovery/evolution/README.md` · **78 tests**.
+- **Plan**: `docs/superpowers/plans/2026-07-11-alphaevolve-evolution.md` · **Docs**: `slate_core/discovery/evolution/README.md` · evolution tests are part of the 150-test green suite.
 
 ### **Integration & Server**
 - **Integration Layer**: `slate_core/discovery/closed_loop_integration.py` (400+ lines)
@@ -372,4 +424,4 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*
-*Last Updated: 2026-07-11 (discovery DB cleared + fresh restart; closed-loop data-structure fix; launchd auto-restart fixed → `com.slate.autoserver` runs server as main process on `/Users/gjw255/.local/bin/python3` with embedded ANTHROPIC/Z.ai env; evolution layer + /api/evolution endpoints; GLM-via-Z.ai LLM; daily-data loader)*
+*Last Updated: 2026-07-14 (🔴 core backtester + data fetcher were gitignored & missing from repo → now tracked, suite collects on fresh clone; behavioural MAP-Elites niches + `add_signal_indicators` injected-columns fix so real signals label correctly; `min_fitness` gate rejects overfit `−1800s` survivors; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green 150 passed/0 failed; cache-file rename deferred — see Correctness Updates 2026-07-14 above)*
