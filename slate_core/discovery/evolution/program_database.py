@@ -8,6 +8,7 @@ sample() -> (parent, inspirations) is added in Task 1.3.
 """
 from __future__ import annotations
 
+import logging
 import random
 import sqlite3
 import json
@@ -15,6 +16,19 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 Niche = Tuple[str, str]
+
+logger = logging.getLogger(__name__)
+
+
+def _verification_ok(verification: Optional[Dict[str, Any]]) -> bool:
+    """A verification block is OBJECTIVE EVIDENCE that the candidate passed a
+    real-data gate (ASTRA's machine-verification contract: program_hash +
+    real_data_result + gate). We require at minimum a `gate` verdict and a
+    `real_data_result` (the actual backtest outcome) - so a stored record can
+    never be fiction (a claim with no real-data evidence behind it)."""
+    if not isinstance(verification, dict) or not verification:
+        return False
+    return "gate" in verification and "real_data_result" in verification
 
 
 @dataclass
@@ -40,6 +54,11 @@ class Program:
     parent_id: Optional[str] = None
     generation: int = 0
     timestamp: str = ""
+    verification: Dict[str, Any] = field(default_factory=dict)
+    # Machine-verification block (ASTRA §7.1 chokepoint): objective real-data
+    # evidence that the candidate passed a gate ({gate, real_data_result,
+    # program_hash, evaluator}). Empty for legacy/seed programs added before the
+    # chokepoint; populated by append_verified() for every real candidate.
 
 
 class ProgramDatabase:
@@ -50,8 +69,55 @@ class ProgramDatabase:
         self._elites: Dict[Niche, Program] = {}
         self._pool: List[Program] = []
 
-    def add(self, program: Program) -> None:
-        """MAP-Elites: replace the niche elite iff strictly better; cap the pool."""
+    def add(self, program: Program) -> bool:
+        """MAP-Elites placement for finite-fitness programs. Returns True if placed.
+
+        The write CHOKEPOINT (defence-in-depth): a gate-rejected candidate
+        (fitness_score == -inf) is REFUSED so a reject can never become a niche
+        elite - the -inf-elite hole (first reject wins the empty niche). add()
+        stays permissive for seeds/fixtures that pre-date the verification
+        contract; real evolved candidates go through append_verified(), which
+        additionally requires a machine-verification block.
+        """
+        if program.fitness_score == float("-inf"):
+            logger.warning(
+                "chokepoint: add() refused gate-rejected candidate %s (-inf); "
+                "use append_verified() with a verification block for real candidates",
+                program.candidate_id,
+            )
+            return False
+        self._place(program)
+        return True
+
+    def append_verified(self, program: Program,
+                        verification: Optional[Dict[str, Any]] = None) -> bool:
+        """The SINGLE write path for a gate-verified candidate (ASTRA §7.1).
+
+        Requires a machine-verification block carrying objective real-data
+        evidence (a `gate` verdict and a `real_data_result`), and refuses
+        gate-rejected (-inf) candidates. Fiction - a stored candidate lacking
+        objective evidence that it passed on real data - is thus structurally
+        impossible: no code path can store an unverified discovery. Stamps the
+        block on the program, then places it via the MAP-Elites primitive.
+        Returns True if placed.
+        """
+        if program.fitness_score == float("-inf"):
+            logger.warning("chokepoint: append_verified refused -inf candidate %s",
+                           program.candidate_id)
+            return False
+        if not _verification_ok(verification):
+            logger.warning(
+                "chokepoint: append_verified refused %s - verification block "
+                "missing objective evidence (needs 'gate' + 'real_data_result')",
+                program.candidate_id,
+            )
+            return False
+        program.verification = dict(verification or {})
+        self._place(program)
+        return True
+
+    def _place(self, program: Program) -> None:
+        """MAP-Elites primitive: replace the niche elite iff strictly better; cap the pool."""
         current = self._elites.get(program.niche)
         if current is None or program.fitness_score > current.fitness_score:
             self._elites[program.niche] = program
@@ -144,7 +210,7 @@ class ProgramDatabase:
                 str(row["edge_type"] or "unknown").lower(),
                 str(row["volatility_regime"] or "unknown").lower(),
             )
-            self.add(Program(
+            self.append_verified(Program(
                 candidate_id=f"seed:{row['strategy_name']}",
                 niche=niche,
                 family=niche[0],
@@ -158,7 +224,18 @@ class ProgramDatabase:
                     "total_trades": int(row["total_trades"] or 0),
                     "beat_market": bool(row["beat_market"]),
                 },
-            ))
+            ), verification={
+                # Seeds are verified by the discovery DB's own gate: the row was
+                # kept because it showed a real edge on real market data.
+                "gate": "seed:discovery_db_profitable",
+                "evaluator": "perpetual_discoveries (profitable row)",
+                "real_data_result": {
+                    "total_profit_usdt": profit,
+                    "vs_buy_hold_usdt": vs_bh,
+                    "sharpe_ratio": float(row["sharpe_ratio"] or 0),
+                    "total_trades": int(row["total_trades"] or 0),
+                },
+            })
             count += 1
         return count
 
@@ -190,17 +267,25 @@ class ProgramDatabase:
             metrics_json TEXT,
             parent_id TEXT,
             generation INTEGER,
-            timestamp TEXT)""")
+            timestamp TEXT,
+            verification_json TEXT)""")
+        # Migrate pre-chokepoint DBs: add the verification_json column if absent.
+        try:
+            c.execute("ALTER TABLE evolution_population ADD COLUMN verification_json TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists (fresh table or already-migrated DB)
         for p in self._all_programs():
             c.execute(
                 "INSERT OR REPLACE INTO evolution_population "
                 "(candidate_id, niche_family, niche_regime, fitness_score, source, "
-                " parameters_json, code, metrics_json, parent_id, generation, timestamp) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                " parameters_json, code, metrics_json, parent_id, generation, timestamp, "
+                " verification_json) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     p.candidate_id, p.family, p.regime, p.fitness_score, p.source,
                     json.dumps(p.parameters), p.code, json.dumps(p.metrics),
                     p.parent_id, p.generation, p.timestamp,
+                    json.dumps(p.verification),
                 ),
             )
         conn.commit()
@@ -219,6 +304,12 @@ class ProgramDatabase:
         conn.close()
         count = 0
         for row in rows:
+            cols = row.keys()
+            verification = (
+                json.loads(row["verification_json"])
+                if "verification_json" in cols and row["verification_json"]
+                else {}
+            )
             self.add(Program(
                 candidate_id=row["candidate_id"],
                 niche=(row["niche_family"], row["niche_regime"]),
@@ -232,6 +323,7 @@ class ProgramDatabase:
                 parent_id=row["parent_id"],
                 generation=int(row["generation"] or 0),
                 timestamp=row["timestamp"] or "",
+                verification=verification,
             ))
             count += 1
         return count

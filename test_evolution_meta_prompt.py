@@ -29,3 +29,12 @@ def test_metaprompt_propose_new_uses_llm():
     new = s.propose_new(client)
     assert isinstance(new, str) and len(new) > 0
     assert "mean-reversion" in new          # came from the mock LLM output
+
+
+def test_default_instruction_steers_toward_non_obvious_edges():
+    """Rec 3: the default instruction must anchor the search on non-obvious
+    (regime/residual/non-linear) edges rather than generic TA."""
+    from slate_core.discovery.evolution.meta_prompt_db import DEFAULT_INSTRUCTION
+    low = DEFAULT_INSTRUCTION.lower()
+    assert any(kw in low for kw in
+               ["regime", "residual", "non-linear", "conditional", "interaction"])

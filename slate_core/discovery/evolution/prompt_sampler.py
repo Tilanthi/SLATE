@@ -15,8 +15,12 @@ from typing import List, Optional
 from slate_core.discovery.evolution.program_database import Program
 
 DEFAULT_SYSTEM = (
-    "You are an expert quantitative-trading strategy developer evolving a "
-    "perpetual-futures signal function. Propose a SMALL, targeted change that "
+    "You are an expert quantitative-trading strategist evolving a perpetual-"
+    "futures signal on REAL daily OHLCV data. The daily-timeframe edge on a "
+    "liquid major is RARE and almost always non-obvious - efficient markets "
+    "have already priced bare technical analysis - so prefer the non-obvious "
+    "structures in ALPHA DIRECTIONS below and avoid re-encoding the textbook "
+    "indicators in KNOWN-DEAD PATTERNS. Propose a SMALL, targeted change that "
     "improves OUT-OF-SAMPLE edge without increasing overfit."
 )
 
@@ -44,6 +48,40 @@ Propose changes as SEARCH/REPLACE blocks:
 >>>>>>> REPLACE
 """
 
+# Rec 3 / ASTRA §7.5 + §6: the daily edge on a liquid major survives costs only
+# when it is non-obvious. The signal has OHLCV + injected EMAs (no order-book or
+# funding fields), so the productive non-obvious directions are CONDITIONAL,
+# RESIDUAL, and NON-LINEAR structure - the trading analogue of ASTRA's higher-
+# order relation priming (which was its single biggest lever on the novel rate).
+ALPHA_DIRECTIONS = """\
+ALPHA DIRECTIONS - reach past simple pairwise/linear relations toward
+CONDITIONAL, RESIDUAL, and NON-LINEAR structure:
+- REGIME-CONDITIONAL: trade differently by volatility regime (e.g. only act
+  when ATR/realized-vol is in a specific tercile, or range expansion vs
+  contraction). Most real edges are regime-specific, not all-weather.
+- RESIDUAL / RELATIVE: trade the deviation from a fitted trend or expected move
+  (mean-reversion of residuals after removing drift), not raw price.
+- NON-LINEAR / INTERACTION: threshold/curvature effects, and interactions of
+  >=3 variables (e.g. return x volume x volatility; high-low range x trend).
+- VOLATILITY & VOLUME STRUCTURE: use high-low range (a vol proxy), volume
+  spikes, and vol-of-vol, usually as CONDITIONING variables.
+Aim for a signal whose profitability is concentrated in a specific state, not
+spread thinly across every bar (thin edges do not clear costs)."""
+
+# ASTRA §7.6: mark the textbook-saturated subdomains and stop burning scale on
+# them. These are already-arbed on liquid majors; do NOT submit bare versions.
+KNOWN_DEAD_PATTERNS = """\
+KNOWN-DEAD PATTERNS (textbook / already-arbed on liquid majors) - do NOT submit
+bare versions of these. If you use one, it must be a non-obvious INGREDIENT in a
+conditional/residual/interaction combo, not the whole signal:
+- Bare RSI thresholds (RSI<30 buy / RSI>70 sell)
+- Plain moving-average crossovers (fast MA crosses slow MA)
+- Generic same-direction momentum (return over N bars -> buy)
+- MACD signal-line crosses
+- Bollinger-band touch at +/-2 sigma
+These barely clear costs on efficient markets and the search has already
+explored them heavily."""
+
 
 class PromptSampler:
     """Builds the evolution prompt from a parent + inspirations."""
@@ -61,6 +99,8 @@ class PromptSampler:
         parts.append(f"TIMEFRAME: {obj.timeframe} only.")
         parts.append(f"CONSTRAINT: {obj.signal_contract}")
         parts.append(f"OVERFIT WARNING: {obj.overfit_warning}")
+        parts.append(ALPHA_DIRECTIONS)
+        parts.append(KNOWN_DEAD_PATTERNS)
 
         parts.append("\n=== PARENT PROGRAM (improve this) ===")
         parts.append(f"id: {parent.candidate_id}")

@@ -46,3 +46,33 @@ def test_prompt_handles_seed_parent_with_no_code():
     assert "seed:foo" in prompt
     assert "50" in prompt
     assert "no code" in prompt.lower() or "seed" in prompt.lower()
+
+
+# ---------------------------------------------------------------------------
+# Rec 3 / ASTRA §7.5 + §6: prime the proposer toward NON-OBVIOUS edges
+# (the few things that survive EMH + costs on a liquid major), and steer AWAY
+# from textbook/already-arbed TA the search would otherwise rediscover forever.
+# ---------------------------------------------------------------------------
+
+def test_prompt_steers_toward_non_obvious_edges():
+    p = _prog("p", 10.0, code="x")
+    prompt = PromptSampler().build(p, [])
+    low = prompt.lower()
+    assert any(kw in low for kw in
+               ["regime", "residual", "non-linear", "interaction", "conditional"]), (
+        "prompt does not steer toward non-obvious (regime/residual/non-linear) edges"
+    )
+
+
+def test_prompt_names_known_dead_patterns_to_avoid():
+    """The blacklist of textbook TA must be present so the model is steered AWAY
+    from re-encoding bare RSI/MA-crossover/momentum (EMH-arbed on liquid majors)."""
+    p = _prog("p", 10.0, code="x")
+    low = PromptSampler().build(p, []).lower()
+    assert "rsi" in low
+    assert "moving-average" in low or "ma crossover" in low or "crossover" in low
+
+
+def test_prompt_has_labeled_alpha_directions_section():
+    p = _prog("p", 10.0, code="x")
+    assert "alpha directions" in PromptSampler().build(p, []).lower()

@@ -167,3 +167,108 @@ def test_persistence_roundtrip():
     finally:
         if os.path.exists(path):
             os.remove(path)
+
+
+# ---------------------------------------------------------------------------
+# Unified write chokepoint (ASTRA §7.1): exactly one verified write path for
+# real candidates, and gate-rejected (fitness_score == -inf) programs can NEVER
+# become niche elites or reach disk. Pinned by regression so fiction (a stored
+# candidate lacking objective real-data evidence) is structurally impossible.
+# ---------------------------------------------------------------------------
+
+def test_add_rejects_gate_rejected_candidate():
+    """A -inf (gate-rejected) Program must not be placed as a niche elite, even
+    on an empty niche. Without this the first reject wins the empty niche - the
+    -inf-elite hole."""
+    db = ProgramDatabase(ProgramDBConfig())
+    placed = db.add(_prog(float("-inf"), cid="reject"))
+    assert placed is False
+    assert db.elite(("momentum", "high")) is None
+    assert db.island_pool() == []
+
+
+def test_add_returns_true_for_finite_fitness_seed():
+    """add() stays permissive for finite-fitness programs (seeds/fixtures that
+    pre-date the verification contract); only -inf is refused."""
+    db = ProgramDatabase(ProgramDBConfig())
+    assert db.add(_prog(10.0, cid="seed1")) is True
+    assert db.elite(("momentum", "high")) is not None
+
+
+def test_append_verified_requires_verification_block():
+    db = ProgramDatabase(ProgramDBConfig())
+    assert db.append_verified(_prog(10.0, cid="v1"), verification=None) is False
+    assert db.append_verified(_prog(10.0, cid="v1"), verification={}) is False
+    assert db.island_pool() == []
+
+
+def test_append_verified_requires_gate_and_real_data_result():
+    """A verification block missing the objective-evidence keys is rejected."""
+    db = ProgramDatabase(ProgramDBConfig())
+    assert db.append_verified(_prog(10.0, cid="v1"),
+                              verification={"gate": "passed"}) is False
+    assert db.append_verified(_prog(10.0, cid="v1"),
+                              verification={"real_data_result": {"x": 1}}) is False
+
+
+def test_append_verified_rejects_gate_rejected_even_with_verification():
+    db = ProgramDatabase(ProgramDBConfig())
+    ok = db.append_verified(
+        _prog(float("-inf"), cid="r"),
+        verification={"gate": "passed", "real_data_result": {"oos": 5}},
+    )
+    assert ok is False
+    assert db.elite(("momentum", "high")) is None
+
+
+def test_append_verified_places_and_stamps_verification():
+    db = ProgramDatabase(ProgramDBConfig())
+    block = {"gate": "passed_two_window",
+             "evaluator": "evaluate_fitness_two_window",
+             "program_hash": "abc123",
+             "real_data_result": {"oos_vs_buyhold": 12.0, "n_trades_oos": 15}}
+    ok = db.append_verified(_prog(10.0, cid="v1"), verification=block)
+    assert ok is True
+    elite = db.elite(("momentum", "high"))
+    assert elite is not None and elite.candidate_id == "v1"
+    assert elite.verification == block
+
+
+def test_save_does_not_persist_gate_rejected():
+    """Persistence is also a chokepoint: a -inf program can never reach disk."""
+    path = tempfile.mktemp(suffix=".db")
+    try:
+        db = ProgramDatabase(ProgramDBConfig(persist_path=path))
+        db.add(_prog(float("-inf"), cid="reject"))  # refused
+        db.append_verified(
+            _prog(7.0, family="arbitrage", regime="low", cid="ok"),
+            verification={"gate": "passed", "real_data_result": {"oos": 7}},
+        )
+        db.save()
+        db2 = ProgramDatabase(ProgramDBConfig(persist_path=path))
+        n = db2.load()
+        assert n == 1
+        assert db2.elite(("arbitrage", "low")) is not None
+        assert db2.elite(("momentum", "high")) is None
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
+
+
+def test_verification_roundtrips_through_persistence():
+    path = tempfile.mktemp(suffix=".db")
+    try:
+        db = ProgramDatabase(ProgramDBConfig(persist_path=path))
+        block = {"gate": "passed_two_window", "program_hash": "deadbeef",
+                 "real_data_result": {"oos_vs_buyhold": 9.0}}
+        db.append_verified(_prog(9.0, cid="v"), verification=block)
+        db.save()
+        db2 = ProgramDatabase(ProgramDBConfig(persist_path=path))
+        db2.load()
+        elite = db2.elite(("momentum", "high"))
+        assert elite is not None
+        assert elite.verification.get("gate") == "passed_two_window"
+        assert elite.verification.get("program_hash") == "deadbeef"
+    finally:
+        if os.path.exists(path):
+            os.remove(path)

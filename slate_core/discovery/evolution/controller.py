@@ -12,6 +12,7 @@ AlphaEvolve's distributed pipeline design.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import uuid
 from dataclasses import dataclass
@@ -24,6 +25,9 @@ from slate_core.discovery.evolution.program_database import Program, ProgramData
 from slate_core.discovery.evolution.prompt_sampler import PromptSampler, PromptObjective
 from slate_core.discovery.evolution.signal_sandbox import compile_signal
 from slate_core.discovery.evolution.subprocess_eval import eval_fitness_subprocess
+from slate_core.discovery.evolution.verdict_log import (
+    CandidateVerdict, log_candidate_verdict, verdict_from_fitness_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,15 +69,24 @@ async def evolution_step(
     diff = await loop.run_in_executor(None, lambda: pool.generate(prompt, tier="auto"))
     diff = extract_code_block(diff or "")   # strip markdown fences from live models
 
+    # Generated before compile so a compile failure still has an id for the
+    # funnel log (we want to SEE compile failures, not just skip them silently).
+    candidate_id = f"evo:{uuid.uuid4().hex[:8]}"
+
     try:
         new_code = apply_diff(parent_code, diff or "")
         compile_signal(new_code)  # validate it compiles under the sandbox
     except Exception as exc:  # noqa: BLE001 - bad code => skip this candidate
         logger.info("candidate rejected at compile: %s", str(exc)[:120])
+        log_candidate_verdict(CandidateVerdict(
+            candidate_id=candidate_id, death_stage="compile", evaluated=False,
+            fitness_score=float("-inf"), rejection_reason=f"compile: {exc}",
+            family="", regime="", parent_id=parent_prog.candidate_id, program_hash="",
+            is_edge=0.0, oos_edge=0.0, n_trades_oos=0, overfit_gap=0.0, timestamp="",
+        ))
         return None
 
     edge_type = parent_prog.family or cfg.edge_type_default
-    candidate_id = f"evo:{uuid.uuid4().hex[:8]}"
 
     # Fix #1: evaluate in an isolated subprocess (RLIMIT_CPU + wall-clock kill)
     # so a non-obvious infinite loop in evolved code cannot hang an executor
@@ -91,6 +104,10 @@ async def evolution_step(
     # pollute the population with non-trading junk.
     if not fitness.evaluated:
         logger.info("candidate rejected at gate: %s", (fitness.rejection_reason or "")[:120])
+        log_candidate_verdict(verdict_from_fitness_result(
+            fitness, candidate_id=candidate_id, parent_id=parent_prog.candidate_id,
+            program_hash=hashlib.sha256(new_code.encode("utf-8")).hexdigest()[:16],
+        ))
         return None
 
     metrics = {
@@ -121,7 +138,27 @@ async def evolution_step(
         parent_id=parent_prog.candidate_id,
         generation=getattr(parent_prog, "generation", 0) + 1,
     )
-    db.add(child)
+    # Route through the write CHOKEPOINT (ASTRA §7.1): the child is stored only
+    # with a machine-verification block carrying objective real-data evidence
+    # (the two-window gate verdict + the actual OOS result + a code hash). This
+    # is what makes a stored record trustworthy rather than fiction.
+    verification = {
+        "gate": "passed_two_window",
+        "evaluator": "evaluate_fitness_two_window (subprocess-isolated, RLIMIT_CPU)",
+        "program_hash": hashlib.sha256(new_code.encode("utf-8")).hexdigest()[:16],
+        "real_data_result": {
+            "oos_vs_buyhold": fitness.oos_vs_buyhold,
+            "is_vs_buyhold": fitness.is_vs_buyhold,
+            "overfit_gap": fitness.overfit_gap,
+            "n_trades_oos": fitness.n_trades_oos,
+            "fitness_score": fitness.fitness_score,
+        },
+    }
+    db.append_verified(child, verification=verification)
+    log_candidate_verdict(verdict_from_fitness_result(
+        fitness, candidate_id=candidate_id, parent_id=parent_prog.candidate_id,
+        program_hash=verification["program_hash"],
+    ))
     return child
 
 

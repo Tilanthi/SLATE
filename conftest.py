@@ -23,3 +23,16 @@ def sol_slice() -> pd.DataFrame:
     df = df.set_index("timestamp").sort_index()
     assert "close" in df.columns, "real data must have a 'close' column"
     return df.head(120).copy()
+
+
+@pytest.fixture(autouse=True)
+def _redirect_verdict_log(tmp_path):
+    """Never let the funnel verdict logger (ASTRA §7.2) write to its real default
+    path during tests. Redirect the singleton to a throwaway tmp file so tests
+    that exercise the controller end-to-end don't pollute slate_core/."""
+    from slate_core.discovery.evolution.verdict_log import (
+        VerdictLogger, set_verdict_logger,
+    )
+    set_verdict_logger(VerdictLogger(str(tmp_path / "test_verdicts.jsonl")))
+    yield
+    set_verdict_logger(None)

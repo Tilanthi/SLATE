@@ -16,7 +16,12 @@ from slate_core.discovery.evolution.llm_client import LLMClient
 
 DEFAULT_INSTRUCTION = (
     "Propose a small change to the signal function that improves out-of-sample "
-    "edge vs buy-and-hold on a daily timeframe, without increasing overfit."
+    "edge vs buy-hold on a daily timeframe, without increasing overfit. The "
+    "daily edge on a liquid major is rare and non-obvious: prefer REGIME-"
+    "CONDITIONAL signals (behave differently by volatility regime), RESIDUALS "
+    "after removing drift, and NON-LINEAR / multi-variable INTERACTIONS (e.g. "
+    "return x volume x volatility) over bare textbook indicators (plain RSI "
+    "thresholds, MA crossovers, generic momentum), which barely clear costs."
 )
 
 

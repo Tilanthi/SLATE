@@ -199,6 +199,55 @@ and failed every run — **the full suite is now green: 150 passed, 0 failed**
 
 ---
 
+## 🔧 ASTRA-Derived Discovery-Pipeline Hardening (2026-07-14)
+
+Distilled from ASTRA's 2026-07-11→14 re-architecture (the AlphaEvolve-based
+re-architecture + measure→fix→re-measure cycle in
+`~/Desktop/Discovery-Pipeline-Lessons-for-Sibling-Projects.md`). Three additive
+mechanisms layered on the evolution layer — they *add* to the verification crown
+jewel; nothing *replaces* it. **One ASTRA idea was deliberately NOT adopted:** a
+literature-novelty "Gate 2" is incoherent for trading (an edge being "in the
+literature" says nothing about whether it's tradeable on crypto, and a real
+microstructure edge would be wrongly rejected). SLATE's Gate-2 analogue is the
+realistic-cost OOS gate it already has.
+
+1. **Unified write chokepoint** (`program_database.py`, ASTRA §7.1) —
+   `append_verified(program, verification)` is the single write path for a
+   gate-verified candidate and **requires a machine-verification block** (`gate`
+   + `real_data_result` + `program_hash`). Both `add()` and `append_verified()`
+   **structurally refuse** gate-rejected (`fitness_score == -inf`) candidates, so
+   a reject can never become a niche elite (the −inf-elite hole) or reach disk.
+   The controller routes every real candidate through `append_verified`; seeds
+   carry a `seed:discovery_db_profitable` block. Pinned by regression tests in
+   `test_evolution_program_database.py`; a guarded `ALTER` adds `verification_json`
+   to existing DBs.
+
+2. **Funnel diagnostic** (`verdict_log.py`, ASTRA §4/§7.2) — every evaluated
+   candidate emits one JSONL line to `slate_core/evolution_verdicts.jsonl`
+   (gitignored; `SLATE_VERDICT_LOG` overrides) carrying its **death-stage**
+   (`correctness → too_few_trades → not_profitable → no_oos_edge →
+   overfit_fitness → validation_failed → eval_crash → passed`) plus IS/OOS edges,
+   family/regime, and a code hash. Written *inside* the search process,
+   independent of stdout, so the failure distribution can be read directly —
+   turning "saves nothing" from a conclusion into a measurable hypothesis
+   (**where** do candidates die?). Logged at compile-fail / gate-reject / pass in
+   `controller.py`.
+
+3. **Proposer primed toward non-obvious edges** (`prompt_sampler.py` +
+   `meta_prompt_db.py`, ASTRA §7.5/§6/§7.6) — the evolution prompt now carries an
+   **ALPHA DIRECTIONS** block (regime-conditional / residual / non-linear /
+   multi-variable-interaction / vol-&-volume-structure — the few structures that
+   survive EMH + costs on a liquid major, given the signal only has OHLCV+EMAs)
+   and a **KNOWN-DEAD PATTERNS** blacklist (bare RSI, MA crossovers, generic
+   momentum, MACD, Bollinger touch — already-arbed; must be ingredients, not the
+   whole signal). `meta_prompt_db.DEFAULT_INSTRUCTION` anchored the same way.
+
+**Test suite: 181 passed / 0 failed** (was 150; +31 tests across the chokepoint,
+the funnel logger, the controller wiring, and the prompt steering). An autouse
+`conftest.py` fixture redirects the verdict logger to tmp during tests.
+
+---
+
 
 ## 🎯 Quick System Overview
 
@@ -404,8 +453,9 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 
 ### **Evolution Layer** (AlphaEvolve-style, `slate_core/discovery/evolution/`)
 - **Fitness evaluator**: `fitness_evaluator.py` — IS/OOS split, overfit penalty, absolute-profit gate, two-window gate. Presets: `strict()` / `exploration()`.
-- **Program database**: `program_database.py` + `niche.py` — MAP-Elites + islands, `sample()`, seeding, sqlite persistence.
-- **Prompts**: `prompt_sampler.py` + `meta_prompt_db.py` — rich context + co-evolved meta-instructions.
+- **Program database**: `program_database.py` + `niche.py` — MAP-Elites + islands, `sample()`, seeding, sqlite persistence, **unified write chokepoint** (`append_verified`, machine-verification block required).
+- **Funnel diagnostic**: `verdict_log.py` — per-candidate death-stage JSONL log (where candidates die).
+- **Prompts**: `prompt_sampler.py` + `meta_prompt_db.py` — rich context + co-evolved meta-instructions + **ALPHA DIRECTIONS / KNOWN-DEAD PATTERNS** steering.
 - **Selection**: `pareto.py` + `novelty.py` — multi-objective Pareto + return-correlation novelty.
 - **Code evolution**: `signal_sandbox.py` (AST-gated), `evolvable_strategy.py` (EVOLVE-BLOCK + apply_diff).
 - **Loop**: `llm_client.py` (GLM via Z.ai proxy), `llm_pool.py` (fast+strong ensemble), `controller.py` (async), `evolution_service.py` (server-hosted), `load_data.py` (daily resample).
@@ -424,4 +474,4 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*
-*Last Updated: 2026-07-14 (🔴 core backtester + data fetcher were gitignored & missing from repo → now tracked, suite collects on fresh clone; behavioural MAP-Elites niches + `add_signal_indicators` injected-columns fix so real signals label correctly; `min_fitness` gate rejects overfit `−1800s` survivors; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green 150 passed/0 failed; cache file renamed `1d_12m`→`1h_6m` (was mislabelled daily) — see Correctness Updates 2026-07-14 above)*
+*Last Updated: 2026-07-14 (ASTRA-derived hardening: unified write chokepoint `append_verified` requiring a machine-verification block + structural −inf rejection; funnel diagnostic `verdict_log.py` logging per-candidate death-stage to JSONL; proposer primed toward non-obvious edges via ALPHA DIRECTIONS + KNOWN-DEAD PATTERNS; deliberately did NOT adopt ASTRA's literature-novelty Gate 2 as it is incoherent for trading — see ASTRA-Derived Hardening 2026-07-14 above. 🔴 core backtester + data fetcher were gitignored & missing from repo → now tracked, suite collects on fresh clone; behavioural MAP-Elites niches + `add_signal_indicators` injected-columns fix so real signals label correctly; `min_fitness` gate rejects overfit `−1800s` survivors; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green **181 passed/0 failed**; cache file renamed `1d_12m`→`1h_6m` (was mislabelled daily) — see Correctness Updates 2026-07-14 above)*

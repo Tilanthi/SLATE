@@ -53,6 +53,9 @@ slate_discoveries.db
 *.log
 logs/
 
+# Funnel verdict log (runtime diagnostic, ASTRA §7.2 — accumulates across runs)
+slate_core/evolution_verdicts.jsonl
+
 # Environment variables
 .env
 .env.local
