@@ -46,6 +46,10 @@ class FitnessConfig:
     validation_score_floor: float = 0.4      # only applied when validation is ON
     random_seed: int = 12345                 # determinism per evaluation
     probe_window: int = 30                   # bars used by the correctness gate
+    min_fitness: float = 0.0                 # gate: reject if overfit-adjusted fitness < floor.
+                                             # Stops overfit survivors (IS>>OOS) that squeak past
+                                             # the absolute-profit gate with deeply negative fitness
+                                             # from being stored as niche elites.
 
     @classmethod
     def strict(cls) -> "FitnessConfig":
@@ -312,6 +316,7 @@ def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
     # 3) Overfit gap & penalty (only penalize when IS looks better than OOS)
     base.overfit_gap = max(0.0, base.is_vs_buyhold - base.oos_vs_buyhold)
     base.overfit_penalty = base.overfit_gap * cfg.overfit_penalty_weight
+    candidate_fitness = base.oos_vs_buyhold - base.overfit_penalty
 
     # 4) Optional pluralistic validation on OOS (slow; off by default)
     if cfg.run_pluralistic_validation:
@@ -333,6 +338,11 @@ def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
         reasons.append(
             f"validation_score={base.validation_score:.2f}<{cfg.validation_score_floor}"
         )
+    if candidate_fitness < cfg.min_fitness:
+        reasons.append(
+            f"fitness={candidate_fitness:.1f}<{cfg.min_fitness} "
+            f"(overfit-adjusted edge not positive; IS>>OOS)"
+        )
     if reasons:
         base.rejection_reason = "; ".join(reasons)
         return base
@@ -341,7 +351,7 @@ def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
     base.family_label = classify_signal_family(signal_fn, df, parameters or {})
     base.regime_label = classify_active_regime(signal_fn, df, parameters or {})
     base.evaluated = True
-    base.fitness_score = base.oos_vs_buyhold - base.overfit_penalty
+    base.fitness_score = candidate_fitness
     return base
 
 
@@ -399,6 +409,7 @@ def evaluate_fitness_two_window(signal_fn: SignalFn, parameters: Dict[str, Any],
     avg_oos = (o1_edge + o2_edge) / 2.0
     base.overfit_gap = max(0.0, is_edge - avg_oos)
     base.overfit_penalty = base.overfit_gap * cfg.overfit_penalty_weight
+    candidate_fitness = base.oos_vs_buyhold - base.overfit_penalty
     base.metrics_is = is_m
     base.metrics_oos = {"oos1": o1, "oos2": o2}
 
@@ -414,6 +425,11 @@ def evaluate_fitness_two_window(signal_fn: SignalFn, parameters: Dict[str, Any],
         reasons.append(f"oos2_trades={o2_trades}<{cfg.min_trades}")
     if cfg.require_beat_buyhold_oos and (o1_edge <= 0 or o2_edge <= 0):
         reasons.append("oos_edge_not_positive_on_both_windows")
+    if candidate_fitness < cfg.min_fitness:
+        reasons.append(
+            f"fitness={candidate_fitness:.1f}<{cfg.min_fitness} "
+            f"(overfit-adjusted edge not positive; IS>>OOS)"
+        )
     if reasons:
         base.rejection_reason = "; ".join(reasons)
         return base
@@ -424,5 +440,5 @@ def evaluate_fitness_two_window(signal_fn: SignalFn, parameters: Dict[str, Any],
     base.family_label = classify_signal_family(signal_fn, df, parameters or {})
     base.regime_label = classify_active_regime(signal_fn, df, parameters or {})
     base.evaluated = True
-    base.fitness_score = base.oos_vs_buyhold - base.overfit_penalty
+    base.fitness_score = candidate_fitness
     return base

@@ -139,7 +139,10 @@ def test_overfit_penalty_when_is_far_exceeds_oos(monkeypatch, sol_slice):
     res = evaluate_fitness(flat, {}, sol_slice, edge_type="momentum", candidate_id="gap")
     assert res.overfit_gap == 490.0
     assert res.overfit_penalty == 490.0
-    assert res.fitness_score == 10.0 - 490.0
+    # The huge IS/OOS gap drags overfit-adjusted fitness to -480, which the
+    # min_fitness gate now rejects (previously this was stored with fitness -480).
+    assert res.evaluated is False
+    assert "fitness" in res.rejection_reason.lower()
 
 
 def test_require_absolute_oos_profit_gate(monkeypatch, sol_slice):
@@ -182,12 +185,13 @@ def test_evaluate_fitness_runs_on_real_data(sol_slice):
 from slate_core.discovery.evolution.fitness_evaluator import evaluate_fitness_two_window
 
 
-def _two_window_run_factory(oos2_profit, oos2_edge):
-    """Stub run_backtest distinguishing IS / OOS1 / OOS2 by row count."""
+def _two_window_run_factory(oos2_profit, oos2_edge, is_edge=40.0):
+    """Stub run_backtest distinguishing IS / OOS1 / OOS2 by row count.
+    is_edge defaults low so the happy path has positive overfit-adjusted fitness."""
     def fake_run(signal_fn, parameters, df, edge_type, seed):
         ln = len(df)
         if ln > 50:                                  # IS (~60 rows)
-            return {"total_profit_usdt": 100.0, "vs_buy_hold_usdt": 80.0,
+            return {"total_profit_usdt": 100.0, "vs_buy_hold_usdt": is_edge,
                     "sharpe_ratio": 1.5, "total_trades": 50, "beat_market": True,
                     "max_drawdown_pct": 0.1, "total_transaction_costs_usdt": 0.0,
                     "win_rate": 0.6, "profit_factor": 1.5}
@@ -199,7 +203,7 @@ def _two_window_run_factory(oos2_profit, oos2_edge):
         return {"total_profit_usdt": oos2_profit, "vs_buy_hold_usdt": oos2_edge,
                 "sharpe_ratio": 0.8, "total_trades": 20, "beat_market": oos2_profit > 0,
                 "max_drawdown_pct": 0.15, "total_transaction_costs_usdt": 0.0,
-                "win_rate": 0.45, "profit_factor": 1.0}
+                    "win_rate": 0.45, "profit_factor": 1.0}
     return fake_run
 
 
@@ -209,7 +213,7 @@ def test_two_window_passes_when_both_windows_profitable(monkeypatch, sol_slice):
     res = evaluate_fitness_two_window(lambda df, i, p: 0, {}, sol_slice,
                                       edge_type="momentum", candidate_id="ok")
     assert res.evaluated is True
-    assert res.fitness_score == 28.0 - 51.0     # min OOS edge(28) - overfit penalty(80-29=51)
+    assert res.fitness_score == 17.0     # min OOS edge(28) - overfit penalty(40-29=11)
 
 
 def test_two_window_rejects_when_one_window_loses(monkeypatch, sol_slice):
@@ -221,6 +225,21 @@ def test_two_window_rejects_when_one_window_loses(monkeypatch, sol_slice):
     assert res.evaluated is False
     assert "profit" in res.rejection_reason.lower()
     assert res.fitness_score == float("-inf")
+
+
+def test_two_window_rejects_negative_overfit_adjusted_fitness(monkeypatch, sol_slice):
+    """Tightened gate: profitable on BOTH OOS windows (so it passes the
+    absolute-profit and beat-buyhold gates) but overfit-adjusted fitness is
+    negative -> REJECTED. Stops overfit survivors (e.g. the live -1826s) being
+    stored as niche elites. min_fitness default = 0."""
+    from slate_core.discovery.evolution import fitness_evaluator as fe
+    # IS edge 500 vs avg OOS ~29 -> penalty ~471 -> fitness min(30,28)-471 = -443
+    monkeypatch.setattr(fe, "run_backtest", _two_window_run_factory(45.0, 28.0, is_edge=500.0))
+    res = evaluate_fitness_two_window(lambda df, i, p: 0, {}, sol_slice,
+                                      edge_type="momentum", candidate_id="overfit_neg")
+    assert res.evaluated is False
+    assert res.fitness_score == float("-inf")
+    assert "fitness" in res.rejection_reason.lower()
 
 
 def test_two_window_rejects_bad_signal(sol_slice):
