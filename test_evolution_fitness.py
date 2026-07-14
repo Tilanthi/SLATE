@@ -361,3 +361,21 @@ def test_two_window_result_carries_behavioral_labels(monkeypatch, sol_slice):
     assert res.evaluated is True
     assert res.family_label == "momentum"
     assert res.regime_label in {"low_vol", "med_vol", "high_vol"}
+
+
+def test_two_window_rejected_candidate_still_carries_labels(monkeypatch, sol_slice):
+    """(a2) A REJECTED candidate must still carry family/regime labels, so the
+    funnel can show WHAT kind of signal is failing - not just that it failed.
+    (Labels used to be set only on the pass-branch, so every reject showed as
+    (none)/(none) in the funnel.)"""
+    from slate_core.discovery.evolution import fitness_evaluator as fe
+    # OOS2 loses -> rejected at the profit gate, but correctness passes.
+    monkeypatch.setattr(fe, "run_backtest", _two_window_run_factory(-20.0, -40.0))
+
+    def mr(df, i, p):                       # mean-reversion: long after down moves
+        return -1 if df["close"].iloc[i] > df["close"].iloc[i - 1] else 1
+    res = evaluate_fitness_two_window(mr, {}, sol_slice, edge_type="momentum",
+                                      candidate_id="rejected_mr")
+    assert res.evaluated is False                       # rejected ...
+    assert res.family_label == "mean_reversion"          # ... but still labelled
+    assert res.regime_label in {"low_vol", "med_vol", "high_vol"}

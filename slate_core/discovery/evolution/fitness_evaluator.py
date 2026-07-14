@@ -301,6 +301,11 @@ def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
         base.rejection_reason = f"correctness: {reason}"
         return base
 
+    # Behavioural niche labels: computed here (after correctness) so REJECTED
+    # candidates carry them too - mirrors evaluate_fitness_two_window.
+    base.family_label = classify_signal_family(signal_fn, df, parameters or {})
+    base.regime_label = classify_active_regime(signal_fn, df, parameters or {})
+
     # 2) Chronological split + deterministic backtests on both halves
     is_df, oos_df = split_is_oos(df, cfg.is_fraction)
     seed = cfg.random_seed
@@ -347,9 +352,7 @@ def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
         base.rejection_reason = "; ".join(reasons)
         return base
 
-    # 6) Final overfit-adjusted OOS edge
-    base.family_label = classify_signal_family(signal_fn, df, parameters or {})
-    base.regime_label = classify_active_regime(signal_fn, df, parameters or {})
+    # 6) Final overfit-adjusted OOS edge (behavioural labels were set in step 1)
     base.evaluated = True
     base.fitness_score = candidate_fitness
     return base
@@ -380,6 +383,12 @@ def evaluate_fitness_two_window(signal_fn: SignalFn, parameters: Dict[str, Any],
     if not ok:
         base.rejection_reason = f"correctness: {reason}"
         return base
+
+    # Behavioural niche labels: computed HERE (after correctness guarantees the
+    # signal is safe to probe) so REJECTED candidates carry them too - the funnel
+    # needs to show WHAT kind of signal is failing, not just that it failed.
+    base.family_label = classify_signal_family(signal_fn, df, parameters or {})
+    base.regime_label = classify_active_regime(signal_fn, df, parameters or {})
 
     n = len(df)
     cut1 = int(n * 0.5)
@@ -434,11 +443,8 @@ def evaluate_fitness_two_window(signal_fn: SignalFn, parameters: Dict[str, Any],
         base.rejection_reason = "; ".join(reasons)
         return base
 
-    # Behavioural niche labels: from this candidate's own signal, so the
-    # controller places it in a behavioural niche instead of inheriting the
-    # parent's. (Only computed for candidates that pass the gates and get stored.)
-    base.family_label = classify_signal_family(signal_fn, df, parameters or {})
-    base.regime_label = classify_active_regime(signal_fn, df, parameters or {})
+    # Behavioural niche labels were computed right after the correctness gate
+    # (above), so they are already populated for this passing candidate too.
     base.evaluated = True
     base.fitness_score = candidate_fitness
     return base

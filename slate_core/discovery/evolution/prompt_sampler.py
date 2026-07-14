@@ -82,6 +82,17 @@ conditional/residual/interaction combo, not the whole signal:
 These barely clear costs on efficient markets and the search has already
 explored them heavily."""
 
+# (b2) The funnel showed candidates making 0-1 OOS trades - near-dormant signals
+# that "beat" buy-hold by sitting in cash rather than trading an edge. Steer the
+# LLM away from producing them.
+TRADE_FREQUENCY_DIRECTIVE = """\
+TRADE FREQUENCY - the signal must actually trade. Candidates that go FLAT (0)
+for almost the entire out-of-sample window are rejected by the min-trades gate,
+and a sparse signal that beats buy-hold merely by sitting in cash is NOT an
+edge (the funnel surfaced many such near-dormant rejects). Ensure the signal
+holds a position on a meaningful fraction of bars; if a threshold is so tight it
+rarely fires, loosen it."""
+
 
 class PromptSampler:
     """Builds the evolution prompt from a parent + inspirations."""
@@ -101,6 +112,7 @@ class PromptSampler:
         parts.append(f"OVERFIT WARNING: {obj.overfit_warning}")
         parts.append(ALPHA_DIRECTIONS)
         parts.append(KNOWN_DEAD_PATTERNS)
+        parts.append(TRADE_FREQUENCY_DIRECTIVE)
 
         parts.append("\n=== PARENT PROGRAM (improve this) ===")
         parts.append(f"id: {parent.candidate_id}")

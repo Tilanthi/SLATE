@@ -84,10 +84,38 @@ def test_evolution_step_works_with_empty_database(sol_slice, monkeypatch):
         "slate_core.discovery.evolution.controller.eval_fitness_subprocess",
         _passing_fitness,
     )
+    # (b1) empty DB -> parent is a rotated SEED archetype, not always BASE_SIGNAL_CODE
     prog = asyncio.run(evolution_step(db, sampler, pool, sol_slice,
-                                      config=EvolutionConfig(edge_type_default="momentum")))
+                                      config=EvolutionConfig(edge_type_default="momentum"),
+                                      rng=random.Random(0)))
     assert prog is not None
-    assert prog.family == "momentum"
+    assert prog.parent_id.startswith("seed:archetype:")
+
+
+# ---------------------------------------------------------------------------
+# (b1) seed-archetype diversity when the population is empty
+# ---------------------------------------------------------------------------
+
+def test_seed_archetypes_compile_and_span_families(sol_slice):
+    """The archetypes must (a) compile under the sandbox and (b) span >=2
+    behavioural families, so an empty population explores varied signals
+    instead of cloning one overfit attractor."""
+    from slate_core.discovery.evolution.evolvable_strategy import SEED_ARCHETYPES
+    from slate_core.discovery.evolution.signal_sandbox import compile_signal
+    from slate_core.discovery.evolution.fitness_evaluator import classify_signal_family
+    families = set()
+    for _label, code in SEED_ARCHETYPES:
+        fn = compile_signal(code)                       # raises if not sandbox-clean
+        families.add(classify_signal_family(fn, sol_slice, {}))
+    assert len(families) >= 2, f"archetypes not diverse: {families}"
+
+
+def test_pick_seed_parent_rotates_archetypes():
+    from slate_core.discovery.evolution.controller import pick_seed_parent
+    cfg = EvolutionConfig()
+    rng = random.Random(0)
+    seen = {pick_seed_parent(cfg, rng=rng).candidate_id for _ in range(30)}
+    assert len(seen) >= 2            # not always the same archetype
 
 
 def test_gate_rejected_candidate_is_not_stored(sol_slice):

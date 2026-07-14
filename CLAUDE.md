@@ -248,6 +248,40 @@ the funnel logger, the controller wiring, and the prompt steering). An autouse
 
 ---
 
+## 🔧 Funnel-Sharpening + Acting on the Diagnosis (2026-07-15)
+
+A first read of the live funnel (`slate_core/evolution_verdicts.jsonl`, ~176
+candidates) surfaced two diagnostic weaknesses and two search pathologies.
+
+**(a) Sharper funnel.**
+- `death_stage` is now the **first (causally-earliest) failing gate**, not a
+  priority scan — previously every multi-gate reject was over-labeled
+  `overfit_fitness`. A new `failed_gates` list on each `CandidateVerdict`
+  preserves the full co-failure set (`verdict_log.py`).
+- **Rejected candidates now carry family/regime labels** (the classifiers run
+  right after the correctness gate in `fitness_evaluator.py`, not only on the
+  pass-branch) — so the funnel shows WHAT kind of signal fails, not just that it
+  failed.
+
+**(b) Acting on the diagnosis** (the funnel showed candidates overfit IS ~4,400
+vs OOS ~92 while making 0–1 OOS trades):
+- **Seed-archetype diversity** (`evolvable_strategy.SEED_ARCHETYPES` +
+  `controller.pick_seed_parent`): an empty population now rotates among
+  momentum / mean-reversion / breakout archetypes instead of always mutating
+  `BASE_SIGNAL_CODE`, so the search no longer collapses onto one overfit
+  attractor (no diversity pressure).
+- **Trade-frequency directive** (`prompt_sampler.TRADE_FREQUENCY_DIRECTIVE`):
+  the prompt steers the LLM away from near-dormant (mostly-flat) signals that
+  "beat" buy-hold merely by sitting in cash.
+
+**Verified live:** post-restart funnel entries carry `failed_gates` + labels,
+and empty-DB parents are `seed:archetype:*`. Suite: **190 passed / 0 failed**
+(+9 tests). **Open research task unchanged:** candidates still go dormant OOS —
+the diagnostics now pinpoint it precisely; the diversity/steer changes are soft
+and dormancy remains the real problem to solve.
+
+---
+
 
 ## 🎯 Quick System Overview
 
@@ -474,4 +508,4 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*
-*Last Updated: 2026-07-14 (ASTRA-derived hardening: unified write chokepoint `append_verified` requiring a machine-verification block + structural −inf rejection; funnel diagnostic `verdict_log.py` logging per-candidate death-stage to JSONL; proposer primed toward non-obvious edges via ALPHA DIRECTIONS + KNOWN-DEAD PATTERNS; deliberately did NOT adopt ASTRA's literature-novelty Gate 2 as it is incoherent for trading — see ASTRA-Derived Hardening 2026-07-14 above. 🔴 core backtester + data fetcher were gitignored & missing from repo → now tracked, suite collects on fresh clone; behavioural MAP-Elites niches + `add_signal_indicators` injected-columns fix so real signals label correctly; `min_fitness` gate rejects overfit `−1800s` survivors; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green **181 passed/0 failed**; cache file renamed `1d_12m`→`1h_6m` (was mislabelled daily) — see Correctness Updates 2026-07-14 above)*
+*Last Updated: 2026-07-15 (funnel-sharpening: `death_stage` = first failing gate + `failed_gates` list; family/regime labels on rejects; seed-archetype diversity when population empty; trade-frequency prompt directive — see Funnel-Sharpening 2026-07-15 above. ASTRA-derived hardening: unified write chokepoint `append_verified` requiring a machine-verification block + structural −inf rejection; funnel diagnostic `verdict_log.py`; proposer primed via ALPHA DIRECTIONS + KNOWN-DEAD PATTERNS; deliberately did NOT adopt ASTRA's literature-novelty Gate 2 as it is incoherent for trading. 🔴 core backtester + data fetcher were gitignored & missing from repo → now tracked; behavioural MAP-Elites niches + `add_signal_indicators` fix; `min_fitness` gate; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green **190 passed/0 failed**; cache file renamed `1d_12m`→`1h_6m`)*

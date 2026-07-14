@@ -76,3 +76,13 @@ def test_prompt_names_known_dead_patterns_to_avoid():
 def test_prompt_has_labeled_alpha_directions_section():
     p = _prog("p", 10.0, code="x")
     assert "alpha directions" in PromptSampler().build(p, []).lower()
+
+
+def test_prompt_directs_against_near_dormant_signals():
+    """(b2) the prompt must steer away from mostly-flat signals that 'beat'
+    buy-hold by sitting in cash - the 0-1 OOS-trades failure mode the funnel
+    surfaced."""
+    p = _prog("p", 10.0, code="x")
+    low = PromptSampler().build(p, []).lower()
+    assert "trade frequency" in low
+    assert "flat" in low or "dormant" in low or "min-trades" in low

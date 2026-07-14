@@ -31,9 +31,9 @@ import json
 import logging
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -58,33 +58,61 @@ class CandidateVerdict:
     n_trades_oos: int
     overfit_gap: float
     timestamp: str              # ISO-8601 UTC
+    failed_gates: List[str] = field(default_factory=list)
+    # Every distinct death-stage this candidate failed (multi-gate rejects fail
+    # several at once). Empty for passes. Use this for the full co-failure
+    # picture; death_stage is just the primary (first) one.
+
+
+def _classify_subreason(text: str) -> str:
+    """Map ONE semicolon-delimited sub-reason to a death-stage."""
+    low = text.lower()
+    if low.startswith("correctness"):
+        return "correctness"
+    if "total_profit" in low:                 # absolute-profit gate (1- or 2-window)
+        return "not_profitable"
+    if "does_not_beat_buyhold" in low or "edge_not_positive" in low:
+        return "no_oos_edge"
+    if "trades=" in low and "<" in low:        # min-trades gate
+        return "too_few_trades"
+    if "fitness=" in low:                      # the min_fitness (overfit) gate
+        return "overfit_fitness"
+    if "validation_score" in low:              # pluralistic validation floor
+        return "validation_failed"
+    if low.startswith("eval ") or low.startswith("eval:"):
+        return "eval_crash"
+    return "unknown"
 
 
 def death_stage_from_reason(reason: str) -> str:
-    """Bucket a FitnessResult.rejection_reason into a funnel death-stage.
+    """PRIMARY death-stage = the causally-earliest failing gate (the FIRST
+    semicolon-delimited sub-reason), not a priority scan of the whole string.
 
-    Reasons are produced by fitness_evaluator.py (the gate messages) and
-    subprocess_eval.py (eval timeouts/crashes). Order matters: check the
-    specific gate signatures before the generic fallback.
+    A reject often fails several gates at once; the evaluator checks them in
+    order, so the first sub-reason is the most informative primary cause.
+    Previously every multi-gate reject was over-labeled 'overfit_fitness'
+    because the fitness reason always fires (a huge overfit penalty drags the
+    adjusted fitness negative) and was scanned first. Use
+    failed_gates_from_reason() for the full co-failure set.
     """
-    r = (reason or "").lower()
+    r = (reason or "").strip()
     if not r:
         return "unknown"
-    if r.startswith("correctness"):
-        return "correctness"
-    if "fitness=" in r:                       # the min_fitness (overfit) gate
-        return "overfit_fitness"
-    if "does_not_beat_buyhold" in r or "edge_not_positive" in r:
-        return "no_oos_edge"
-    if "total_profit" in r:                   # absolute-profit gate (1- or 2-window)
-        return "not_profitable"
-    if "trades=" in r and "<" in r:           # min-trades gate
-        return "too_few_trades"
-    if "validation_score" in r:               # pluralistic validation floor
-        return "validation_failed"
-    if r.startswith("eval ") or r.startswith("eval:"):
-        return "eval_crash"
-    return "unknown"
+    return _classify_subreason(r.split("; ")[0])
+
+
+def failed_gates_from_reason(reason: str) -> List[str]:
+    """Every distinct death-stage mentioned in a (possibly multi-gate) rejection
+    reason, in first-appearance order. Empty for passes / unknown reasons."""
+    r = (reason or "").strip()
+    if not r:
+        return []
+    seen: List[str] = []
+    for sub in r.split("; "):
+        stage = _classify_subreason(sub)
+        if stage != "unknown" and stage not in seen:
+            seen.append(stage)
+    return seen
 
 
 def _now_iso() -> str:
@@ -112,6 +140,7 @@ def verdict_from_fitness_result(result, *, candidate_id: str = "",
         n_trades_oos=int(result.n_trades_oos),
         overfit_gap=float(result.overfit_gap),
         timestamp=_now_iso(),
+        failed_gates=[] if result.evaluated else failed_gates_from_reason(result.rejection_reason),
     )
 
 

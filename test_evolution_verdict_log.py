@@ -11,6 +11,7 @@ from slate_core.discovery.evolution.verdict_log import (
     CandidateVerdict,
     VerdictLogger,
     death_stage_from_reason,
+    failed_gates_from_reason,
     verdict_from_fitness_result,
     log_candidate_verdict,
     set_verdict_logger,
@@ -64,6 +65,55 @@ def test_death_stage_maps_eval_crash():
 def test_death_stage_unknown_for_empty_or_unrecognized():
     assert death_stage_from_reason("") == "unknown"
     assert death_stage_from_reason("something unprecedented") == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# (a1) multi-gate reasons: primary stage = FIRST failing gate; failed_gates
+# preserves the co-failures. Stops the over-labeling where every multi-gate
+# reject was bucketed as "overfit_fitness" because the fitness reason appeared
+# last but the min_fitness gate always fires when the overfit penalty is huge.
+# ---------------------------------------------------------------------------
+
+def test_death_stage_uses_first_failing_gate_for_multi_gate_reason():
+    reason = ("oos2_total_profit=0.00<=0; oos1_trades=1<5; oos2_trades=0<5; "
+              "fitness=-3858.0<0.0 (overfit-adjusted edge not positive; IS>>OOS)")
+    assert death_stage_from_reason(reason) == "not_profitable"
+
+
+def test_failed_gates_lists_all_distinct_stages_in_order():
+    reason = ("oos2_total_profit=0.00<=0; oos1_trades=1<5; oos2_trades=0<5; "
+              "fitness=-3858.0<0.0 (overfit-adjusted edge not positive; IS>>OOS)")
+    assert failed_gates_from_reason(reason) == [
+        "not_profitable", "too_few_trades", "overfit_fitness",
+    ]
+
+
+def test_failed_gates_empty_when_no_reason():
+    assert failed_gates_from_reason("") == []
+    assert failed_gates_from_reason(None) == []
+
+
+def test_verdict_carries_primary_stage_and_failed_gates():
+    res = FitnessResult(evaluated=False, fitness_score=float("-inf"),
+                        oos_vs_buyhold=0.0, is_vs_buyhold=0.0, overfit_gap=0.0,
+                        overfit_penalty=0.0, n_trades_is=0, n_trades_oos=0,
+                        validation_score=0.0,
+                        rejection_reason="oos2_total_profit=0.00<=0; oos1_trades=1<5; "
+                                         "fitness=-5.0<0.0 (overfit-adjusted edge not positive; IS>>OOS)",
+                        candidate_id="r")
+    v = verdict_from_fitness_result(res, candidate_id="r")
+    assert v.death_stage == "not_profitable"            # primary = first gate
+    assert v.failed_gates == ["not_profitable", "too_few_trades", "overfit_fitness"]
+
+
+def test_passed_verdict_has_empty_failed_gates():
+    res = FitnessResult(evaluated=True, fitness_score=12.0, oos_vs_buyhold=12.0,
+                        is_vs_buyhold=20.0, overfit_gap=8.0, overfit_penalty=4.0,
+                        n_trades_is=30, n_trades_oos=15, validation_score=1.0,
+                        candidate_id="ok")
+    v = verdict_from_fitness_result(res, candidate_id="ok")
+    assert v.death_stage == "passed"
+    assert v.failed_gates == []
 
 
 # ---------------------------------------------------------------------------

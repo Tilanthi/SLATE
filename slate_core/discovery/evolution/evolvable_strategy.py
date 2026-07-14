@@ -29,6 +29,47 @@ def signal_fn(df, i, params):
 # EVOLVE-BLOCK-END
 '''
 
+# Diverse starting archetypes for when the population is EMPTY. Without these,
+# every mutation restarts from BASE_SIGNAL_CODE and the search collapses onto one
+# overfit attractor (no diversity pressure - the funnel showed ~163 rejects
+# clustered at a near-identical IS edge). Each archetype spans a distinct
+# behavioural family so the funnel can show VARIED signals failing instead of
+# one clone. All are sandbox-clean (no imports/dunder/forbidden attrs) and read
+# only OHLCV + the backtester-injected ema_20.
+SEED_ARCHETYPES = [
+    ("momentum",
+     "# EVOLVE-BLOCK-START\n"
+     "def signal_fn(df, i, params):\n"
+     "    \"\"\"Momentum: long above the 20-EMA, short below.\"\"\"\n"
+     "    close = df['close'].iloc[i]\n"
+     "    ema = df['ema_20'].iloc[i] if 'ema_20' in df.columns else df['close'].iloc[i - 1]\n"
+     "    return 1 if close > ema else -1\n"
+     "# EVOLVE-BLOCK-END\n"),
+    ("mean_reversion",
+     "# EVOLVE-BLOCK-START\n"
+     "def signal_fn(df, i, params):\n"
+     "    \"\"\"Mean-reversion: long when oversold vs the 20-EMA, short when overbought.\"\"\"\n"
+     "    close = df['close'].iloc[i]\n"
+     "    ema = df['ema_20'].iloc[i] if 'ema_20' in df.columns else df['close'].iloc[i - 1]\n"
+     "    return 1 if close < ema else -1\n"
+     "# EVOLVE-BLOCK-END\n"),
+    ("breakout",
+     "# EVOLVE-BLOCK-START\n"
+     "def signal_fn(df, i, params):\n"
+     "    \"\"\"Range breakout: long on a 20-bar high break, short on a low break.\"\"\"\n"
+     "    if i < 20:\n"
+     "        return 0\n"
+     "    close = df['close'].iloc[i]\n"
+     "    hi = df['high'].iloc[i - 20:i].max()\n"
+     "    lo = df['low'].iloc[i - 20:i].min()\n"
+     "    if close > hi:\n"
+     "        return 1\n"
+     "    if close < lo:\n"
+     "        return -1\n"
+     "    return 0\n"
+     "# EVOLVE-BLOCK-END\n"),
+]
+
 
 _FENCE_RE = re.compile(r"```(?:[a-zA-Z0-9_+-]*)?\n(.*?)```", re.DOTALL)
 

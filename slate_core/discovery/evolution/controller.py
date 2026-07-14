@@ -14,11 +14,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import random
 import uuid
 from dataclasses import dataclass
 from typing import Optional
 
-from slate_core.discovery.evolution.evolvable_strategy import BASE_SIGNAL_CODE, apply_diff, extract_code_block
+from slate_core.discovery.evolution.evolvable_strategy import (
+    BASE_SIGNAL_CODE, SEED_ARCHETYPES, apply_diff, extract_code_block,
+)
 from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
 from slate_core.discovery.evolution.llm_pool import LLMPool
 from slate_core.discovery.evolution.program_database import Program, ProgramDatabase
@@ -47,6 +50,30 @@ def _seed_parent(config: EvolutionConfig) -> Program:
     )
 
 
+# Module RNG for seed-archetype rotation when no caller injects one. Created at
+# import so successive steps (each a fresh evolution_step call) draw different
+# archetypes - the diversity pressure an empty population otherwise lacks.
+_SEED_RNG = random.Random()
+
+
+def pick_seed_parent(config: EvolutionConfig,
+                     rng: Optional[random.Random] = None) -> Program:
+    """Parent for an EMPTY population: a randomly-rotated SEED archetype, not
+    always BASE_SIGNAL_CODE. Without this, every mutation restarts from the same
+    seed and the search collapses onto one overfit attractor (no diversity
+    pressure - the funnel showed ~163 rejects clustered at one IS edge)."""
+    r = rng or _SEED_RNG
+    if not SEED_ARCHETYPES:
+        return _seed_parent(config)
+    family, code = r.choice(SEED_ARCHETYPES)
+    return Program(
+        candidate_id=f"seed:archetype:{family}",
+        niche=(family, config.regime_default),
+        family=family, regime=config.regime_default,
+        fitness_score=0.0, source="seed", code=code,
+    )
+
+
 async def evolution_step(
     db: ProgramDatabase,
     sampler: PromptSampler,
@@ -55,6 +82,7 @@ async def evolution_step(
     config: Optional[EvolutionConfig] = None,
     fitness_config: Optional[FitnessConfig] = None,
     objective: Optional[PromptObjective] = None,
+    rng: Optional[random.Random] = None,
 ) -> Optional[Program]:
     """Run ONE evolution step. Returns the new Program, or None if the proposed
     code failed to compile (the candidate is simply skipped)."""
@@ -62,7 +90,9 @@ async def evolution_step(
     loop = asyncio.get_running_loop()
 
     parent, inspirations = db.sample()
-    parent_prog = parent if parent is not None else _seed_parent(cfg)
+    # Empty population -> rotate a diverse SEED archetype (diversity pressure),
+    # not always BASE_SIGNAL_CODE.
+    parent_prog = parent if parent is not None else pick_seed_parent(cfg, rng)
     parent_code = parent_prog.code or BASE_SIGNAL_CODE
 
     prompt = sampler.build(parent_prog, inspirations, objective)
