@@ -276,6 +276,28 @@ def test_classify_signal_family_flat_is_other(sol_slice):
     assert classify_signal_family(flat, sol_slice, {}) == "other"
 
 
+def test_classifiers_handle_backtester_injected_columns(sol_slice):
+    """Real evolved signals read columns the backtester INJECTS (e.g. ema_20),
+    which are absent from the raw df. The classifiers must probe on the same
+    enriched frame the backtester trades on — otherwise every such signal
+    KeyErrors bar-by-bar and mislabels as other/unknown, collapsing MAP-Elites
+    back to one cell. (This is the bug the live monitor surfaced: the first
+    real survivors were all labelled other/unknown despite using ema_20.)"""
+    def ema_trend(df, i, p):                       # mirrors a real evolved signal
+        close = df["close"].iloc[i]
+        ema = df["ema_20"].iloc[i]                 # NOT in the raw df
+        roc = (close - df["close"].iloc[i - 3]) / df["close"].iloc[i - 3]
+        if close > ema and roc > 0:
+            return 1
+        if close < ema and roc < 0:
+            return -1
+        return 0
+    fam = classify_signal_family(ema_trend, sol_slice, {})
+    reg = classify_active_regime(ema_trend, sol_slice, {})
+    assert fam != "other", f"family fell back to 'other' (raw df lacks ema_20): {fam}"
+    assert reg != "unknown", f"regime fell back to 'unknown': {reg}"
+
+
 def _vol_regime_df(n_each=60):
     """Synthetic close path for the vol-bucketing UNIT TEST only: first half
     calm, second half wild. NOT market data (no trading uses this) — it exists

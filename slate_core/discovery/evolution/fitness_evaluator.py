@@ -21,6 +21,7 @@ import pandas as pd
 from slate_core.discovery.perpetual_futures_backtest import (
     PerpetualBacktestConfig,
     PerpetualFuturesBacktester,
+    add_signal_indicators,
 )
 
 SignalFn = Callable[[pd.DataFrame, int, Dict[str, Any]], float]
@@ -151,6 +152,7 @@ def classify_signal_family(signal_fn: SignalFn, df: pd.DataFrame,
     Diversifies the *family* axis of the niche grid across candidates on the
     same data (a pure-data label could not do this).
     """
+    df = add_signal_indicators(df.copy())   # signals may read injected EMA cols
     close = df["close"].astype(float).values
     n = len(close)
     start = max(lookback, _WARMUP)
@@ -187,6 +189,7 @@ def classify_active_regime(signal_fn: SignalFn, df: pd.DataFrame,
     two strategies on the same data can land in different regime cells. Returns
     'unknown' if the candidate never trades or the series is too short.
     """
+    df = add_signal_indicators(df.copy())   # signals may read injected EMA cols
     close = df["close"].astype(float).values
     n = len(close)
     if n <= window + 3:
