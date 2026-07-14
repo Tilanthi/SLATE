@@ -67,7 +67,7 @@ from slate_core.discovery.closed_loop_discovery import StrategyHypothesis, Hypot
 
 # Load market data
 try:
-    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df.set_index('timestamp', inplace=True)
     print(f'✅ Loaded {len(df)} days of market data')

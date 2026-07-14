@@ -269,7 +269,7 @@ async def main():
                 'funding_rate': row['funding_rate']
             })
 
-        with open(cache_dir / 'SOLUSDT_perpetual_1d_12m.csv', 'w') as f:
+        with open(cache_dir / 'SOLUSDT_perpetual_1h_6m.csv', 'w') as f:
             json.dump(basic_data, f)
 
         # Save full data with all indicators
@@ -301,7 +301,7 @@ async def main():
             json.dump(full_data, f)
 
         logger.info("✓ Data files saved successfully")
-        logger.info(f"  - SOLUSDT_perpetual_1d_12m.csv: {len(basic_data)} days")
+        logger.info(f"  - SOLUSDT_perpetual_1h_6m.csv: {len(basic_data)} days")
         logger.info(f"  - SOLUSDT_perpetual_1d_12m_full.csv: {len(full_data)} days with indicators")
         logger.info(f"  Period: {df.index[0]} to {df.index[-1]}")
         logger.info(f"  Price range: ${df['close'].min():.2f} - ${df['close'].max():.2f}")

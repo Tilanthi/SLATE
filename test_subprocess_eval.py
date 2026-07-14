@@ -17,7 +17,7 @@ _DAILY = None
 def _daily():
     global _DAILY
     if _DAILY is None:
-        _DAILY = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1d_12m.csv")
+        _DAILY = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")
     return _DAILY
 
 

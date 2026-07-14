@@ -10,7 +10,7 @@ print("=" * 60)
 # Try 1: read_csv (current method)
 try:
     print("\n1. Trying pd.read_csv():")
-    df_csv = pd.read_csv('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+    df_csv = pd.read_csv('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
     print(f"   Shape: {df_csv.shape}")
     print(f"   Columns: {df_csv.columns.tolist()[:5]}")
     print(f"   Index type: {type(df_csv.index)}")
@@ -20,7 +20,7 @@ except Exception as e:
 # Try 2: read_json (correct method)
 try:
     print("\n2. Trying pd.read_json():")
-    df_json = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+    df_json = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
     print(f"   Shape: {df_json.shape}")
     print(f"   Columns: {df_json.columns.tolist()[:5]}")
     print(f"   Index type: {type(df_json.index)}")

@@ -91,7 +91,7 @@ basis = mean of `D` snapshots. All streams join on the daily date index.
 ## 5. Storage layout
 
 - Directory: `data/multi_stream/` (gitignored — data is fetched, not committed;
-  the existing `sol_data_cache/SOLUSDT_perpetual_1d_12m.csv` IS tracked, but the
+  the existing `sol_data_cache/SOLUSDT_perpetual_1h_6m.csv` IS tracked, but the
   larger multi-stream set is kept local).
 - Parquet per `(symbol, stream)`: e.g. `data/multi_stream/SOLUSDT/funding_1d.parquet`.
 - A small `manifest.json` records coverage per symbol/stream (date range, row

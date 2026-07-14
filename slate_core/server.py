@@ -231,7 +231,7 @@ async def start_closed_loop_discovery():
         logger.info("🧠 Starting Closed-Loop Discovery via API")
 
         # Load market data with proper parsing
-        with open('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv', 'r') as f:
+        with open('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv', 'r') as f:
             content = f.read()
 
         all_data = []
@@ -425,7 +425,7 @@ async def start_continuous_discovery():
                     import pandas as pd
 
                     # Load JSON data file (not CSV format despite extension)
-                    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+                    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
                     df['timestamp'] = pd.to_datetime(df['timestamp'])
                     df.set_index('timestamp', inplace=True)
                     logger.info(f"✅ Market data loaded: {len(df)} days")

@@ -191,11 +191,11 @@ legacy tests (`slate_core/tests/test_{connectors,languages,strategies}.py` and
 `slate_core/test_integration.py`) that imported a defunct layer
 (`slate_core.engine`/`connectors.binance`/`languages.haas_script`/`risk.manager`)
 and failed every run — **the full suite is now green: 150 passed, 0 failed**
-(was 152 passed + 13 dead failures, masked). The mislabelled cache file
-(`SOLUSDT_perpetual_1d_12m.csv` is actually 4,182 hourly bars) was **not** renamed
-— 30+ references across code/tests/scripts/docs + the live server path, and
-`load_data.py` already handles the content correctly (detects intraday,
-resamples to daily); the churn/risk was judged not worth the cosmetic gain.
+(was 152 passed + 13 dead failures, masked). Renamed the mislabelled cache file
+`SOLUSDT_perpetual_1d_12m.csv` → `SOLUSDT_perpetual_1h_6m.csv` (it is 4,182
+**hourly** bars ≈ 6 months, not daily/12-month as the old name claimed); all
+~30 references across code/tests/scripts/docs + the live server path updated.
+`load_data.py` still detects intraday and resamples to daily regardless of name.
 
 ---
 
@@ -215,7 +215,7 @@ resamples to daily); the churn/risk was judged not worth the cosmetic gain.
 ### **Key Architecture**
 - **Discovery Method**: Hypothesis-driven scientific discovery (closed-loop AI)
 - **Evolution Layer**: AlphaEvolve-style evolutionary code search (`slate_core/discovery/evolution/`) — runs alongside closed-loop discovery
-- **Market Data**: Real SOLUSDT perpetual futures. ⚠️ `SOLUSDT_perpetual_1d_12m.csv` is a JSON array (load with `pd.read_json`, not `read_csv`) of **~4,182 hourly bars ≈ 175 days** despite the "1d" name. The evolution layer resamples it to **daily** (`load_data.load_daily_data`) to match the documented daily-timeframe edge.
+- **Market Data**: Real SOLUSDT perpetual futures. `sol_data_cache/SOLUSDT_perpetual_1h_6m.csv` is a JSON array (load with `pd.read_json`, not `read_csv`) of **~4,182 hourly bars ≈ 175 days** (renamed from the misleading `1d_12m` on 2026-07-14). The evolution layer resamples it to **daily** (`load_data.load_daily_data`) to match the documented daily-timeframe edge.
 - **Validation**: 6 pluralistic validation methods with realistic thresholds
 - **Learning**: Continuous feedback learning system
 - **Server**: Port 8788 with 24/7 autonomous operation
@@ -419,9 +419,9 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 ### **Database & Market Data**
 - **Database**: `slate_core/slate_realistic_discoveries.db` (production, **fresh — cleared 2026-07-11**) · rich history in `slate_realistic_discoveries_backup_20260705_161518.db` (118k rows)
 - **Evolution DB**: `slate_core/slate_evolution.db` (persisted population)
-- **Market Data**: `sol_data_cache/SOLUSDT_perpetual_1d_12m.csv` — JSON array of ~4,182 **hourly** bars ≈ 175 days (load with `pd.read_json`; evolution resamples to daily)
+- **Market Data**: `sol_data_cache/SOLUSDT_perpetual_1h_6m.csv` — JSON array of ~4,182 **hourly** bars ≈ 175 days (load with `pd.read_json`; evolution resamples to daily)
 
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*
-*Last Updated: 2026-07-14 (🔴 core backtester + data fetcher were gitignored & missing from repo → now tracked, suite collects on fresh clone; behavioural MAP-Elites niches + `add_signal_indicators` injected-columns fix so real signals label correctly; `min_fitness` gate rejects overfit `−1800s` survivors; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green 150 passed/0 failed; cache-file rename deferred — see Correctness Updates 2026-07-14 above)*
+*Last Updated: 2026-07-14 (🔴 core backtester + data fetcher were gitignored & missing from repo → now tracked, suite collects on fresh clone; behavioural MAP-Elites niches + `add_signal_indicators` injected-columns fix so real signals label correctly; `min_fitness` gate rejects overfit `−1800s` survivors; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green 150 passed/0 failed; cache file renamed `1d_12m`→`1h_6m` (was mislabelled daily) — see Correctness Updates 2026-07-14 above)*

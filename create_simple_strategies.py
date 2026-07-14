@@ -203,7 +203,7 @@ if __name__ == "__main__":
     import json
 
     # Load a small sample for testing
-    with open('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv', 'r') as f:
+    with open('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv', 'r') as f:
         data_lines = f.readlines()[:50]  # Just first 50 lines for testing
 
     all_data = []

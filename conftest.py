@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from pathlib import Path
 
-REAL_DATA = Path("sol_data_cache/SOLUSDT_perpetual_1d_12m.csv")  # JSON array, .csv ext
+REAL_DATA = Path("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")  # JSON array, .csv ext
 
 
 @pytest.fixture(scope="session")

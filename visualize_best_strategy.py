@@ -32,7 +32,7 @@ def load_price_data():
     """Load SOLUSDT perpetual futures price data"""
     try:
         print("Loading price data from JSON format...")
-        with open('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv', 'r') as f:
+        with open('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv', 'r') as f:
             content = f.read()
 
         # Parse JSON objects from the content

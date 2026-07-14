@@ -41,7 +41,7 @@ def test_is_intraday_false_for_daily():
 
 
 def test_load_daily_data_real_yields_daily_index():
-    df = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1d_12m.csv")
+    df = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")
     assert "close" in df.columns
     median_delta = df.index.to_series().diff().median()
     assert median_delta >= pd.Timedelta(days=1)    # daily, not hourly

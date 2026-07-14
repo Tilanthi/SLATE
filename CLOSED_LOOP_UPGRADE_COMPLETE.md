@@ -156,7 +156,7 @@ from slate_core.discovery.closed_loop_integration import get_enhanced_discovery_
 import pandas as pd
 
 # Load market data
-df = pd.read_csv('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+df = pd.read_csv('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
 
 # Get enhanced system
 system = get_enhanced_discovery_system()

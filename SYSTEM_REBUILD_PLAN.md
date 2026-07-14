@@ -14,7 +14,7 @@ AUTHOR: Claude (SLATE System Engineer)
 ==========================================
 
 Problem #1: Empty Market Data File
-- File: sol_data_cache/SOLUSDT_perpetual_1d_12m.csv
+- File: sol_data_cache/SOLUSDT_perpetual_1h_6m.csv
 - Expected: 241 days of SOLUSDT perpetual futures data
 - Actual: 0 bytes (empty file)
 - Impact: Cannot run ANY backtests without data
@@ -52,7 +52,7 @@ Step 1.1: Install Binance API dependencies
 Step 1.2: Download SOLUSDT perpetual futures data
     - Download 12 months of daily data (backtest requirement)
     - Include OHLCV data + funding rates
-    - Save to sol_data_cache/SOLUSDT_perpetual_1d_12m.csv
+    - Save to sol_data_cache/SOLUSDT_perpetual_1h_6m.csv
     - Verify file is not empty and has proper structure
 
 Step 1.3: Validate market data structure

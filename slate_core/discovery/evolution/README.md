@@ -144,7 +144,7 @@ from slate_core.discovery.evolution.prompt_sampler import PromptSampler
 from slate_core.discovery.evolution.llm_pool import LLMPool
 from slate_core.discovery.evolution.llm_client import get_llm_client, LLMConfig
 
-df = pd.read_json("sol_data_cache/SOLUSDT_perpetual_1d_12m.csv")
+df = pd.read_json("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")
 df["timestamp"] = pd.to_datetime(df["timestamp"]); df = df.set_index("timestamp").sort_index()
 
 db = ProgramDatabase(ProgramDBConfig(persist_path="slate_core/slate_evolution.db"))

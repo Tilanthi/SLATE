@@ -12,7 +12,7 @@
 
 ## Global Constraints (apply to every task)
 
-- ❌ **NO SYNTHETIC MARKET DATA for strategy evaluation.** All fitness evaluation runs on the real `sol_data_cache/SOLUSDT_perpetual_1d_12m.csv`. **This file is a JSON array despite the `.csv` extension** — load it with `pd.read_json(...)`, NOT `pd.read_csv` (matches `server.py:362`). Columns include `timestamp, open, high, low, close, volume, atr, rsi, macd, ...` (no `date` column). Unit tests may load a small *slice of the real data* as a fixture — never fabricate OHLCV rows. (Deterministic dummy `signal_function` callables in tests are fine — they are strategy stubs, not market data.)
+- ❌ **NO SYNTHETIC MARKET DATA for strategy evaluation.** All fitness evaluation runs on the real `sol_data_cache/SOLUSDT_perpetual_1h_6m.csv`. **This file is a JSON array despite the `.csv` extension** — load it with `pd.read_json(...)`, NOT `pd.read_csv` (matches `server.py:362`). Columns include `timestamp, open, high, low, close, volume, atr, rsi, macd, ...` (no `date` column). Unit tests may load a small *slice of the real data* as a fixture — never fabricate OHLCV rows. (Deterministic dummy `signal_function` callables in tests are fine — they are strategy stubs, not market data.)
 - ⚠️ **Known pre-existing inconsistency:** the `1d` filename and CLAUDE.md say "daily", but the data is actually **hourly** bars (4182 rows ≈ 175 days, 2026-01-08 → 2026-07-01). Phase 0/1 does not resolve this — the backtester runs on any OHLCV rows. Flagged for the user; out of scope here.
 - ✅ **Daily timeframe only.** `timeframe = "1d"`. Per SLATE research, sub-daily indicators are not profitable; evolution must not "rediscover" overfit sub-daily edges.
 - ✅ **Realistic costs are already applied** by the backtester (maker 0.02%, taker 0.05%, 15bps slippage, 80% fill, 20% partial). Do not weaken them.
@@ -90,7 +90,7 @@ import pandas as pd
 import pytest
 from pathlib import Path
 
-REAL_DATA = Path("sol_data_cache/SOLUSDT_perpetual_1d_12m.csv")  # JSON array, .csv ext
+REAL_DATA = Path("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")  # JSON array, .csv ext
 
 @pytest.fixture(scope="session")
 def sol_slice() -> pd.DataFrame:
@@ -112,7 +112,7 @@ def sol_slice() -> pd.DataFrame:
 
 - [ ] **Step 4: Verify the fixture loads real data**
 
-Run: `python3 -c "import pandas as pd; df=pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv'); print(len(df), [c for c in df.columns][:6])"`
+Run: `python3 -c "import pandas as pd; df=pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv'); print(len(df), [c for c in df.columns][:6])"`
 Expected: `4182 ['timestamp', 'open', 'high', 'low', 'close', 'volume']`. (Confirmed 2026-07-11.)
 
 - [ ] **Step 5: Commit**
@@ -534,7 +534,7 @@ git commit -m "feat(evolution): add overfit-resistant evaluate_fitness (IS/OOS +
 python3 -c "
 import pandas as pd
 from slate_core.discovery.evolution.fitness_evaluator import evaluate_fitness
-df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
 df['timestamp']=pd.to_datetime(df['timestamp']); df=df.set_index('timestamp').sort_index()
 def mom(df,i,p): return 1 if df['close'].iloc[i]>df['close'].iloc[i-1] else -1
 def flat(df,i,p): return 0
@@ -1129,7 +1129,7 @@ pkill -f "python3 -m slate_core.server" ; sleep 2 ; python3 -m slate_core.server
 - `PerpetualBacktestResult` — `perpetual_futures_backtest.py:84` (~47 fields; `vs_buy_hold_usdt`, `beat_market`, `sharpe_ratio`, `total_trades`, `max_drawdown_pct`, etc.).
 - `rigorous_validation.py`: `BootstrapValidation` (`:99`), `WalkForwardValidation` (`:197`, OOS), `MonteCarloValidation` (`:304`), `RegimeStressValidation` (`:375`), `ParameterSensitivityValidation` (`:467`), `CostSensitivityValidation` (`:558`), `PluralisticValidationSystem.validate_strategy` (`:659`), `get_rigorous_validation_system()` (`:784`).
 - `PerpetualDatabaseManager` — `perpetual_database.py:18` (`save_discovery`, `get_top_strategies`, `get_statistics`); `perpetual_discoveries` schema at `:31`.
-- Real data: `sol_data_cache/SOLUSDT_perpetual_1d_12m.csv` (daily SOL perpetual).
+- Real data: `sol_data_cache/SOLUSDT_perpetual_1h_6m.csv` (daily SOL perpetual).
 
 # Appendix B — Self-review checklist (run before declaring Phases 0–1 done)
 

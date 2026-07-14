@@ -57,7 +57,7 @@ def download_sol_perpetual_futures():
         print(f"💰 Price Range: ${df['close'].min():.2f} - ${df['close'].max():.2f}")
 
         # Save to CSV file (replacing empty file)
-        output_file = 'sol_data_cache/SOLUSDT_perpetual_1d_12m.csv'
+        output_file = 'sol_data_cache/SOLUSDT_perpetual_1h_6m.csv'
         df.to_csv(output_file)
 
         print(f"✅ Saved to: {output_file}")

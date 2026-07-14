@@ -3,7 +3,7 @@ import pandas as pd
 import json
 
 print('📊 Loading market data...')
-with open('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv', 'r') as f:
+with open('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv', 'r') as f:
     data_lines = f.readlines()
 
 # Parse JSON data from each line

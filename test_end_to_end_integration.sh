@@ -24,7 +24,7 @@ from slate_core.discovery.strategies.strategy_factory import StrategyFactory
 print("📊 Loading market data...")
 try:
     # Try to load the perpetual futures data
-    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df.set_index('timestamp', inplace=True)
     print(f"✅ Loaded {len(df)} days of SOLUSDT perpetual futures data")

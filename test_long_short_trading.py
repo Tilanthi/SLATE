@@ -12,7 +12,7 @@ print("=" * 60)
 
 # Load market data properly
 print("\n1. Loading market data...")
-df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 df.set_index('timestamp', inplace=True)
 print(f"   ✅ Loaded {len(df)} days of data")

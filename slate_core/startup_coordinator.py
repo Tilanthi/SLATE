@@ -231,7 +231,7 @@ class StartupCoordinator:
                     # timeframe (sub-daily signals are not profitable), so
                     # resample intraday->daily via the shared evolution loader.
                     from slate_core.discovery.evolution.load_data import load_daily_data
-                    df = load_daily_data('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv')
+                    df = load_daily_data('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
 
                     logger.info(f"✅ Market data loaded: {len(df)} daily bars")
 

@@ -52,7 +52,7 @@ class WorldClassDiscoveryEngine:
     def load_market_data(self) -> pd.DataFrame:
         """Load and prepare market data for strategy discovery"""
         try:
-            with open('sol_data_cache/SOLUSDT_perpetual_1d_12m.csv', 'r') as f:
+            with open('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv', 'r') as f:
                 content = f.read()
 
             all_data = []

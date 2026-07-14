@@ -47,7 +47,7 @@
 - **Process ID:** 57725
 
 ### **Market Data: ✅ LOADED**
-- **Data File:** `sol_data_cache/SOLUSDT_perpetual_1d_12m.csv`
+- **Data File:** `sol_data_cache/SOLUSDT_perpetual_1h_6m.csv`
 - **Format:** JSON (2.0MB)
 - **Days of Data:** 4,182 days
 - **Quality:** ✅ Real Binance perpetual futures data

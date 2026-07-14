@@ -144,7 +144,7 @@ def test_closed_loop_market_data_is_daily():
     the 4,182 hourly bars in the source file."""
     from slate_core.discovery.evolution.load_data import load_daily_data, is_intraday
 
-    df = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1d_12m.csv")
+    df = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")
     assert not is_intraday(df), "data is still intraday after load_daily_data"
     assert 100 < len(df) < 400, f"expected ~175 daily bars, got {len(df)}"
 
@@ -157,7 +157,7 @@ def test_regime_filter_does_not_starve_small_daily_dataset():
     )
     from slate_core.discovery.evolution.load_data import load_daily_data
 
-    df = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1d_12m.csv")
+    df = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")
     rf = get_market_regime_filter()
     filtered = rf.filter_for_discovery(df, strategy_type="adaptive_regime_switching")
     assert len(filtered) >= MIN_BARS_FOR_DISCOVERY, (
