@@ -67,6 +67,25 @@ DEX_SEED_ARCHETYPES = [
      "        return 1\n"
      "    return 0\n"
      "# EVOLVE-BLOCK-END\n"),
+    ("imbalance_fade",
+     "# EVOLVE-BLOCK-START\n"
+     "def signal_fn(df, i, params):\n"
+     "    \"\"\"Orderbook imbalance proxy: fade intrabar buying/selling pressure.\"\"\"\n"
+     "    if i < 5:\n"
+     "        return 0\n"
+     "    h = df['high'].iloc[i]\n"
+     "    l = df['low'].iloc[i]\n"
+     "    c = df['close'].iloc[i]\n"
+     "    if h <= l:\n"
+     "        return 0\n"
+     "    pressure = (c - l) / (h - l)\n"
+     "    imbalance = 2 * pressure - 1\n"
+     "    if imbalance > 0.4:\n"
+     "        return -1\n"
+     "    if imbalance < -0.4:\n"
+     "        return 1\n"
+     "    return 0\n"
+     "# EVOLVE-BLOCK-END\n"),
 ]
 
 _DEX_SEED_RNG = random.Random()
