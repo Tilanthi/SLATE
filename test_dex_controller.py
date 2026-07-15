@@ -107,6 +107,25 @@ def test_dex_mm_step_stores_verified_candidate(monkeypatch):
     assert len(recorded) == 1 and recorded[0].death_stage == "passed"
 
 
+def test_dex_pairs_step_stores_verified_candidate(monkeypatch):
+    """target=pairs: the pairs evolution step evolves spread_fn, routes through the
+    chokepoint, and logs a verdict."""
+    from slate_core.dex.evolution.dex_controller import dex_pairs_evolution_step, DexPairsPromptSampler
+    db = ProgramDatabase(ProgramDBConfig(persist_path=None))   # empty -> pairs base parent
+    monkeypatch.setattr("slate_core.dex.evolution.dex_controller.dex_pairs_eval_fitness_subprocess",
+                        _passing)
+    recorded = []
+    monkeypatch.setattr("slate_core.dex.evolution.dex_controller.log_dex_verdict",
+                        lambda v: recorded.append(v))
+    canned = "def spread_fn(dfA, dfB, i):\n    return 1 if i > 60 else 0\n"
+    prog = asyncio.run(dex_pairs_evolution_step(
+        db, DexPairsPromptSampler(), _mock_pool(canned=canned), _df(), _df()))
+    assert prog is not None
+    assert prog.verification.get("gate") == "dex_pairs_passed_two_window"
+    assert prog.family == "pairs"
+    assert len(recorded) == 1 and recorded[0].death_stage == "passed"
+
+
 def test_dex_service_uses_loosened_complexity_cap():
     """The DEX cap is loosened from the CEX 200 (measured DEX signals cluster at
     201-350) so candidates reach evaluation; CEX stays at 200."""

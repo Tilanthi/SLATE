@@ -266,10 +266,11 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
   `load_markets`. (P4) a **pairs/stat-arb backtester** (`PairsBacktester`, $-neutral
   2-leg spread) + spread-z-score archetype + `evaluate_dex_pairs_fitness` — the
   market-neutral multi-leg edge class. (P5) failure-feedback injected into the prompt.
-  (Pairs + cross-market as runnable evolution targets is the remaining wiring.)
+  Pairs is a **runnable evolution target** (`SLATE_DEX_TARGET=pairs`; evolves
+  `spread_fn`), alongside `directional` (default) and `market_maker`.
 - **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
-  `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=market_maker`
-  (default `directional`). Suite: **249 passed / 0 failed**.
+  `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=` `directional`
+  (default) | `market_maker` | `pairs`. Suite: **250 passed / 0 failed**.
   Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
 
 ---

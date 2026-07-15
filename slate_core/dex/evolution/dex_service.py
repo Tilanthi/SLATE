@@ -19,8 +19,8 @@ from slate_core.discovery.evolution.program_database import ProgramDBConfig, Pro
 from slate_core.dex.data.load_data import REAL_DATA_DEFAULT, load_candles, merge_funding
 from slate_core.dex.data.hyperliquid_client import HLClient
 from slate_core.dex.evolution.dex_controller import (
-    DexMMPromptSampler, DexPromptSampler, _run_steps_parallel,
-    dex_failure_summary, dex_mm_evolution_step,
+    DexMMPromptSampler, DexPairsPromptSampler, DexPromptSampler, _run_steps_parallel,
+    dex_failure_summary, dex_mm_evolution_step, dex_pairs_evolution_step,
     run_dex_evolution, run_dex_evolution_parallel,
 )
 
@@ -38,7 +38,8 @@ class DexEvolutionService:
                  target: str = "directional",
                  max_signal_complexity: int = 350,
                  concurrency: int = 4,
-                 coin: str = "SOL"):
+                 coin: str = "SOL",
+                 coin_b: str = "BTC"):
         self.data_path = data_path
         self.gate_preset = gate_preset
         self.interval_s = interval_s
@@ -46,7 +47,10 @@ class DexEvolutionService:
         self.target = target                  # "directional" | "market_maker"
         self.concurrency = concurrency        # P1: candidate evals run concurrently
         self.coin = coin                      # P2: perp symbol for funding-data merge
+        self.coin_b = coin_b                  # P4: second leg of the pairs target
         self._hl = HLClient()
+        self._dfA = None
+        self._dfB = None
         self.fitness_config = (FitnessConfig.exploration() if gate_preset == "exploration"
                                else FitnessConfig.strict())
         # DEX complexity cap is LOOSER than CEX (200): measured DEX signals cluster
@@ -57,8 +61,12 @@ class DexEvolutionService:
                                                 validation="walkforward")
         self.db = ProgramDatabase(ProgramDBConfig(persist_path=persist_path))
         self.db.load()
-        self.sampler = (DexMMPromptSampler() if target == "market_maker"
-                        else DexPromptSampler())
+        if target == "market_maker":
+            self.sampler = DexMMPromptSampler()
+        elif target == "pairs":
+            self.sampler = DexPairsPromptSampler()
+        else:
+            self.sampler = DexPromptSampler()
         self.llm = llm_client or get_llm_client(LLMConfig())
         self.pool = LLMPool(self.llm, self.llm, LLMPoolConfig())
         self._task: Optional[asyncio.Task] = None
@@ -75,6 +83,17 @@ class DexEvolutionService:
                 logger.warning("funding merge failed: %s", str(exc)[:120])
             self._df = df
         return self._df
+
+    def _load_pair(self):
+        """Load two aligned markets (coin, coin_b) for the pairs target."""
+        if self._dfA is None:
+            dfA = load_candles(self.data_path)
+            dfB = load_candles(f"sol_data_cache/HYPERLIQUID_{self.coin_b}_1h.json")
+            common = dfA.index.intersection(dfB.index)
+            self._dfA = dfA.loc[common]
+            self._dfB = dfB.loc[common]
+            self._df = self._dfA                  # so status() reports row count
+        return self._dfA, self._dfB
 
     def status(self) -> dict:
         best = self.db.best()
@@ -114,12 +133,21 @@ class DexEvolutionService:
     async def _loop(self):
         while self._running:
             try:
-                df = self._load_df()
+                if self.target == "pairs":
+                    dfA, dfB = self._load_pair()
+                else:
+                    df = self._load_df()
                 try:                                   # P5: inject recent failure feedback
                     self.sampler.failure_summary = dex_failure_summary()
                 except Exception:
                     pass
-                if self.target == "market_maker":
+                if self.target == "pairs":
+                    produced = await _run_steps_parallel(
+                        lambda: dex_pairs_evolution_step(
+                            self.db, self.sampler, self.pool, dfA, dfB,
+                            config=self.evolution_config, fitness_config=self.fitness_config),
+                        self.steps_per_cycle, self.concurrency)
+                elif self.target == "market_maker":
                     produced = await _run_steps_parallel(
                         lambda: dex_mm_evolution_step(
                             self.db, self.sampler, self.pool, df,

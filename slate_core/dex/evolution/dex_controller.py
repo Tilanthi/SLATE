@@ -32,6 +32,7 @@ from slate_core.discovery.evolution.verdict_log import (
 )
 from slate_core.dex.evolution.dex_subprocess_eval import (
     dex_eval_fitness_subprocess, dex_mm_eval_fitness_subprocess,
+    dex_pairs_eval_fitness_subprocess,
 )
 from slate_core.dex.strategies.dex_seeds import dex_pick_seed_parent
 
@@ -321,6 +322,122 @@ async def dex_mm_evolution_step(
     verification = {
         "gate": "dex_mm_passed_two_window", "evaluator": "evaluate_dex_mm_fitness (subprocess)",
         "program_hash": _hash(new_code),
+        "real_data_result": {"oos_pnl": fitness.oos_vs_buyhold, "is_pnl": fitness.is_vs_buyhold,
+                             "overfit_gap": fitness.overfit_gap, "n_trades_oos": fitness.n_trades_oos},
+    }
+    db.append_verified(child, verification=verification)
+    log_dex_verdict(verdict_from_fitness_result(
+        fitness, candidate_id=candidate_id, parent_id=parent.candidate_id,
+        program_hash=verification["program_hash"]))
+    return child
+
+
+# ---------------------------------------------------------------------------
+# Pairs (stat-arb) evolution: evolve the spread_fn(dfA, dfB, i) of a 2-leg
+# market-neutral pair. Same crown-jewel reuse.
+# ---------------------------------------------------------------------------
+
+DEX_PAIRS_BASE_CODE = (
+    "def spread_fn(dfA, dfB, i):\n"
+    "    # Evolve: 1 = long A / short B, -1 = reverse, 0 = flat. Use np (no imports).\n"
+    "    if i < 50:\n"
+    "        return 0\n"
+    "    la = np.log(dfA['close'].astype(float).iloc[i - 50:i].values)\n"
+    "    lb = np.log(dfB['close'].astype(float).iloc[i - 50:i].values)\n"
+    "    spread = la - lb\n"
+    "    sd = np.std(spread)\n"
+    "    if sd <= 0:\n"
+    "        return 0\n"
+    "    cur = np.log(float(dfA['close'].iloc[i])) - np.log(float(dfB['close'].iloc[i]))\n"
+    "    z = (cur - np.mean(spread)) / sd\n"
+    "    if z < -1.5:\n"
+    "        return 1\n"
+    "    if z > 1.5:\n"
+    "        return -1\n"
+    "    return 0\n"
+)
+
+DEX_PAIRS_SYSTEM = (
+    "You are evolving a Hyperliquid PAIRS (stat-arb) spread signal. spread_fn(dfA, "
+    "dfB, i) must return 1 (long A / short B), -1 (reverse), or 0 (flat); A and B are "
+    "two aligned perp OHLCV frames. Exploit mean-reversion or momentum of their spread "
+    "(log price-ratio z-score, or returns differential). Use np (np.log, np.std, np.mean) "
+    "— no imports. Propose a SMALL change improving net-of-fee OUT-OF-SAMPLE PnL."
+)
+
+
+class DexPairsPromptSampler(PromptSampler):
+    def __init__(self):
+        super().__init__(system_instruction=DEX_PAIRS_SYSTEM)
+
+
+async def dex_pairs_evolution_step(db, sampler, pool, dfA, dfB, config=None,
+                                   fitness_config=None, rng=None):
+    """One pairs evolution step: evolve the spread_fn. dfA/dfB are aligned markets."""
+    cfg = config or EvolutionConfig()
+    loop = asyncio.get_running_loop()
+    parent, inspirations = db.sample()
+    if parent is None:
+        parent = Program(candidate_id="seed:pairs_base", niche=("pairs", "unknown"),
+                         family="pairs", regime="unknown", fitness_score=0.0,
+                         source="seed", code=DEX_PAIRS_BASE_CODE)
+    parent_code = parent.code or DEX_PAIRS_BASE_CODE
+
+    prompt = sampler.build(parent, inspirations, None)
+    diff = await loop.run_in_executor(None, lambda: pool.generate(prompt, tier="auto"))
+    diff = extract_code_block(diff or "")
+    candidate_id = f"dexpairs:{uuid.uuid4().hex[:8]}"
+
+    try:
+        new_code = apply_diff(parent_code, diff or "")
+        compile_function(new_code, "spread_fn")
+    except Exception as exc:  # noqa: BLE001
+        logger.info("dex-pairs candidate rejected at compile: %s", str(exc)[:120])
+        log_dex_verdict(CandidateVerdict(
+            candidate_id=candidate_id, death_stage="compile", evaluated=False,
+            fitness_score=float("-inf"), rejection_reason=f"compile: {exc}",
+            family="pairs", regime="", parent_id=parent.candidate_id, program_hash="",
+            is_edge=0.0, oos_edge=0.0, n_trades_oos=0, overfit_gap=0.0, timestamp=""))
+        return None
+
+    if cfg.max_signal_complexity > 0:
+        cplx = signal_complexity(new_code)
+        if cplx > cfg.max_signal_complexity:
+            log_dex_verdict(CandidateVerdict(
+                candidate_id=candidate_id, death_stage="too_complex", evaluated=False,
+                fitness_score=float("-inf"),
+                rejection_reason=f"complexity={cplx}>{cfg.max_signal_complexity}",
+                family="pairs", regime="", parent_id=parent.candidate_id,
+                program_hash=_hash(new_code), is_edge=0.0, oos_edge=0.0,
+                n_trades_oos=0, overfit_gap=0.0, timestamp=""))
+            return None
+
+    h = _hash(new_code)
+    if h in _EVALUATED_HASHES:
+        return None
+    fitness = await loop.run_in_executor(
+        None, lambda: dex_pairs_eval_fitness_subprocess(new_code, dfA, dfB,
+                                                         config=fitness_config,
+                                                         candidate_id=candidate_id))
+    _EVALUATED_HASHES.add(h)
+    if not fitness.evaluated:
+        log_dex_verdict(verdict_from_fitness_result(
+            fitness, candidate_id=candidate_id, parent_id=parent.candidate_id,
+            program_hash=h))
+        return None
+
+    metrics = {"oos_pnl": fitness.oos_vs_buyhold, "is_pnl": fitness.is_vs_buyhold,
+               "overfit_gap": fitness.overfit_gap, "n_trades_oos": fitness.n_trades_oos}
+    child = Program(
+        candidate_id=candidate_id, niche=("pairs", fitness.regime_label or "unknown"),
+        family="pairs", regime=fitness.regime_label or "unknown",
+        fitness_score=fitness.fitness_score, source="evolved", code=new_code,
+        metrics=metrics, parent_id=parent.candidate_id,
+        generation=getattr(parent, "generation", 0) + 1)
+    verification = {
+        "gate": "dex_pairs_passed_two_window",
+        "evaluator": "evaluate_dex_pairs_fitness (subprocess)",
+        "program_hash": h,
         "real_data_result": {"oos_pnl": fitness.oos_vs_buyhold, "is_pnl": fitness.is_vs_buyhold,
                              "overfit_gap": fitness.overfit_gap, "n_trades_oos": fitness.n_trades_oos},
     }
