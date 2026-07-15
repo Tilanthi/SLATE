@@ -16,12 +16,12 @@ from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
 from slate_core.discovery.evolution.llm_client import LLMClient, LLMConfig, get_llm_client
 from slate_core.discovery.evolution.llm_pool import LLMPool, LLMPoolConfig
 from slate_core.discovery.evolution.program_database import ProgramDBConfig, ProgramDatabase
-from slate_core.dex.data.load_data import REAL_DATA_DEFAULT, load_candles, merge_funding
+from slate_core.dex.data.load_data import REAL_DATA_DEFAULT, load_candles, load_markets, merge_funding
 from slate_core.dex.data.hyperliquid_client import HLClient
 from slate_core.dex.evolution.dex_controller import (
     DexMMPromptSampler, DexPairsPromptSampler, DexPromptSampler, _run_steps_parallel,
-    dex_failure_summary, dex_mm_evolution_step, dex_pairs_evolution_step,
-    run_dex_evolution, run_dex_evolution_parallel,
+    dex_cross_market_evolution_step, dex_failure_summary, dex_mm_evolution_step,
+    dex_pairs_evolution_step, run_dex_evolution, run_dex_evolution_parallel,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,8 @@ class DexEvolutionService:
                  max_signal_complexity: int = 350,
                  concurrency: int = 4,
                  coin: str = "SOL",
-                 coin_b: str = "BTC"):
+                 coin_b: str = "BTC",
+                 markets=None):
         self.data_path = data_path
         self.gate_preset = gate_preset
         self.interval_s = interval_s
@@ -51,6 +52,8 @@ class DexEvolutionService:
         self._hl = HLClient()
         self._dfA = None
         self._dfB = None
+        self.markets = markets or ["SOL", "BTC", "ETH"]   # P3: cross-market target
+        self._markets_df = None
         self.fitness_config = (FitnessConfig.exploration() if gate_preset == "exploration"
                                else FitnessConfig.strict())
         # DEX complexity cap is LOOSER than CEX (200): measured DEX signals cluster
@@ -65,6 +68,8 @@ class DexEvolutionService:
             self.sampler = DexMMPromptSampler()
         elif target == "pairs":
             self.sampler = DexPairsPromptSampler()
+        elif target == "cross_market":
+            self.sampler = DexPromptSampler()        # evolves a directional signal
         else:
             self.sampler = DexPromptSampler()
         self.llm = llm_client or get_llm_client(LLMConfig())
@@ -87,13 +92,21 @@ class DexEvolutionService:
     def _load_pair(self):
         """Load two aligned markets (coin, coin_b) for the pairs target."""
         if self._dfA is None:
-            dfA = load_candles(self.data_path)
+            dfA = load_candles(f"sol_data_cache/HYPERLIQUID_{self.coin}_1h.json")
             dfB = load_candles(f"sol_data_cache/HYPERLIQUID_{self.coin_b}_1h.json")
             common = dfA.index.intersection(dfB.index)
             self._dfA = dfA.loc[common]
             self._dfB = dfB.loc[common]
             self._df = self._dfA                  # so status() reports row count
         return self._dfA, self._dfB
+
+    def _load_markets(self):
+        """Load N markets for the cross-market directional target."""
+        if self._markets_df is None:
+            self._markets_df = load_markets(self.markets)
+            if self._markets_df:
+                self._df = next(iter(self._markets_df.values()))
+        return self._markets_df
 
     def status(self) -> dict:
         best = self.db.best()
@@ -135,13 +148,21 @@ class DexEvolutionService:
             try:
                 if self.target == "pairs":
                     dfA, dfB = self._load_pair()
+                elif self.target == "cross_market":
+                    markets_df = self._load_markets()
                 else:
                     df = self._load_df()
                 try:                                   # P5: inject recent failure feedback
                     self.sampler.failure_summary = dex_failure_summary()
                 except Exception:
                     pass
-                if self.target == "pairs":
+                if self.target == "cross_market":
+                    produced = await _run_steps_parallel(
+                        lambda: dex_cross_market_evolution_step(
+                            self.db, self.sampler, self.pool, markets_df,
+                            config=self.evolution_config, fitness_config=self.fitness_config),
+                        self.steps_per_cycle, self.concurrency)
+                elif self.target == "pairs":
                     produced = await _run_steps_parallel(
                         lambda: dex_pairs_evolution_step(
                             self.db, self.sampler, self.pool, dfA, dfB,

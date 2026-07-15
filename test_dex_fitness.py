@@ -2,7 +2,9 @@
 import numpy as np
 import pandas as pd
 
-from slate_core.dex.evolution.dex_fitness import evaluate_dex_fitness, evaluate_dex_mm_fitness
+from slate_core.dex.evolution.dex_fitness import (
+    evaluate_dex_fitness, evaluate_dex_mm_fitness, evaluate_dex_cross_market,
+)
 from slate_core.discovery.evolution.fitness_evaluator import FitnessResult
 
 
@@ -39,6 +41,15 @@ def test_dex_mm_fitness_runs_and_labels_market_maker():
     res = evaluate_dex_mm_fitness(qf, df, candidate_id="mm")
     assert isinstance(res, FitnessResult)
     assert res.family_label == "market_maker"
+
+
+def test_dex_cross_market_runs_and_labels():
+    df = _syn_df(400)
+    markets = {"SOL": df, "BTC": df.copy()}
+    mom = lambda d, i, p: 1 if d["close"].iloc[i] > d["ema_20"].iloc[i] else -1
+    res = evaluate_dex_cross_market(mom, markets, candidate_id="xmrkt")
+    assert isinstance(res, FitnessResult)
+    assert res.family_label in {"cross_market", "momentum", "mean_reversion", "other"}
 
 
 def test_make_walkforward_folds_disjoint_and_anchored():

@@ -126,6 +126,23 @@ def test_dex_pairs_step_stores_verified_candidate(monkeypatch):
     assert len(recorded) == 1 and recorded[0].death_stage == "passed"
 
 
+def test_dex_cross_market_step_stores_verified(monkeypatch):
+    """target=cross_market: evolves a directional signal judged across markets."""
+    from slate_core.dex.evolution.dex_controller import dex_cross_market_evolution_step
+    db = ProgramDatabase(ProgramDBConfig(persist_path=None))
+    monkeypatch.setattr("slate_core.dex.evolution.dex_controller.dex_cross_market_eval_fitness_subprocess",
+                        _passing)
+    recorded = []
+    monkeypatch.setattr("slate_core.dex.evolution.dex_controller.log_dex_verdict",
+                        lambda v: recorded.append(v))
+    markets = {"SOL": _df(), "BTC": _df()}
+    prog = asyncio.run(dex_cross_market_evolution_step(
+        db, DexPromptSampler(), _mock_pool(), markets))
+    assert prog is not None
+    assert prog.verification.get("gate") == "dex_cross_market_passed_all"
+    assert len(recorded) == 1 and recorded[0].death_stage == "passed"
+
+
 def test_dex_service_uses_loosened_complexity_cap():
     """The DEX cap is loosened from the CEX 200 (measured DEX signals cluster at
     201-350) so candidates reach evaluation; CEX stays at 200."""

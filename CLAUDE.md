@@ -270,7 +270,9 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
   `spread_fn`), alongside `directional` (default) and `market_maker`.
 - **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
   `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=` `directional`
-  (default) | `market_maker` | `pairs`. Suite: **250 passed / 0 failed**.
+  (default) | `market_maker` | `pairs` | `cross_market`. Pairs legs configurable via
+  `SLATE_DEX_COIN`/`SLATE_DEX_COIN_B`; cross-market set via `SLATE_DEX_MARKETS`.
+  Suite: **252 passed / 0 failed**.
   Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
 
 ---

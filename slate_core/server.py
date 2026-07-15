@@ -126,7 +126,12 @@ DEX_AVAILABLE = False
 DEX_SERVICE = None
 try:
     from slate_core.dex.evolution.dex_service import DexEvolutionService
-    DEX_SERVICE = DexEvolutionService(target=os.getenv("SLATE_DEX_TARGET", "directional"))
+    DEX_SERVICE = DexEvolutionService(
+        target=os.getenv("SLATE_DEX_TARGET", "directional"),
+        coin=os.getenv("SLATE_DEX_COIN", "SOL"),
+        coin_b=os.getenv("SLATE_DEX_COIN_B", "BTC"),
+        markets=[c for c in os.getenv("SLATE_DEX_MARKETS", "SOL,BTC,ETH").split(",") if c],
+    )
     DEX_AVAILABLE = True
     logger.info("🔁 DEX evolution service available (Hyperliquid)")
 except Exception as e:

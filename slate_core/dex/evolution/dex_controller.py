@@ -32,7 +32,7 @@ from slate_core.discovery.evolution.verdict_log import (
 )
 from slate_core.dex.evolution.dex_subprocess_eval import (
     dex_eval_fitness_subprocess, dex_mm_eval_fitness_subprocess,
-    dex_pairs_eval_fitness_subprocess,
+    dex_pairs_eval_fitness_subprocess, dex_cross_market_eval_fitness_subprocess,
 )
 from slate_core.dex.strategies.dex_seeds import dex_pick_seed_parent
 
@@ -444,5 +444,81 @@ async def dex_pairs_evolution_step(db, sampler, pool, dfA, dfB, config=None,
     db.append_verified(child, verification=verification)
     log_dex_verdict(verdict_from_fitness_result(
         fitness, candidate_id=candidate_id, parent_id=parent.candidate_id,
+        program_hash=verification["program_hash"]))
+    return child
+
+
+# ---------------------------------------------------------------------------
+# Cross-market directional evolution (P3): evolve a signal_fn evaluated across ALL
+# markets (must profit on each). A directional robustness gate.
+# ---------------------------------------------------------------------------
+
+async def dex_cross_market_evolution_step(db, sampler, pool, markets_df, config=None,
+                                          fitness_config=None, rng=None):
+    """Evolve a directional signal judged across multiple markets (cross-market gate)."""
+    cfg = config or EvolutionConfig()
+    loop = asyncio.get_running_loop()
+    parent, inspirations = db.sample()
+    parent_prog = parent if parent is not None else dex_pick_seed_parent(cfg, rng)
+    parent_code = parent_prog.code or BASE_SIGNAL_CODE
+
+    prompt = sampler.build(parent_prog, inspirations, None)
+    diff = await loop.run_in_executor(None, lambda: pool.generate(prompt, tier="auto"))
+    diff = extract_code_block(diff or "")
+    candidate_id = f"dexxmrkt:{uuid.uuid4().hex[:8]}"
+    try:
+        new_code = apply_diff(parent_code, diff or "")
+        compile_signal(new_code)
+    except Exception as exc:  # noqa: BLE001
+        logger.info("dex-xmrkt candidate rejected at compile: %s", str(exc)[:120])
+        log_dex_verdict(CandidateVerdict(
+            candidate_id=candidate_id, death_stage="compile", evaluated=False,
+            fitness_score=float("-inf"), rejection_reason=f"compile: {exc}",
+            family="cross_market", regime="", parent_id=parent_prog.candidate_id,
+            program_hash="", is_edge=0.0, oos_edge=0.0, n_trades_oos=0,
+            overfit_gap=0.0, timestamp=""))
+        return None
+    if cfg.max_signal_complexity > 0:
+        cplx = signal_complexity(new_code)
+        if cplx > cfg.max_signal_complexity:
+            log_dex_verdict(CandidateVerdict(
+                candidate_id=candidate_id, death_stage="too_complex", evaluated=False,
+                fitness_score=float("-inf"),
+                rejection_reason=f"complexity={cplx}>{cfg.max_signal_complexity}",
+                family="cross_market", regime="", parent_id=parent_prog.candidate_id,
+                program_hash=_hash(new_code), is_edge=0.0, oos_edge=0.0,
+                n_trades_oos=0, overfit_gap=0.0, timestamp=""))
+            return None
+    h = _hash(new_code)
+    if h in _EVALUATED_HASHES:
+        return None
+    fitness = await loop.run_in_executor(
+        None, lambda: dex_cross_market_eval_fitness_subprocess(new_code, markets_df,
+                                                               config=fitness_config,
+                                                               candidate_id=candidate_id))
+    _EVALUATED_HASHES.add(h)
+    if not fitness.evaluated:
+        log_dex_verdict(verdict_from_fitness_result(
+            fitness, candidate_id=candidate_id, parent_id=parent_prog.candidate_id,
+            program_hash=h))
+        return None
+    metrics = {"oos_pnl": fitness.oos_vs_buyhold, "is_pnl": fitness.is_vs_buyhold,
+               "overfit_gap": fitness.overfit_gap, "n_trades_oos": fitness.n_trades_oos}
+    child = Program(
+        candidate_id=candidate_id,
+        niche=(fitness.family_label or "cross_market", fitness.regime_label or "unknown"),
+        family=fitness.family_label or "cross_market", regime=fitness.regime_label or "unknown",
+        fitness_score=fitness.fitness_score, source="evolved", code=new_code, metrics=metrics,
+        parent_id=parent_prog.candidate_id, generation=getattr(parent_prog, "generation", 0) + 1)
+    verification = {
+        "gate": "dex_cross_market_passed_all",
+        "evaluator": "evaluate_dex_cross_market (subprocess)",
+        "program_hash": h,
+        "real_data_result": {"oos_pnl": fitness.oos_vs_buyhold, "is_pnl": fitness.is_vs_buyhold,
+                             "overfit_gap": fitness.overfit_gap, "n_trades_oos": fitness.n_trades_oos},
+    }
+    db.append_verified(child, verification=verification)
+    log_dex_verdict(verdict_from_fitness_result(
+        fitness, candidate_id=candidate_id, parent_id=parent_prog.candidate_id,
         program_hash=verification["program_hash"]))
     return child

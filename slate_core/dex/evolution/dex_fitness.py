@@ -197,6 +197,71 @@ def evaluate_dex_fitness(signal_fn: SignalFn, df, config: Optional[FitnessConfig
 
 
 # ---------------------------------------------------------------------------
+# Cross-market directional fitness (P3): evaluate a directional signal on EACH
+# market (two-window) and require it to profit on ALL — a strong cross-market
+# robustness gate (a SOL-specific curve-fit fails on BTC/ETH). fitness = worst mkt.
+# ---------------------------------------------------------------------------
+
+def evaluate_dex_cross_market(signal_fn, markets_df, config: Optional[FitnessConfig] = None,
+                              candidate_id: str = "") -> FitnessResult:
+    cfg = config or FitnessConfig()
+    base = FitnessResult(
+        evaluated=False, fitness_score=float("-inf"),
+        oos_vs_buyhold=0.0, is_vs_buyhold=0.0, overfit_gap=0.0,
+        overfit_penalty=0.0, n_trades_is=0, n_trades_oos=0,
+        validation_score=1.0, candidate_id=candidate_id,
+        family_label="cross_market", regime_label="",
+    )
+    coins = list(markets_df.keys()) if isinstance(markets_df, dict) else []
+    if not coins:
+        base.rejection_reason = "no_markets"
+        return base
+    first = add_signal_indicators(markets_df[coins[0]].copy())
+    ok, reason = check_signal_correctness(signal_fn, first, {}, probe_window=cfg.probe_window)
+    if not ok:
+        base.rejection_reason = f"correctness: {reason}"
+        return base
+    base.family_label = classify_signal_family(signal_fn, first, {})
+    base.regime_label = classify_active_regime(signal_fn, first, {})
+    bt = DexBacktester(DexBacktestConfig(warmup=min(cfg.probe_window, 20), funding_interval_bars=0))
+    strat = _adapt(signal_fn)
+    edges, pnls, trades, used = [], [], [], []
+    for coin, mdf in markets_df.items():
+        mdf = add_signal_indicators(mdf.copy())
+        if len(mdf) < 60:
+            continue
+        cut1, cut2 = int(len(mdf) * 0.5), int(len(mdf) * 0.8)
+        o1 = bt.backtest(strat, mdf.iloc[cut1:cut2])
+        o2 = bt.backtest(strat, mdf.iloc[cut2:])
+        e1 = o1.total_pnl - _buyhold_pnl(mdf.iloc[cut1:cut2])
+        e2 = o2.total_pnl - _buyhold_pnl(mdf.iloc[cut2:])
+        edges.append(min(e1, e2))
+        pnls.append(min(o1.total_pnl, o2.total_pnl))
+        trades.append(min(o1.total_trades, o2.total_trades))
+        used.append(coin)
+    if not edges:
+        base.rejection_reason = "no_markets"
+        return base
+    base.oos_vs_buyhold = min(edges)              # worst market (conservative)
+    base.n_trades_oos = min(trades)
+    candidate_fitness = base.oos_vs_buyhold       # no single IS -> no overfit penalty
+    reasons = []
+    for coin, pnl, t in zip(used, pnls, trades):
+        if cfg.require_absolute_oos_profit and pnl <= 0:
+            reasons.append(f"{coin}_total_profit={pnl:.2f}<=0")
+        if t < cfg.min_trades:
+            reasons.append(f"{coin}_trades={t}<{cfg.min_trades}")
+    if candidate_fitness < cfg.min_fitness:
+        reasons.append(f"fitness={candidate_fitness:.1f}<{cfg.min_fitness}")
+    if reasons:
+        base.rejection_reason = "; ".join(reasons)
+        return base
+    base.evaluated = True
+    base.fitness_score = candidate_fitness
+    return base
+
+
+# ---------------------------------------------------------------------------
 # Pairs (stat-arb) fitness: a $-neutral 2-leg spread trade (P4 multi-leg). PnL is
 # absolute (market-neutral, no buy-hold benchmark).
 # ---------------------------------------------------------------------------
