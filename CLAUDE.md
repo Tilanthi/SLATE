@@ -234,8 +234,10 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
 - **DEX-specific:** `dex/data/` (first-party HL candles + funding, 5,000-candle
   accumulating store), `dex/backtester/` (bar-level: maker/taker fee split +
   rebates, oracle rejection, min-notional, leverage cap, funding), and a richer
-  `act(state)->list[Order]` action model with **Directional** (maker-routed) and
-  **MarketMaker** (two-sided quoting + inventory skew + rebate) archetypes.
+  `act(state)->list[Order]` action model with **Directional** (Market-executed —
+  Alo/post-only left ~40% of candidates 0-trade on 1h data, a fill confound;
+  maker-rebate capture is the **MarketMaker** archetype's job) and **MarketMaker**
+  (two-sided quoting + inventory skew + rebate) archetypes.
 - **L2/trade feed (definitive MM fills):** `bar_fill_l2` adds a queue gate (a maker
   fills only if the bar's traded volume consumes the queue ahead of it); the
   backtester takes an optional `l2_provider` (pluggable seam; `HLClient.l2_book`
@@ -255,7 +257,7 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
   `DexEvolutionService(max_signal_complexity=...)`.
 - **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
   `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=market_maker`
-  (default `directional`). Suite: **234 passed / 0 failed**.
+  (default `directional`). Suite: **235 passed / 0 failed**.
   Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
 
 ---

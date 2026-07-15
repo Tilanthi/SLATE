@@ -35,14 +35,26 @@ def test_directional_flat_when_at_target():
 
 
 def test_directional_momentum_makes_money_on_uptrend():
-    # clear uptrend; momentum signal goes long and rides it (Limit so it fills)
+    # clear uptrend; momentum signal goes long and rides it
     rows = [(100 + k, 100 + k, 99 + k, 100 + k) for k in range(30)]
     df = pd.DataFrame(rows, columns=["open", "high", "low", "close"],
                       index=pd.date_range("2026-01-01", periods=30, freq="1h"))
     mom = lambda st: 1 if len(st.history) > 1 and st.close > st.history["close"].iloc[-2] else 0
-    s = DirectionalStrategy(mom, size=1.0, tif="Market")
+    s = DirectionalStrategy(mom, size=1.0)             # default Market execution
     r = DexBacktester(DexBacktestConfig(warmup=2, funding_interval_bars=0)).backtest(s, df)
     assert r.total_pnl > 0 and r.total_trades > 0
+
+
+def test_directional_default_execution_fills_reliably():
+    """The no-fill fix: default execution must express the signal, not evaluate as
+    0-trade (Alo on trending 1h data left 40% of candidates as 'did nothing')."""
+    rows = [(100 + k, 100 + k, 99 + k, 100 + k) for k in range(20)]   # clean uptrend
+    df = pd.DataFrame(rows, columns=["open", "high", "low", "close"],
+                      index=pd.date_range("2026-01-01", periods=20, freq="1h"))
+    s = DirectionalStrategy(lambda st: 1, size=1.0)     # default tif (now Market)
+    assert s.tif == "Market"
+    r = DexBacktester(DexBacktestConfig(warmup=2, funding_interval_bars=0)).backtest(s, df)
+    assert r.total_trades > 0                            # reliably fills
 
 
 # ---- market maker ----

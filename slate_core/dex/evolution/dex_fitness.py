@@ -29,9 +29,10 @@ from slate_core.dex.strategies.market_maker import MarketMakerStrategy, _parse_q
 SignalFn = Callable[..., int]
 
 
-def _adapt(signal_fn: SignalFn, tif: str = "Alo", edge_bps: float = 5.0) -> DirectionalStrategy:
+def _adapt(signal_fn: SignalFn, tif: str = "Market", edge_bps: float = 5.0) -> DirectionalStrategy:
     """Wrap a CEX-form signal_fn(df,i,params) into a DirectionalStrategy that
-    reads the backtester's BarState (history, i)."""
+    reads the backtester's BarState (history, i). Default Market execution so the
+    signal is reliably expressed (Alo rarely fills on 1h data → 0-trade evaluations)."""
     return DirectionalStrategy(lambda st: signal_fn(st.history, st.i, {}),
                                tif=tif, edge_bps=edge_bps)
 

@@ -15,11 +15,15 @@ class DirectionalStrategy(DexStrategy):
     name = "directional"
 
     def __init__(self, signal_fn: SignalFn, size: float = 1.0,
-                 tif: str = "Alo", edge_bps: float = 5.0):
+                 tif: str = "Market", edge_bps: float = 5.0):
         self.signal_fn = signal_fn
         self.size = size
-        self.tif = tif                    # default Alo = pure maker (rebate or no fill)
-        self.edge = edge_bps / 10000.0    # how far inside the mid to rest the order
+        # Default Market so a signal that wants a position reliably takes one
+        # (Alo/post-only rarely fills on trending 1h data → 40% of candidates
+        # evaluated as "did nothing"). Maker-rebate execution belongs to the
+        # market-maker archetype; directional is judged net of honest taker cost.
+        self.tif = tif
+        self.edge = edge_bps / 10000.0    # how far inside the mid (Limit/Alo only)
 
     def act(self, state: BarState) -> List[Order]:
         sig = self.signal_fn(state)
