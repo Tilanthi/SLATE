@@ -28,8 +28,8 @@ def sol_slice() -> pd.DataFrame:
 @pytest.fixture(autouse=True)
 def _redirect_verdict_log(tmp_path):
     """Never let the funnel verdict logger (ASTRA §7.2) write to its real default
-    path during tests. Redirect the singleton to a throwaway tmp file so tests
-    that exercise the controller end-to-end don't pollute slate_core/."""
+    path during tests. Redirect BOTH the CEX singleton and the DEX module-level
+    logger to throwaway tmp files so tests don't pollute slate_core/."""
     from slate_core.discovery.evolution.verdict_log import (
         VerdictLogger, set_verdict_logger,
     )
@@ -39,6 +39,14 @@ def _redirect_verdict_log(tmp_path):
     try:
         from slate_core.dex.evolution.dex_controller import _EVALUATED_HASHES
         _EVALUATED_HASHES.clear()
+    except Exception:
+        pass
+    # Redirect the DEX verdict logger (separate module-level instance, NOT the
+    # CEX singleton — without this, DEX controller tests leak mock verdicts into
+    # the production dex_verdicts.jsonl).
+    try:
+        import slate_core.dex.evolution.dex_controller as _dex_ctrl
+        _dex_ctrl._dex_logger = VerdictLogger(str(tmp_path / "test_dex_verdicts.jsonl"))
     except Exception:
         pass
     yield
