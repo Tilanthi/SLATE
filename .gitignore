@@ -56,6 +56,9 @@ logs/
 # Funnel verdict log (runtime diagnostic, ASTRA §7.2 — accumulates across runs)
 slate_core/evolution_verdicts.jsonl
 slate_core/dex_verdicts.jsonl
+# L2 + trade accumulator output (microstructure data, grows continuously)
+sol_data_cache/L2_*.jsonl
+sol_data_cache/TRADES_*.jsonl
 
 # Environment variables
 .env
