@@ -16,9 +16,12 @@ from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
 from slate_core.discovery.evolution.llm_client import LLMClient, LLMConfig, get_llm_client
 from slate_core.discovery.evolution.llm_pool import LLMPool, LLMPoolConfig
 from slate_core.discovery.evolution.program_database import ProgramDBConfig, ProgramDatabase
-from slate_core.dex.data.load_data import REAL_DATA_DEFAULT, load_candles
+from slate_core.dex.data.load_data import REAL_DATA_DEFAULT, load_candles, merge_funding
+from slate_core.dex.data.hyperliquid_client import HLClient
 from slate_core.dex.evolution.dex_controller import (
-    DexMMPromptSampler, DexPromptSampler, dex_mm_evolution_step, run_dex_evolution,
+    DexMMPromptSampler, DexPromptSampler, _run_steps_parallel,
+    dex_failure_summary, dex_mm_evolution_step,
+    run_dex_evolution, run_dex_evolution_parallel,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,12 +36,17 @@ class DexEvolutionService:
                  gate_preset: str = "exploration",
                  interval_s: float = 60.0, steps_per_cycle: int = 2,
                  target: str = "directional",
-                 max_signal_complexity: int = 350):
+                 max_signal_complexity: int = 350,
+                 concurrency: int = 4,
+                 coin: str = "SOL"):
         self.data_path = data_path
         self.gate_preset = gate_preset
         self.interval_s = interval_s
         self.steps_per_cycle = steps_per_cycle
         self.target = target                  # "directional" | "market_maker"
+        self.concurrency = concurrency        # P1: candidate evals run concurrently
+        self.coin = coin                      # P2: perp symbol for funding-data merge
+        self._hl = HLClient()
         self.fitness_config = (FitnessConfig.exploration() if gate_preset == "exploration"
                                else FitnessConfig.strict())
         # DEX complexity cap is LOOSER than CEX (200): measured DEX signals cluster
@@ -60,7 +68,12 @@ class DexEvolutionService:
 
     def _load_df(self):
         if self._df is None:
-            self._df = load_candles(self.data_path)
+            df = load_candles(self.data_path)
+            try:                                   # P2: real per-bar funding for carry
+                df = merge_funding(df, self._hl, self.coin)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("funding merge failed: %s", str(exc)[:120])
+            self._df = df
         return self._df
 
     def status(self) -> dict:
@@ -102,18 +115,20 @@ class DexEvolutionService:
         while self._running:
             try:
                 df = self._load_df()
+                try:                                   # P5: inject recent failure feedback
+                    self.sampler.failure_summary = dex_failure_summary()
+                except Exception:
+                    pass
                 if self.target == "market_maker":
-                    produced = []
-                    for _ in range(self.steps_per_cycle):
-                        p = await dex_mm_evolution_step(
+                    produced = await _run_steps_parallel(
+                        lambda: dex_mm_evolution_step(
                             self.db, self.sampler, self.pool, df,
-                            config=self.evolution_config, fitness_config=self.fitness_config)
-                        if p is not None:
-                            produced.append(p)
+                            config=self.evolution_config, fitness_config=self.fitness_config),
+                        self.steps_per_cycle, self.concurrency)
                 else:
-                    produced = await run_dex_evolution(
+                    produced = await run_dex_evolution_parallel(
                         self.db, self.sampler, self.pool, df,
-                        n_steps=self.steps_per_cycle,
+                        n_steps=self.steps_per_cycle, concurrency=self.concurrency,
                         config=self.evolution_config, fitness_config=self.fitness_config,
                     )
                 self.stats["cycles"] += 1

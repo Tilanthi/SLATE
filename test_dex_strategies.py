@@ -103,3 +103,32 @@ def test_mm_uses_evolved_quote_fn():
     assert calls["n"] == 1
     buy = [o for o in orders if o.side == "B"][0]
     assert abs(buy.px - 100.0 * (1 - 0.002)) < 1e-6      # bid at 20bps below mid
+
+
+# ---- DEX anomaly seed archetypes (P2) ----
+
+def test_dex_seed_archetypes_compile_under_sandbox():
+    from slate_core.dex.strategies.dex_seeds import DEX_SEED_ARCHETYPES
+    from slate_core.discovery.evolution.signal_sandbox import compile_signal
+    for _fam, code in DEX_SEED_ARCHETYPES:
+        compile_signal(code)                              # all sandbox-clean
+
+
+def test_funding_carry_signal_uses_funding_column(sol_slice):
+    from slate_core.discovery.evolution.signal_sandbox import compile_signal
+    from slate_core.dex.strategies.dex_seeds import DEX_SEED_ARCHETYPES
+    carry = compile_signal(dict(DEX_SEED_ARCHETYPES)["funding_carry"])
+    assert carry(sol_slice, 30, {}) == 0                  # no funding col -> flat
+    funded = sol_slice.copy()
+    funded["funding"] = 0.001                             # positive -> longs pay -> short
+    assert carry(funded, 30, {}) == -1
+
+
+def test_dex_pick_seed_parent_rotates_anomaly_archetypes():
+    import random as _r
+    from slate_core.dex.strategies.dex_seeds import dex_pick_seed_parent
+    from slate_core.discovery.evolution.controller import EvolutionConfig
+    rng = _r.Random(0)
+    seen = {dex_pick_seed_parent(EvolutionConfig(), rng=rng).candidate_id for _ in range(30)}
+    assert len(seen) >= 2
+    assert all(cid.startswith("seed:dex:") for cid in seen)

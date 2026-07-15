@@ -87,3 +87,15 @@ def test_l2_provider_blocks_maker_fills_vs_bar_proxy():
                                            l2_provider=lambda side, px: 1e9)).backtest(_MakerBuy(), df)
     assert r_proxy.total_trades > 0          # proxy: touched = filled
     assert r_l2.total_trades == 0            # definitive: queue never consumed
+
+
+def test_backtester_uses_per_bar_funding_column():
+    """P2: a long held across funding events pays the per-bar funding rate."""
+    import pandas as pd
+    n = 20
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h")
+    df = pd.DataFrame({"open": [100.0] * n, "high": [100.0] * n, "low": [100.0] * n,
+                       "close": [100.0] * n, "volume": [100.0] * n,
+                       "funding": [0.001] * n}, index=idx)
+    r = DexBacktester(DexBacktestConfig(warmup=0, funding_interval_bars=8)).backtest(_BuyHold(), df)
+    assert r.total_funding > 0              # longs paid positive funding across events

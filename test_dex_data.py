@@ -63,3 +63,15 @@ def test_refresh_store_appends_only_new_candles(tmp_path):
     df = load_candles(str(p))
     assert n == 2
     assert len(df) == 4
+
+
+def test_merge_funding_adds_forward_filled_column():
+    import pandas as pd
+    from slate_core.dex.data.load_data import merge_funding
+    idx = pd.date_range("2026-01-01", periods=10, freq="1h")
+    df = pd.DataFrame({"close": [100.0] * 10}, index=idx)
+    fake = type("C", (), {"funding_history": lambda self, coin: [
+        {"fundingRate": "0.001", "time": int(idx[0].timestamp() * 1000)}]})()
+    out = merge_funding(df, fake, "SOL")
+    assert "funding" in out.columns
+    assert abs(out["funding"].iloc[0] - 0.001) < 1e-9     # forward-filled

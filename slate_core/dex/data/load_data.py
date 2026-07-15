@@ -53,3 +53,25 @@ def refresh_store(path: str = REAL_DATA_DEFAULT, coin: str = "SOL",
     with open(path, "w") as f:
         json.dump(merged, f)
     return len(fresh)
+
+
+def merge_funding(df, client, coin: str = "SOL"):
+    """Fetch HL funding history and add a forward-filled 'funding' column (the 8h
+    funding rate carried onto each bar). funding>0 => longs pay (carry: short);
+    funding<0 => longs receive. Returns df unchanged if funding can't be fetched."""
+    import pandas as pd
+    try:
+        hist = client.funding_history(coin)
+    except Exception:
+        return df
+    if not hist:
+        return df
+    fr = pd.DataFrame(hist)
+    if "fundingRate" not in fr.columns or "time" not in fr.columns:
+        return df
+    fr["time"] = pd.to_datetime(fr["time"], unit="ms")
+    s = (fr.set_index("time")["fundingRate"].astype(float)
+         .sort_index()[~fr.set_index("time").index.duplicated(keep="last")])
+    funded = df.copy()
+    funded["funding"] = s.reindex(df.index, method="ffill").fillna(0.0)
+    return funded

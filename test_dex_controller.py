@@ -122,3 +122,51 @@ def test_dex_service_uses_loosened_complexity_cap():
     finally:
         if _os.path.exists(path):
             _os.remove(path)
+
+
+def test_run_steps_parallel_gathers_all():
+    """P1: the concurrent runner gathers n_steps (concurrency at a time)."""
+    from slate_core.dex.evolution.dex_controller import _run_steps_parallel
+    counter = {"n": 0}
+
+    async def step():
+        counter["n"] += 1
+        return f"p{counter['n']}"
+
+    out = asyncio.run(_run_steps_parallel(step, 4, 4))
+    assert len(out) == 4
+
+
+def test_hash_dedup_skips_identical_code(monkeypatch):
+    """P1: byte-identical code is evaluated once, then deduped."""
+    from slate_core.dex.evolution.dex_controller import dex_evolution_step, _EVALUATED_HASHES
+    db = _seed_db()
+    calls = []
+
+    def counting(*a, **kw):
+        calls.append(1)
+        return _passing(*a, **kw)
+
+    monkeypatch.setattr("slate_core.dex.evolution.dex_controller.dex_eval_fitness_subprocess",
+                        counting)
+    _EVALUATED_HASHES.clear()
+    canned = "def signal_fn(df, i, params):\n    return 1\n"
+    asyncio.run(dex_evolution_step(db, DexPromptSampler(), _mock_pool(canned=canned), _df()))
+    asyncio.run(dex_evolution_step(db, DexPromptSampler(), _mock_pool(canned=canned), _df()))
+    assert len(calls) == 1            # second identical code deduped
+
+
+def test_dex_failure_summary_and_prompt_injection(tmp_path):
+    """P5: the failure distribution is summarized and injected into the prompt."""
+    import json
+    from slate_core.dex.evolution.dex_controller import dex_failure_summary, DexPromptSampler
+    p = tmp_path / "dex.jsonl"
+    p.write_text("\n".join(json.dumps({"death_stage": s}) for s in
+                           ["not_profitable", "not_profitable", "overfit_fitness"]))
+    summ = dex_failure_summary(str(p))
+    assert "not_profitable" in summ and "overfit" in summ
+    s = DexPromptSampler()
+    s.failure_summary = summ
+    parent = Program(candidate_id="p", niche=("m", "h"), family="m", regime="h",
+                     fitness_score=1.0, source="seed", code="x")
+    assert "RECENT FAILURE FEEDBACK" in s.build(parent, [])

@@ -34,5 +34,12 @@ def _redirect_verdict_log(tmp_path):
         VerdictLogger, set_verdict_logger,
     )
     set_verdict_logger(VerdictLogger(str(tmp_path / "test_verdicts.jsonl")))
+    # Clear the DEX hash-dedup set so identical mock code in one test doesn't
+    # dedupe a later test's candidate (test isolation).
+    try:
+        from slate_core.dex.evolution.dex_controller import _EVALUATED_HASHES
+        _EVALUATED_HASHES.clear()
+    except Exception:
+        pass
     yield
     set_verdict_logger(None)

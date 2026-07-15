@@ -140,9 +140,12 @@ class DexBacktester:
             for order in pending:
                 _apply(order, o, h, l, c, volume)
             pending = []
-            # 2) funding accrual on the current position
+            # 2) funding accrual on the current position (per-bar funding if the df
+            # carries a 'funding' column, else the constant config rate)
             if cfg.funding_interval_bars and (i % cfg.funding_interval_bars == 0) and position != 0:
-                pay = position * c * cfg.funding_rate
+                f = row.get("funding", cfg.funding_rate)
+                fr = float(f) if (f is not None and f == f) else cfg.funding_rate
+                pay = position * c * fr
                 total_funding += pay
                 cash -= pay
             # 3) mark equity, then ask the strategy for next bar's orders

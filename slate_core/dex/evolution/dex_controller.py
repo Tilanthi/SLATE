@@ -33,6 +33,7 @@ from slate_core.discovery.evolution.verdict_log import (
 from slate_core.dex.evolution.dex_subprocess_eval import (
     dex_eval_fitness_subprocess, dex_mm_eval_fitness_subprocess,
 )
+from slate_core.dex.strategies.dex_seeds import dex_pick_seed_parent
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +58,38 @@ def log_dex_verdict(verdict: CandidateVerdict) -> None:
         logger.warning("dex verdict log failed: %s", exc)
 
 
+# Hash-dedup: skip re-evaluating byte-identical code the LLM regenerates. Grows
+# with evaluated candidates over a run (bounded by the search itself).
+_EVALUATED_HASHES: set = set()
+
+
+def dex_failure_summary(path: str = "slate_core/dex_verdicts.jsonl", n: int = 60) -> str:
+    """Read the tail of the DEX verdict log and summarize where candidates die, for
+    injection into the prompt (P5: steer the LLM away from dead patterns)."""
+    import collections as _collections
+    import json as _json
+    import os as _os
+    if not _os.path.exists(path):
+        return ""
+    rows = [_json.loads(l) for l in open(path) if l.strip()][-n:]
+    if not rows:
+        return ""
+    stages = _collections.Counter(r.get("death_stage") for r in rows)
+    parts = [f"{k} {100 * v / len(rows):.0f}%" for k, v in stages.most_common(4)]
+    return ("recent rejects died at: " + ", ".join(parts)
+            + " — propose something structurally different; do not repeat these dead patterns.")
+
+
 class DexPromptSampler(PromptSampler):
     def __init__(self):
         super().__init__(system_instruction=DEX_SYSTEM)
+        self.failure_summary = ""           # P5: funnel feedback injected into the prompt
+
+    def build(self, parent, inspirations, objective=None):
+        prompt = super().build(parent, inspirations, objective)
+        if self.failure_summary:
+            return prompt + "\n\nRECENT FAILURE FEEDBACK: " + self.failure_summary
+        return prompt
 
 
 def _hash(code: str) -> str:
@@ -81,7 +111,9 @@ async def dex_evolution_step(
     loop = asyncio.get_running_loop()
 
     parent, inspirations = db.sample()
-    parent_prog = parent if parent is not None else pick_seed_parent(cfg, rng)
+    # Empty population -> rotate a DEX anomaly archetype (carry/residual/vol-regime),
+    # not EMH-dead textbook TA.
+    parent_prog = parent if parent is not None else dex_pick_seed_parent(cfg, rng)
     parent_code = parent_prog.code or BASE_SIGNAL_CODE
 
     prompt = sampler.build(parent_prog, inspirations, None)
@@ -114,10 +146,14 @@ async def dex_evolution_step(
                 n_trades_oos=0, overfit_gap=0.0, timestamp=""))
             return None
 
+    h = _hash(new_code)
+    if h in _EVALUATED_HASHES:
+        return None                       # hash-dedup: skip re-evaluating identical code
     fitness = await loop.run_in_executor(
         None, lambda: dex_eval_fitness_subprocess(new_code, df, config=fitness_config,
                                                    candidate_id=candidate_id,
                                                    validation=cfg.validation))
+    _EVALUATED_HASHES.add(h)
 
     if not fitness.evaluated:
         logger.info("dex candidate rejected at gate: %s", (fitness.rejection_reason or "")[:120])
@@ -162,6 +198,35 @@ async def run_dex_evolution(db, sampler, pool, df, n_steps: int = 10, **kwargs):
         if prog is not None:
             produced.append(prog)
     return produced
+
+
+async def _run_steps_parallel(step_coro_fn, n_steps: int, concurrency: int = 4):
+    """Run n_steps evolution steps, `concurrency` at a time. Each step is
+    independent; the heavy LLM call + subprocess eval run concurrently (true
+    parallelism — separate processes), while the shared ProgramDatabase mutations
+    happen in the single-threaded event loop and stay race-free."""
+    produced = []
+    remaining = n_steps
+    while remaining > 0:
+        k = min(max(1, concurrency), remaining)
+        batch = await asyncio.gather(
+            *(step_coro_fn() for _ in range(k)), return_exceptions=True)
+        for r in batch:
+            if isinstance(r, Exception):
+                logger.warning("dex evolution step error: %s", str(r)[:120])
+                continue
+            if r is not None:
+                produced.append(r)
+        remaining -= k
+    return produced
+
+
+async def run_dex_evolution_parallel(db, sampler, pool, df, n_steps: int = 10,
+                                     concurrency: int = 4, **kwargs):
+    """Concurrent directional evolution (P1 throughput lever)."""
+    return await _run_steps_parallel(
+        lambda: dex_evolution_step(db, sampler, pool, df, **kwargs),
+        n_steps, concurrency)
 
 
 # ---------------------------------------------------------------------------
