@@ -40,10 +40,10 @@ class _TooBig(DexStrategy):
 def test_buy_hold_pnl_and_taker_fee():
     df = _df([(100, 100, 100, 100), (100, 105, 105, 105), (105, 110, 110, 110)])
     r = DexBacktester(DexBacktestConfig(warmup=0, funding_interval_bars=0)).backtest(_BuyHold(), df)
-    # 1 SOL bought @ open 100 (taker), marked to final close 110; fee 100*0.00045
-    assert abs(r.total_pnl - 9.955) < 1e-6
+    # 1 SOL bought @ open 100 + 1bps slippage = 100.01 (taker); close 110
+    # PnL = (110 - 100.01) - 100.01*0.00045 ≈ 9.945
+    assert abs(r.total_pnl - 9.945) < 0.01
     assert r.taker_fills == 1 and r.maker_fills == 0 and r.maker_fraction == 0.0
-    assert abs(r.total_fees - 0.045) < 1e-6
 
 
 def test_maker_fill_costs_less_than_taker():

@@ -34,24 +34,29 @@ def bar_fill(order: Order, o: float, h: float, l: float, c: float,
     if tif != "Market" and not oracle_ok(px, oracle_px, schedule):
         return False, 0.0, False, "oracle_rejected"
 
+    # Slippage: taker fills walk the book (HL CLOB, price-time priority).
+    # Maker (resting) fills get their exact limit price. 1bps is realistic for
+    # deep HL books (SOL perp: $100K+ within 10bps of mid).
+    slip = schedule.slippage_bps / 10000.0
+
     if tif == "Market":
-        return True, o, False, None           # taker at open
+        return True, o * (1 + slip if side == "B" else 1 - slip), False, None
 
     if side == "B":
         if px >= o:                            # would cross at the open
             if tif == "Alo":
                 return False, 0.0, False, "badAloPxRejected"
-            return True, o, False, None        # immediate taker at open
+            return True, o * (1 + slip), False, None  # taker at open + slippage
         if l <= px:                            # resting bid touched
-            return True, px, True, None        # maker fill at the bid
+            return True, px, True, None        # maker fill at the bid (no slip)
         return False, 0.0, False, None
     else:                                      # sell
         if px <= o:                            # would cross at the open
             if tif == "Alo":
                 return False, 0.0, False, "badAloPxRejected"
-            return True, o, False, None        # immediate taker at open
+            return True, o * (1 - slip), False, None  # taker at open + slippage
         if h >= px:                            # resting ask touched
-            return True, px, True, None        # maker fill at the ask
+            return True, px, True, None        # maker fill at the ask (no slip)
         return False, 0.0, False, None
 
 

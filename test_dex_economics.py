@@ -32,6 +32,29 @@ def test_oracle_ok_tolerance():
     assert oracle_ok(120, 100, SCH) is False           # 20% > tol
 
 
+# ---- slippage (HL-realistic: taker fills walk the book) ----
+
+def test_buy_taker_has_slippage():
+    sch = HLFeeSchedule(slippage_bps=2.0)
+    o = Order("B", px=0, sz=1, tif="Market")
+    _, fpx, maker, _ = bar_fill(o, *_bar(), oracle_px=100, schedule=sch)
+    assert not maker and abs(fpx - 100.02) < 1e-6      # 2bps worse on buy
+
+
+def test_sell_taker_has_negative_slippage():
+    sch = HLFeeSchedule(slippage_bps=2.0)
+    o = Order("A", px=0, sz=1, tif="Market")
+    _, fpx, maker, _ = bar_fill(o, *_bar(), oracle_px=100, schedule=sch)
+    assert not maker and abs(fpx - 99.98) < 1e-6       # 2bps worse on sell
+
+
+def test_maker_fill_no_slippage():
+    sch = HLFeeSchedule(slippage_bps=2.0)
+    o = Order("B", px=99.5, sz=1, tif="Limit")
+    _, fpx, maker, _ = bar_fill(o, *_bar(), oracle_px=100, schedule=sch)
+    assert maker and abs(fpx - 99.5) < 1e-6            # exact limit, no slip
+
+
 # ---- fill model ----
 
 def test_buy_resting_touched_fills_maker():
@@ -43,7 +66,7 @@ def test_buy_resting_touched_fills_maker():
 def test_buy_crossing_open_fills_taker():
     o = Order("B", px=100.5, sz=1)                     # >= open -> crosses
     filled, fpx, maker, rej = bar_fill(o, *_bar(), oracle_px=100, schedule=SCH)
-    assert filled and not maker and abs(fpx - 100) < 1e-9
+    assert filled and not maker and abs(fpx - 100 * (1 + SCH.slippage_bps / 10000.0)) < 1e-9
 
 
 def test_alo_crossing_is_rejected():
@@ -67,7 +90,7 @@ def test_not_touched_not_filled_no_reject():
 def test_market_order_fills_taker_at_open():
     o = Order("B", px=0.0, sz=1, tif="Market")
     filled, fpx, maker, rej = bar_fill(o, *_bar(), oracle_px=100, schedule=SCH)
-    assert filled and not maker and abs(fpx - 100) < 1e-9
+    assert filled and not maker and abs(fpx - 100 * (1 + SCH.slippage_bps / 10000.0)) < 1e-9
 
 
 def test_min_notional_rejected():
