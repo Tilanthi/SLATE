@@ -23,6 +23,7 @@ from slate_core.discovery.evolution.fitness_evaluator import (
 )
 from slate_core.discovery.perpetual_futures_backtest import add_signal_indicators
 from slate_core.dex.backtester.dex_backtester import DexBacktester, DexBacktestConfig
+from slate_core.dex.backtester.pairs_backtester import PairsBacktester, PairsBacktestConfig
 from slate_core.dex.strategies.action import BarState
 from slate_core.dex.strategies.directional import DirectionalStrategy
 from slate_core.dex.strategies.market_maker import MarketMakerStrategy, _parse_quote
@@ -196,7 +197,64 @@ def evaluate_dex_fitness(signal_fn: SignalFn, df, config: Optional[FitnessConfig
 
 
 # ---------------------------------------------------------------------------
-# Market-maker fitness: evolve the QUOTING logic (quote_fn), not a directional
+# Pairs (stat-arb) fitness: a $-neutral 2-leg spread trade (P4 multi-leg). PnL is
+# absolute (market-neutral, no buy-hold benchmark).
+# ---------------------------------------------------------------------------
+
+def evaluate_dex_pairs_fitness(spread_signal, dfA, dfB,
+                               config: Optional[FitnessConfig] = None,
+                               candidate_id: str = "") -> FitnessResult:
+    cfg = config or FitnessConfig()
+    base = FitnessResult(
+        evaluated=False, fitness_score=float("-inf"),
+        oos_vs_buyhold=0.0, is_vs_buyhold=0.0, overfit_gap=0.0,
+        overfit_penalty=0.0, n_trades_is=0, n_trades_oos=0,
+        validation_score=1.0, candidate_id=candidate_id,
+        family_label="pairs", regime_label="",
+    )
+    n = min(len(dfA), len(dfB))
+    if n < 200:
+        base.rejection_reason = "too_few_bars"
+        return base
+    cut1, cut2 = int(n * 0.5), int(n * 0.8)
+    bt = PairsBacktester(PairsBacktestConfig(warmup=min(cfg.probe_window, 50)))
+    is_r = bt.backtest(spread_signal, dfA.iloc[:cut1], dfB.iloc[:cut1])
+    o1 = bt.backtest(spread_signal, dfA.iloc[cut1:cut2], dfB.iloc[cut1:cut2])
+    o2 = bt.backtest(spread_signal, dfA.iloc[cut2:], dfB.iloc[cut2:])
+
+    base.is_vs_buyhold = is_r.total_pnl                      # absolute (market-neutral)
+    base.oos_vs_buyhold = min(o1.total_pnl, o2.total_pnl)
+    base.n_trades_is = is_r.total_trades
+    base.n_trades_oos = min(o1.total_trades, o2.total_trades)
+    base.oos_activity = (o1.bars_in_market / max(1, o1.n_bars)
+                         + o2.bars_in_market / max(1, o2.n_bars)) / 2.0
+    avg_oos = (o1.total_pnl + o2.total_pnl) / 2.0
+    base.overfit_gap = max(0.0, is_r.total_pnl - avg_oos)
+    base.overfit_penalty = base.overfit_gap * cfg.overfit_penalty_weight
+    exposure = (max(0.0, min(1.0, base.oos_activity / cfg.activity_floor))
+                if cfg.activity_floor > 0 else 1.0)
+    base.exposure_factor = exposure
+    candidate_fitness = base.oos_vs_buyhold * exposure - base.overfit_penalty
+    base.metrics_is = is_r.to_dict()
+    base.metrics_oos = {"oos1": o1.to_dict(), "oos2": o2.to_dict()}
+
+    reasons = []
+    if cfg.require_absolute_oos_profit and o1.total_pnl <= 0:
+        reasons.append(f"oos1_total_profit={o1.total_pnl:.2f}<=0")
+    if cfg.require_absolute_oos_profit and o2.total_pnl <= 0:
+        reasons.append(f"oos2_total_profit={o2.total_pnl:.2f}<=0")
+    if o1.total_trades < cfg.min_trades:
+        reasons.append(f"oos1_trades={o1.total_trades}<{cfg.min_trades}")
+    if o2.total_trades < cfg.min_trades:
+        reasons.append(f"oos2_trades={o2.total_trades}<{cfg.min_trades}")
+    if candidate_fitness < cfg.min_fitness:
+        reasons.append(f"fitness={candidate_fitness:.1f}<{cfg.min_fitness}")
+    if reasons:
+        base.rejection_reason = "; ".join(reasons)
+        return base
+    base.evaluated = True
+    base.fitness_score = candidate_fitness
+    return base
 # signal. Same two-window + overfit + activity + min_fitness discipline.
 # ---------------------------------------------------------------------------
 

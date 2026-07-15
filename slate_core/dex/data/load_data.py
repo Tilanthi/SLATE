@@ -75,3 +75,9 @@ def merge_funding(df, client, coin: str = "SOL"):
     funded = df.copy()
     funded["funding"] = s.reindex(df.index, method="ffill").fillna(0.0)
     return funded
+
+
+def load_markets(coins, base: str = "sol_data_cache"):
+    """Load multiple HL perp candle frames for cross-market / pairs strategies.
+    Returns {coin: df}. Files must already be fetched (HYPERLIQUID_{coin}_1h.json)."""
+    return {c: load_candles(f"{base}/HYPERLIQUID_{c}_1h.json") for c in coins}

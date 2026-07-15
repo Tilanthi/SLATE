@@ -75,3 +75,14 @@ def test_merge_funding_adds_forward_filled_column():
     out = merge_funding(df, fake, "SOL")
     assert "funding" in out.columns
     assert abs(out["funding"].iloc[0] - 0.001) < 1e-9     # forward-filled
+
+
+def test_load_markets_loads_multiple_coins(tmp_path):
+    import json
+    from slate_core.dex.data.load_data import load_markets
+    for coin in ("SOL", "BTC"):
+        rows = [_candle(1000 + k) for k in range(3)]
+        (tmp_path / f"HYPERLIQUID_{coin}_1h.json").write_text(json.dumps(rows))
+    m = load_markets(["SOL", "BTC"], base=str(tmp_path))
+    assert set(m.keys()) == {"SOL", "BTC"}
+    assert len(m["SOL"]) == 3 and len(m["BTC"]) == 3

@@ -260,16 +260,16 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
   the next; a candidate must profit on **all** independent OOS folds (not one
   split), a far stronger overfit defense. Selectable via
   `EvolutionConfig.validation` ("walkforward", DEX default | "two_window").
-- **Discovery performance (P1/P2/P5):** (P1) candidate evals run **concurrently**
-  (`DexEvolutionService.concurrency=4`) + byte-identical code is hash-deduped →
-  ~N× throughput. (P2) the empty population now seeds from **anomaly archetypes** —
-  funding-carry, residual mean-reversion, vol-regime — instead of EMH-dead TA;
-  real per-bar **funding** is merged into the data + backtester (the carry edge).
-  (P5) the recent failure distribution is injected into the prompt so the LLM
-  stops re-proposing dead patterns.
+- **Discovery performance (P1–P5):** (P1) concurrent eval (`concurrency=4`) +
+  hash-dedup. (P2) anomaly seed archetypes (funding-carry, residual-MR, vol-regime)
+  + real per-bar funding. (P3) **multi-market data** — SOL/BTC/ETH fetched;
+  `load_markets`. (P4) a **pairs/stat-arb backtester** (`PairsBacktester`, $-neutral
+  2-leg spread) + spread-z-score archetype + `evaluate_dex_pairs_fitness` — the
+  market-neutral multi-leg edge class. (P5) failure-feedback injected into the prompt.
+  (Pairs + cross-market as runnable evolution targets is the remaining wiring.)
 - **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
   `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=market_maker`
-  (default `directional`). Suite: **245 passed / 0 failed**.
+  (default `directional`). Suite: **249 passed / 0 failed**.
   Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
 
 ---
