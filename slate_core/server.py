@@ -128,6 +128,7 @@ try:
     from slate_core.dex.evolution.dex_service import DexEvolutionService
     DEX_SERVICE = DexEvolutionService(
         target=os.getenv("SLATE_DEX_TARGET", "directional"),
+        data_path=os.getenv("SLATE_DEX_DATA_PATH") or "sol_data_cache/HYPERLIQUID_SOL_1h.json",
         coin=os.getenv("SLATE_DEX_COIN", "SOL"),
         coin_b=os.getenv("SLATE_DEX_COIN_B", "BTC"),
         markets=[c for c in os.getenv("SLATE_DEX_MARKETS", "SOL,BTC,ETH").split(",") if c],

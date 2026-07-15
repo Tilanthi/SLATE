@@ -50,6 +50,23 @@ DEX_SEED_ARCHETYPES = [
      "        return 1 if close > df['ema_20'].iloc[i] else -1\n"
      "    return 0\n"
      "# EVOLVE-BLOCK-END\n"),
+    ("liquidation_aware",
+     "# EVOLVE-BLOCK-START\n"
+     "def signal_fn(df, i, params):\n"
+     "    \"\"\"Liquidation cascade: sharp drop + volume spike = forced selling.\"\"\"\n"
+     "    if i < 20:\n"
+     "        return 0\n"
+     "    ret = df['close'].iloc[i] / df['close'].iloc[i - 1] - 1\n"
+     "    avg_vol = df['volume'].iloc[i - 20:i].mean()\n"
+     "    if avg_vol <= 0:\n"
+     "        return 0\n"
+     "    vol_ratio = df['volume'].iloc[i] / avg_vol\n"
+     "    if ret < -0.02 and vol_ratio > 2:\n"
+     "        return -1\n"
+     "    if ret > 0.02 and vol_ratio > 2:\n"
+     "        return 1\n"
+     "    return 0\n"
+     "# EVOLVE-BLOCK-END\n"),
 ]
 
 _DEX_SEED_RNG = random.Random()
