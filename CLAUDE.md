@@ -282,6 +282,35 @@ and dormancy remains the real problem to solve.
 
 ---
 
+## 🔧 Activity-Credit in the Fitness Function (2026-07-15)
+
+The funnel showed candidates overfit IS ~4,420 vs OOS ~92 while making 0-1 OOS
+trades: the "+92 OOS edge" was a flat position beating a losing buy-hold, not a
+real edge. A prompt-only trade-frequency directive nudged OOS trading from 0% to
+only ~20% — not enough. So the pressure moved INTO THE FITNESS FUNCTION
+(`fitness_evaluator.py`), where the search is gradient-pushed rather than
+text-nudged:
+
+- **`signal_market_activity`** = fraction of OOS bars a signal holds a position.
+- **Activity-credit**: a signal's OOS edge is credited proportional to its
+  market participation — `exposure_factor = clip(oos_activity / activity_floor,
+  0, 1)`, then `fitness = oos_edge * exposure_factor - overfit_penalty`. A
+  dormant (flat) signal's "edge" is discounted to ~0; a signal active on ≥
+  `activity_floor` (default 0.20) of bars keeps full credit. Deliberately no
+  flat bonus, so a hyperactive loser cannot farm fitness from pure activity.
+- Carried into the funnel verdict as `oos_activity` so the diagnostic shows it.
+
+**Why this is gradient-aligned:** between two candidates, the more active one
+keeps more of its edge → ranks higher → evolution preferentially retains and
+refines signals that actually trade (a necessary condition for any real edge).
+**Honest caveat:** with the population still empty (every candidate rejected)
+selection has limited leverage until something passes; and the dominant gate
+remains the overfit gap (IS≫OOS), which the activity-credit *sharpens* (a
+discounted OOS edge widens the gap) but does not by itself close. Suite:
+**193 passed / 0 failed** (+3 tests).
+
+---
+
 
 ## 🎯 Quick System Overview
 
@@ -508,4 +537,4 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*
-*Last Updated: 2026-07-15 (funnel-sharpening: `death_stage` = first failing gate + `failed_gates` list; family/regime labels on rejects; seed-archetype diversity when population empty; trade-frequency prompt directive — see Funnel-Sharpening 2026-07-15 above. ASTRA-derived hardening: unified write chokepoint `append_verified` requiring a machine-verification block + structural −inf rejection; funnel diagnostic `verdict_log.py`; proposer primed via ALPHA DIRECTIONS + KNOWN-DEAD PATTERNS; deliberately did NOT adopt ASTRA's literature-novelty Gate 2 as it is incoherent for trading. 🔴 core backtester + data fetcher were gitignored & missing from repo → now tracked; behavioural MAP-Elites niches + `add_signal_indicators` fix; `min_fitness` gate; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green **190 passed/0 failed**; cache file renamed `1d_12m`→`1h_6m`)*
+*Last Updated: 2026-07-15 (activity-credit in the fitness function: OOS edge credited proportional to market participation so a dormant signal's cash-beats-buyhold 'edge' is discounted to ~0 — gradient pressure to trade, not just a prompt nudge — see Activity-Credit 2026-07-15 above. Funnel-sharpening: `death_stage` = first failing gate + `failed_gates` list; family/regime labels on rejects; seed-archetype diversity; trade-frequency prompt directive. ASTRA-derived hardening: unified write chokepoint `append_verified` + structural −inf rejection; funnel diagnostic `verdict_log.py`; proposer primed via ALPHA DIRECTIONS + KNOWN-DEAD PATTERNS; deliberately did NOT adopt ASTRA's literature-novelty Gate 2 as it is incoherent for trading. 🔴 core backtester + data fetcher gitignored → now tracked; behavioural MAP-Elites niches + `add_signal_indicators` fix; `min_fitness` gate; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green **193 passed/0 failed**; cache file renamed `1d_12m`→`1h_6m`)*

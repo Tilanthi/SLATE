@@ -50,6 +50,10 @@ class FitnessConfig:
                                              # Stops overfit survivors (IS>>OOS) that squeak past
                                              # the absolute-profit gate with deeply negative fitness
                                              # from being stored as niche elites.
+    activity_floor: float = 0.20             # activity-credit: a signal must hold a position on >=
+                                             # this fraction of OOS bars to earn its FULL edge. Below
+                                             # it, the OOS edge is credited proportionally (a flat
+                                             # signal's cash-beats-losing-buyhold 'edge' -> ~0).
 
     @classmethod
     def strict(cls) -> "FitnessConfig":
@@ -233,6 +237,35 @@ def classify_active_regime(signal_fn: SignalFn, df: pd.DataFrame,
     return Counter(in_market).most_common(1)[0][0]
 
 
+def signal_market_activity(signal_fn: SignalFn, df: pd.DataFrame,
+                           parameters: Dict[str, Any], warmup: int = _WARMUP) -> float:
+    """Fraction of post-warmup bars where the signal holds a position
+    (|signal| == 1). 0.0 = always flat (dormant); 1.0 = always in the market.
+
+    The market-participation measure behind the activity-credit: a strategy that
+    sits flat for the whole window has not earned any vs_buy_hold 'edge' - that
+    'edge' is just cash outperforming a losing market, not a tradeable signal.
+    Probes on the backtester-enriched frame so signals reading injected columns
+    (ema_20 etc.) work.
+    """
+    df = add_signal_indicators(df.copy())
+    n = len(df)
+    start = min(warmup, n)
+    if start >= n:
+        return 0.0
+    active = 0
+    total = 0
+    for i in range(start, n):
+        try:
+            sig = signal_fn(df, i, parameters)
+        except Exception:  # noqa: BLE001 - a flaky bar counts as flat
+            sig = 0
+        total += 1
+        if sig in (1, -1):
+            active += 1
+    return active / total if total else 0.0
+
+
 @dataclass
 class FitnessResult:
     """Outcome of evaluate_fitness. fitness_score = -inf means rejected."""
@@ -255,6 +288,11 @@ class FitnessResult:
     # candidate was rejected (rejected candidates are never stored anyway).
     family_label: str = ""
     regime_label: str = ""
+    # Activity-credit (gradient pressure to actually trade, not just a prompt
+    # nudge): oos_activity = fraction of OOS bars in a position; exposure_factor
+    # = how much of the OOS edge is credited (0 for dormant, 1 for >= activity_floor).
+    oos_activity: float = 0.0
+    exposure_factor: float = 1.0
 
 
 def _validation_score(oos_metrics: Dict[str, Any], oos_df: pd.DataFrame = None,
@@ -321,7 +359,16 @@ def evaluate_fitness(signal_fn: SignalFn, parameters: Dict[str, Any],
     # 3) Overfit gap & penalty (only penalize when IS looks better than OOS)
     base.overfit_gap = max(0.0, base.is_vs_buyhold - base.oos_vs_buyhold)
     base.overfit_penalty = base.overfit_gap * cfg.overfit_penalty_weight
-    candidate_fitness = base.oos_vs_buyhold - base.overfit_penalty
+    # Activity-credit: a signal's OOS edge is credited only proportional to how
+    # much it actually participated. A flat signal's vs_buy_hold 'edge' is just
+    # cash outperforming a losing market (not tradeable), so it is discounted to
+    # ~0 - gradient pressure to trade, not just a prompt nudge.
+    base.oos_activity = signal_market_activity(signal_fn, oos_df, parameters or {})
+    base.exposure_factor = (
+        max(0.0, min(1.0, base.oos_activity / cfg.activity_floor))
+        if cfg.activity_floor > 0 else 1.0
+    )
+    candidate_fitness = base.oos_vs_buyhold * base.exposure_factor - base.overfit_penalty
 
     # 4) Optional pluralistic validation on OOS (slow; off by default)
     if cfg.run_pluralistic_validation:
@@ -418,7 +465,18 @@ def evaluate_fitness_two_window(signal_fn: SignalFn, parameters: Dict[str, Any],
     avg_oos = (o1_edge + o2_edge) / 2.0
     base.overfit_gap = max(0.0, is_edge - avg_oos)
     base.overfit_penalty = base.overfit_gap * cfg.overfit_penalty_weight
-    candidate_fitness = base.oos_vs_buyhold - base.overfit_penalty
+    # Activity-credit (see evaluate_fitness): credit the OOS edge by market
+    # participation across both OOS windows, so a dormant signal cannot ride the
+    # cash-beats-losing-buyhold artifact to a positive fitness.
+    base.oos_activity = (
+        signal_market_activity(signal_fn, oos1_df, parameters or {}) +
+        signal_market_activity(signal_fn, oos2_df, parameters or {})
+    ) / 2.0
+    base.exposure_factor = (
+        max(0.0, min(1.0, base.oos_activity / cfg.activity_floor))
+        if cfg.activity_floor > 0 else 1.0
+    )
+    candidate_fitness = base.oos_vs_buyhold * base.exposure_factor - base.overfit_penalty
     base.metrics_is = is_m
     base.metrics_oos = {"oos1": o1, "oos2": o2}
 

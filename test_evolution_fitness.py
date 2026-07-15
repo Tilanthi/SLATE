@@ -12,6 +12,7 @@ from slate_core.discovery.evolution.fitness_evaluator import (
     evaluate_fitness,
     classify_signal_family,
     classify_active_regime,
+    signal_market_activity,
     FitnessResult,
 )
 
@@ -210,9 +211,12 @@ def _two_window_run_factory(oos2_profit, oos2_edge, is_edge=40.0):
 def test_two_window_passes_when_both_windows_profitable(monkeypatch, sol_slice):
     from slate_core.discovery.evolution import fitness_evaluator as fe
     monkeypatch.setattr(fe, "run_backtest", _two_window_run_factory(45.0, 28.0))
-    res = evaluate_fitness_two_window(lambda df, i, p: 0, {}, sol_slice,
+    # an ACTIVE signal (in the market every bar) keeps its full OOS edge
+    active = lambda df, i, p: 1 if df["close"].iloc[i] > df["close"].iloc[i - 1] else -1
+    res = evaluate_fitness_two_window(active, {}, sol_slice,
                                       edge_type="momentum", candidate_id="ok")
     assert res.evaluated is True
+    assert res.exposure_factor == 1.0                       # fully active -> full credit
     assert res.fitness_score == 17.0     # min OOS edge(28) - overfit penalty(40-29=11)
 
 
@@ -379,3 +383,41 @@ def test_two_window_rejected_candidate_still_carries_labels(monkeypatch, sol_sli
     assert res.evaluated is False                       # rejected ...
     assert res.family_label == "mean_reversion"          # ... but still labelled
     assert res.regime_label in {"low_vol", "med_vol", "high_vol"}
+
+
+# ---------------------------------------------------------------------------
+# Activity-credit in fitness: the OOS edge is credited proportional to market
+# participation, so a dormant (mostly-flat) signal cannot ride the "cash beats a
+# losing buy-hold" artifact to a positive fitness. (Gradient pressure to trade,
+# not just a prompt nudge.)
+# ---------------------------------------------------------------------------
+
+def test_signal_market_activity_measures_exposure(sol_slice):
+    assert signal_market_activity(lambda df, i, p: 1, sol_slice, {}) == 1.0
+    assert signal_market_activity(lambda df, i, p: 0, sol_slice, {}) == 0.0
+
+
+def test_dormant_flat_signal_oos_edge_discounted_to_zero(monkeypatch, sol_slice):
+    """A FLAT signal that stubbed-passes the profit/beat-buyhold/trades gates
+    still has its OOS edge discounted to ~0 (activity=0 -> exposure=0), so it
+    cannot reach a positive fitness - the dormancy artifact is killed."""
+    from slate_core.discovery.evolution import fitness_evaluator as fe
+    monkeypatch.setattr(fe, "run_backtest", _two_window_run_factory(45.0, 28.0))
+    res = evaluate_fitness_two_window(lambda df, i, p: 0, {}, sol_slice,
+                                      edge_type="momentum", candidate_id="dormant")
+    assert res.oos_activity == 0.0
+    assert res.exposure_factor == 0.0
+    assert res.evaluated is False          # discounted edge -> fitness<0 -> rejected
+
+
+def test_activity_floor_scales_exposure_below_floor(monkeypatch, sol_slice):
+    """Below the floor, exposure scales linearly (partial credit); the floor is
+    the activity at which a signal earns its full edge."""
+    from slate_core.discovery.evolution import fitness_evaluator as fe
+    monkeypatch.setattr(fe, "run_backtest", _two_window_run_factory(45.0, 28.0))
+    cfg = FitnessConfig(activity_floor=1.5)        # unreachable -> always partial
+    active = lambda df, i, p: 1 if df["close"].iloc[i] > df["close"].iloc[i - 1] else -1
+    res = evaluate_fitness_two_window(active, {}, sol_slice, edge_type="momentum",
+                                      candidate_id="cap", config=cfg)
+    assert res.oos_activity == 1.0
+    assert abs(res.exposure_factor - (1.0 / 1.5)) < 1e-9

@@ -57,7 +57,8 @@ class CandidateVerdict:
     oos_edge: float             # out-of-sample edge vs buy-hold (USDT)
     n_trades_oos: int
     overfit_gap: float
-    timestamp: str              # ISO-8601 UTC
+    oos_activity: float = 0.0    # fraction of OOS bars the signal held a position
+    timestamp: str = ""          # ISO-8601 UTC
     failed_gates: List[str] = field(default_factory=list)
     # Every distinct death-stage this candidate failed (multi-gate rejects fail
     # several at once). Empty for passes. Use this for the full co-failure
@@ -139,6 +140,7 @@ def verdict_from_fitness_result(result, *, candidate_id: str = "",
         oos_edge=float(result.oos_vs_buyhold),
         n_trades_oos=int(result.n_trades_oos),
         overfit_gap=float(result.overfit_gap),
+        oos_activity=float(getattr(result, "oos_activity", 0.0) or 0.0),
         timestamp=_now_iso(),
         failed_gates=[] if result.evaluated else failed_gates_from_reason(result.rejection_reason),
     )
