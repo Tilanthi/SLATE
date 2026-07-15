@@ -105,3 +105,20 @@ def test_dex_mm_step_stores_verified_candidate(monkeypatch):
     assert prog is not None
     assert prog.verification.get("gate") == "dex_mm_passed_two_window"
     assert len(recorded) == 1 and recorded[0].death_stage == "passed"
+
+
+def test_dex_service_uses_loosened_complexity_cap():
+    """The DEX cap is loosened from the CEX 200 (measured DEX signals cluster at
+    201-350) so candidates reach evaluation; CEX stays at 200."""
+    import os as _os
+    import tempfile
+    from slate_core.dex.evolution.dex_service import DexEvolutionService
+    from slate_core.discovery.evolution.llm_client import MockLLMClient, LLMConfig
+    path = tempfile.mktemp(suffix=".db")
+    try:
+        svc = DexEvolutionService(persist_path=path, llm_client=MockLLMClient(LLMConfig()))
+        assert svc.evolution_config.max_signal_complexity == 350
+        assert svc.evolution_config.max_signal_complexity > 200
+    finally:
+        if _os.path.exists(path):
+            _os.remove(path)

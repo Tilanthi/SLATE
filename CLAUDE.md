@@ -248,9 +248,14 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
 - **Honest v1 limits:** funding uses a constant rate; bar-level fills without an
   L2 provider are indicative. Backtester is **lookahead-safe** (decide at bar i,
   fill at i+1). Paper/discovery only — never places live HL orders.
+- **Complexity cap:** DEX uses **350** AST nodes (vs CEX 200) — measured DEX
+  signals cluster at 201-350 (p50=277, p90=341), so cap 200 rejected 68% pre-eval
+  and starved the funnel. The overfit gate is the primary defense; the cap is a
+  secondary guardrail that now blocks only the baroque tail (>350). Tunable via
+  `DexEvolutionService(max_signal_complexity=...)`.
 - **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
   `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=market_maker`
-  (default `directional`). Suite: **233 passed / 0 failed** (+8 DEX tests).
+  (default `directional`). Suite: **234 passed / 0 failed**.
   Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
 
 ---

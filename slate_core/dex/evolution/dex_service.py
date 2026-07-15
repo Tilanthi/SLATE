@@ -32,7 +32,8 @@ class DexEvolutionService:
                  llm_client: Optional[LLMClient] = None,
                  gate_preset: str = "exploration",
                  interval_s: float = 60.0, steps_per_cycle: int = 2,
-                 target: str = "directional"):
+                 target: str = "directional",
+                 max_signal_complexity: int = 350):
         self.data_path = data_path
         self.gate_preset = gate_preset
         self.interval_s = interval_s
@@ -40,7 +41,11 @@ class DexEvolutionService:
         self.target = target                  # "directional" | "market_maker"
         self.fitness_config = (FitnessConfig.exploration() if gate_preset == "exploration"
                                else FitnessConfig.strict())
-        self.evolution_config = EvolutionConfig()
+        # DEX complexity cap is LOOSER than CEX (200): measured DEX signals cluster
+        # at 201-350 AST nodes (p50=277, p90=341), so 200 rejected 68% pre-eval and
+        # starved the funnel. 350 lets candidates reach evaluation where the overfit
+        # gate (the primary defense) decides, while still blocking the baroque tail.
+        self.evolution_config = EvolutionConfig(max_signal_complexity=max_signal_complexity)
         self.db = ProgramDatabase(ProgramDBConfig(persist_path=persist_path))
         self.db.load()
         self.sampler = (DexMMPromptSampler() if target == "market_maker"
