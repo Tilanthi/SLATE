@@ -261,18 +261,34 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
   split), a far stronger overfit defense. Selectable via
   `EvolutionConfig.validation` ("walkforward", DEX default | "two_window").
 - **Discovery performance (P1–P5):** (P1) concurrent eval (`concurrency=4`) +
-  hash-dedup. (P2) anomaly seed archetypes (funding-carry, residual-MR, vol-regime)
+  hash-dedup. (P2) 5 anomaly seed archetypes (funding-carry, residual-MR, vol-regime,
+  liquidation-aware, imbalance-fade)
   + real per-bar funding. (P3) **multi-market data** — SOL/BTC/ETH fetched;
   `load_markets`. (P4) a **pairs/stat-arb backtester** (`PairsBacktester`, $-neutral
   2-leg spread) + spread-z-score archetype + `evaluate_dex_pairs_fitness` — the
   market-neutral multi-leg edge class. (P5) failure-feedback injected into the prompt.
   Pairs is a **runnable evolution target** (`SLATE_DEX_TARGET=pairs`; evolves
   `spread_fn`), alongside `directional` (default) and `market_maker`.
+- **Slippage model:** taker fills walk the book (default 1bps); maker fills get
+  their exact price. Models the HL incentive: maker avoids slippage. Configurable
+  via `HLFeeSchedule.slippage_bps`.
+- **L2 microstructure infrastructure:** a launchd accumulator (`com.slate.l2accumulator`)
+  captures L2 snapshots (1/sec, 20 levels) + WebSocket trades for SOL/BTC/ETH, building
+  tick-level history continuously. A tick-level backtester (`l2_tick_backtester.py`)
+  replays L2 event-by-event, simulating imbalance-scalping (inspired by analysis of a
+  profitable HL wallet: $1,297/3 days, 67% win rate, 5-7s holds, 99% maker entry).
+  **The real HL edge lives at sub-second timescales with L2 data — not candle bars.**
+  Next: refine the tick model (maker-queue, multi-coin, trend filter), check free
+  historical sources (Dwellir, SonarX), re-run when data is sufficient.
+- **Honest state:** 0 stored discoveries across ALL bar-level experiments (5 strategy
+  classes, 3 timescales, 3 markets). The edge is real (proven) but lives at a finer
+  resolution than candle bars capture. The L2 accumulator + tick backtester are the
+  infrastructure to reach it.
 - **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
   `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=` `directional`
   (default) | `market_maker` | `pairs` | `cross_market`. Pairs legs configurable via
-  `SLATE_DEX_COIN`/`SLATE_DEX_COIN_B`; cross-market set via `SLATE_DEX_MARKETS`.
-  Suite: **252 passed / 0 failed**.
+  `SLATE_DEX_COIN`/`SLATE_DEX_COIN_B`; data file via `SLATE_DEX_DATA_PATH`.
+  Suite: **255 passed / 0 failed**.
   Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
 
 ---
