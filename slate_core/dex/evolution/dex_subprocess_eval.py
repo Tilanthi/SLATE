@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _worker(code: str, df, config: FitnessConfig, candidate_id: str,
-            cpu_s: int, q: "mp.Queue") -> None:
+            cpu_s: int, q: "mp.Queue", validation: str) -> None:
     try:
         import resource
         resource.setrlimit(resource.RLIMIT_CPU, (cpu_s, cpu_s))
@@ -27,7 +27,8 @@ def _worker(code: str, df, config: FitnessConfig, candidate_id: str,
         from slate_core.discovery.evolution.signal_sandbox import compile_signal
         from slate_core.dex.evolution.dex_fitness import evaluate_dex_fitness
         fn = compile_signal(code)
-        result = evaluate_dex_fitness(fn, df, config=config, candidate_id=candidate_id)
+        result = evaluate_dex_fitness(fn, df, config=config, candidate_id=candidate_id,
+                                      validation=validation)
         q.put(("ok", dataclasses.asdict(result)))
     except Exception as exc:  # noqa: BLE001
         q.put(("error", f"{type(exc).__name__}: {str(exc)[:160]}"))
@@ -43,12 +44,12 @@ def _rejected(candidate_id: str, reason: str) -> FitnessResult:
 
 
 def dex_eval_fitness_subprocess(code: str, df, config: Optional[FitnessConfig] = None,
-                                candidate_id: str = "", timeout_s: float = 60.0,
-                                cpu_s: int = 20) -> FitnessResult:
+                                candidate_id: str = "", validation: str = "two_window",
+                                timeout_s: float = 120.0, cpu_s: int = 20) -> FitnessResult:
     cfg = config or FitnessConfig()
     ctx = mp.get_context("spawn")
     q: "mp.Queue" = ctx.Queue()
-    proc = ctx.Process(target=_worker, args=(code, df, cfg, candidate_id, cpu_s, q))
+    proc = ctx.Process(target=_worker, args=(code, df, cfg, candidate_id, cpu_s, q, validation))
     proc.start()
     proc.join(timeout_s)
     if proc.is_alive():

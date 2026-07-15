@@ -45,7 +45,8 @@ class DexEvolutionService:
         # at 201-350 AST nodes (p50=277, p90=341), so 200 rejected 68% pre-eval and
         # starved the funnel. 350 lets candidates reach evaluation where the overfit
         # gate (the primary defense) decides, while still blocking the baroque tail.
-        self.evolution_config = EvolutionConfig(max_signal_complexity=max_signal_complexity)
+        self.evolution_config = EvolutionConfig(max_signal_complexity=max_signal_complexity,
+                                                validation="walkforward")
         self.db = ProgramDatabase(ProgramDBConfig(persist_path=persist_path))
         self.db.load()
         self.sampler = (DexMMPromptSampler() if target == "market_maker"

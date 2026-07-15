@@ -12,7 +12,8 @@ so the funnel (verdict_log) and chokepoint (ProgramDatabase) work unchanged.
 from __future__ import annotations
 
 import math
-from typing import Callable, Optional
+import statistics
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
@@ -43,8 +44,83 @@ def _buyhold_pnl(window) -> float:
     return float(window["close"].iloc[-1] - window["close"].iloc[0])
 
 
+# ---------------------------------------------------------------------------
+# Walk-forward (multi-fold) validation — a stronger overfit defense than one
+# IS/OOS split. A signal must profit on several INDEPENDENT OOS folds (anchored:
+# each fold trains on all data up to its block, tests on the next block), so a
+# curve-fit to one regime fails elsewhere. Strict: ALL folds must clear the gates.
+# ---------------------------------------------------------------------------
+
+WALKFORWARD_FOLDS = 5
+
+
+def make_walkforward_folds(df, n_folds: int = WALKFORWARD_FOLDS
+                           ) -> List[Tuple[object, object]]:
+    """Anchored walk-forward folds: fold i trains on df[:b_{i+1}], tests on the next
+    block. Returns n_folds (is_df, oos_df) pairs whose OOS blocks are disjoint and
+    cover the tail of the series."""
+    n = len(df)
+    n_blocks = n_folds + 1
+    bounds = [int(n * k / n_blocks) for k in range(n_blocks + 1)]
+    folds = []
+    for i in range(n_folds):
+        is_df = df.iloc[: bounds[i + 1]]          # anchored: all data up to here
+        oos_df = df.iloc[bounds[i + 1]: bounds[i + 2]]
+        if len(is_df) >= 30 and len(oos_df) >= 30:
+            folds.append((is_df, oos_df))
+    return folds
+
+
+def _walkforward_eval(strat, bt, df, cfg, base) -> FitnessResult:
+    folds = make_walkforward_folds(df, WALKFORWARD_FOLDS)
+    if len(folds) < 3:
+        base.rejection_reason = "too_few_folds"
+        return base
+    is_edges, oos_edges, oos_pnls, oos_trades, oos_acts = [], [], [], [], []
+    for is_df, oos_df in folds:
+        is_r = bt.backtest(strat, is_df)
+        oos_r = bt.backtest(strat, oos_df)
+        is_edges.append(is_r.total_pnl - _buyhold_pnl(is_df))
+        oos_edges.append(oos_r.total_pnl - _buyhold_pnl(oos_df))
+        oos_pnls.append(oos_r.total_pnl)
+        oos_trades.append(oos_r.total_trades)
+        oos_acts.append(oos_r.bars_in_market / max(1, oos_r.n_bars))
+    base.is_vs_buyhold = statistics.median(is_edges)
+    base.oos_vs_buyhold = min(oos_edges)            # conservative: worst fold
+    base.n_trades_oos = min(oos_trades)
+    base.oos_activity = statistics.median(oos_acts)
+    avg_is, avg_oos = statistics.mean(is_edges), statistics.mean(oos_edges)
+    base.overfit_gap = max(0.0, avg_is - avg_oos)
+    base.overfit_penalty = base.overfit_gap * cfg.overfit_penalty_weight
+    exposure = (max(0.0, min(1.0, base.oos_activity / cfg.activity_floor))
+                if cfg.activity_floor > 0 else 1.0)
+    base.exposure_factor = exposure
+    candidate_fitness = base.oos_vs_buyhold * exposure - base.overfit_penalty
+    base.metrics_oos = {"fold_oos_edges": oos_edges, "fold_oos_pnls": oos_pnls}
+
+    # STRICT: every fold must clear the gates independently.
+    reasons = []
+    for i, pnl in enumerate(oos_pnls):
+        if cfg.require_absolute_oos_profit and pnl <= 0:
+            reasons.append(f"fold{i}_total_profit={pnl:.2f}<=0")
+    for i, t in enumerate(oos_trades):
+        if t < cfg.min_trades:
+            reasons.append(f"fold{i}_trades={t}<{cfg.min_trades}")
+    if cfg.require_beat_buyhold_oos and min(oos_edges) <= 0:
+        reasons.append("oos_edge_not_positive_all_folds")
+    if candidate_fitness < cfg.min_fitness:
+        reasons.append(f"fitness={candidate_fitness:.1f}<{cfg.min_fitness}")
+    if reasons:
+        base.rejection_reason = "; ".join(reasons)
+        return base
+    base.evaluated = True
+    base.fitness_score = candidate_fitness
+    return base
+
+
 def evaluate_dex_fitness(signal_fn: SignalFn, df, config: Optional[FitnessConfig] = None,
-                         candidate_id: str = "") -> FitnessResult:
+                         candidate_id: str = "",
+                         validation: str = "two_window") -> FitnessResult:
     cfg = config or FitnessConfig()
     base = FitnessResult(
         evaluated=False, fitness_score=float("-inf"),
@@ -71,6 +147,8 @@ def evaluate_dex_fitness(signal_fn: SignalFn, df, config: Optional[FitnessConfig
     bt = DexBacktester(DexBacktestConfig(warmup=min(cfg.probe_window, 20),
                                          funding_interval_bars=0))
     strat = _adapt(signal_fn)
+    if validation == "walkforward":
+        return _walkforward_eval(strat, bt, df, cfg, base)
     is_r = bt.backtest(strat, is_df)
     o1 = bt.backtest(strat, oos1)
     o2 = bt.backtest(strat, oos2)

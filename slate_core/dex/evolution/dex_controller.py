@@ -116,7 +116,8 @@ async def dex_evolution_step(
 
     fitness = await loop.run_in_executor(
         None, lambda: dex_eval_fitness_subprocess(new_code, df, config=fitness_config,
-                                                   candidate_id=candidate_id))
+                                                   candidate_id=candidate_id,
+                                                   validation=cfg.validation))
 
     if not fitness.evaluated:
         logger.info("dex candidate rejected at gate: %s", (fitness.rejection_reason or "")[:120])

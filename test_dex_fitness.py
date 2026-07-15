@@ -39,3 +39,27 @@ def test_dex_mm_fitness_runs_and_labels_market_maker():
     res = evaluate_dex_mm_fitness(qf, df, candidate_id="mm")
     assert isinstance(res, FitnessResult)
     assert res.family_label == "market_maker"
+
+
+def test_make_walkforward_folds_disjoint_and_anchored():
+    import pandas as pd
+    from slate_core.dex.evolution.dex_fitness import make_walkforward_folds
+    df = pd.DataFrame({"close": range(300)},
+                      index=pd.date_range("2026-01-01", periods=300, freq="1h"))
+    folds = make_walkforward_folds(df, n_folds=5)
+    assert len(folds) == 5
+    for is_df, oos_df in folds:
+        assert len(is_df) >= 30 and len(oos_df) >= 30
+        assert is_df.index[-1] < oos_df.index[0]         # anchored: IS ends before OOS
+
+
+def test_dex_fitness_walkforward_rejects_flat_and_runs():
+    df = _syn_df(500)                                     # big enough for 5 folds
+    # flat signal -> fails every fold's gates
+    flat = evaluate_dex_fitness(lambda d, i, p: 0, df, candidate_id="wf_flat",
+                                validation="walkforward")
+    assert isinstance(flat, FitnessResult) and flat.evaluated is False
+    # momentum runs across all folds (strict; not asserting a pass)
+    mom = lambda d, i, p: 1 if d["close"].iloc[i] > d["ema_20"].iloc[i] else -1
+    res = evaluate_dex_fitness(mom, df, candidate_id="wf_mom", validation="walkforward")
+    assert isinstance(res, FitnessResult)

@@ -41,6 +41,8 @@ class EvolutionConfig:
     regime_default: str = "unknown"
     max_signal_complexity: int = 200   # AST-node cap: reject over-expressive signals
                                        # (regularization against overfitting a small sample)
+    validation: str = "two_window"     # "two_window" | "walkforward" (multi-fold OOS;
+                                       # a stronger overfit defense)
 
 
 def _seed_parent(config: EvolutionConfig) -> Program:

@@ -255,9 +255,14 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
   and starved the funnel. The overfit gate is the primary defense; the cap is a
   secondary guardrail that now blocks only the baroque tail (>350). Tunable via
   `DexEvolutionService(max_signal_complexity=...)`.
+- **Validation (overfit defense):** DEX directional fitness uses **anchored
+  walk-forward** — 5 folds, each training on all data up to a block and testing on
+  the next; a candidate must profit on **all** independent OOS folds (not one
+  split), a far stronger overfit defense. Selectable via
+  `EvolutionConfig.validation` ("walkforward", DEX default | "two_window").
 - **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
   `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=market_maker`
-  (default `directional`). Suite: **235 passed / 0 failed**.
+  (default `directional`). Suite: **237 passed / 0 failed**.
   Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
 
 ---
