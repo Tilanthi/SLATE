@@ -1,0 +1,195 @@
+# SLATE Change Log
+
+Detailed dated change records, moved out of `CLAUDE.md` to keep it a concise
+quick-reference. Newest last. `CLAUDE.md` holds the operational rules, current
+status, and pointers; this file holds the history.
+
+---
+
+## 🔧 Correctness Fixes (2026-07-11) — the 7 force-multipliers
+
+A deep audit found the pipeline manufactured false confidence. These fixes make
+the numbers trustworthy (120 tests, TDD). All verified live.
+
+1. **Lookahead closed** (`perpetual_futures_backtest.py:381`) — the signal now
+   receives only `df.iloc[:i+1]`, so evolved code can no longer read future bars.
+   Defeatable overfit cage → sound.
+2. **Timeframe-aware backtester + daily data** (`perpetual_futures_backtest`,
+   `startup_coordinator`) — funding accrual and Sharpe annualization now scale to
+   the detected bar frequency (was hardcoded daily on hourly data → 24× funding
+   error). The closed-loop now loads **daily** bars via `load_daily_data`
+   (matches the documented daily-timeframe edge). Result carries `bars_per_year`.
+3. **Deterministic RNG** — backtests seed numpy (config `random_seed`, overridable
+   per-candidate via the `seed` param). Same strategy/seed → identical result.
+4. **Full backtest result carried to DB** (`convert_backtest_to_dict` now
+   comprehensive; integration reads canonical `*_usdt` names) — buy-hold, funding,
+   per-trade stats, real prices/period no longer default to 0. Fixes the
+   `max_drawdown_usdt`-stored-as-ratio bug.
+5. **Validation gate rejects losers** (`rigorous_validation.py` + `closed_loop_discovery.py`)
+   — hard profitability floor (`total_profit <= 0` → REJECT) on **both** gates
+   (the pluralistic gate AND the hypothesis `is_successful` check, which could
+   otherwise score 0.8 from the other four components) + consensus raised to a
+   true majority (50%, was 33%). Money-losing strategies can no longer be saved.
+6. **No more `-inf` elites** (`controller.py`) — gate-rejected candidates are not
+   stored (was: first reject became the niche elite).
+7. **Sandbox hardened** (`signal_sandbox.py`) — AST-gates DataFrame write/export
+   methods (`to_csv`/`to_pickle`/… ; closes the filesystem leak) and rejects
+   unconditional `while True` loops at compile. **Fitness eval now runs in an
+   isolated subprocess** (`subprocess_eval.py`) with `RLIMIT_CPU` + wall-clock
+   kill, so a non-obvious infinite loop in evolved code can't hang an executor
+   thread (the worker-thread DoS hole).
+
+**Follow-ups completed:** test suite un-ignored and committed (24 modules, 124
+tests, was wrongly gitignored); regime filter floors small datasets
+(`MIN_BARS_FOR_DISCOVERY=120`) so the closed-loop gets enough daily bars to trade
+(was 47 → strategies fired 0 trades).
+
+**Honest state at the time:** with the gates now truthful, the closed-loop saves
+**nothing** because every current strategy template loses money on daily SOL
+perps after brutal costs — i.e. the system correctly refuses to record fake
+edges. The infrastructure is sound; finding a genuinely profitable daily-timeframe
+strategy is the remaining research task.
+
+---
+
+## 🔧 Correctness, Search & Hygiene Updates (2026-07-14)
+
+**🔴 P0 repo-integrity fix — the core backtester was never committed.** An
+over-broad `.gitignore` rule (`*_backtest.py`, line 72) matched
+`slate_core/discovery/perpetual_futures_backtest.py`, and `fetch_*.py` (line 81)
+matched `fetch_binance_futures.py`, so **neither core file was tracked**. On a
+fresh clone the backtester is absent → every `from ...perpetual_futures_backtest
+import …` fails and the suite cannot be collected. Fixed by un-ignoring both
+(`!path` negation in `.gitignore`) and tracking them. **Lesson: claims are now
+reproducible from a clean clone; before this commit they were machine-local.**
+
+**Behavioural MAP-Elites niches (closes the deferred Phase-3 gap).** The old
+controller *inherited* the niche from the parent, so with the closed-loop DB
+empty every program collapsed onto one cell (`momentum/unknown`, top-10 tied at
+fitness −1776). Added `classify_signal_family` (momentum/mean_reversion/other via
+signal↔recent-return correlation) and `classify_active_regime`
+(low/med/high_vol = modal rolling-vol tercile of in-market bars) in
+`fitness_evaluator.py`; `FitnessResult` carries `family_label`/`regime_label`;
+the controller now places each child by its **own** behaviour. **Gotcha that bit
+us once:** the classifiers must probe the signal on the **backtester-enriched**
+frame (`add_signal_indicators(df)` — the shared EMA injector in
+`perpetual_futures_backtest.py`), not the raw df, or every real signal (which
+reads `ema_20` etc.) KeyErrors into the `other/unknown` fallback.
+
+**Tightened fitness gate (`min_fitness`, default 0.0).** The two-window gate only
+required absolute OOS profit > 0, so overfit survivors (IS ~4400 vs OOS ~100,
+overfit_gap ~3850) could PASS with fitness −1826 and become niche elites. Now a
+candidate is rejected unless its overfit-adjusted fitness (oos_edge −
+overfit_penalty) ≥ the floor.
+
+**Repo hygiene:** added `LICENSE` (MIT) and `requirements.txt` /
+`requirements-dev.txt` (Python 3.14; numpy/pandas/anthropic/fastapi/uvicorn/pyarrow/…).
+Removed dead legacy tests; full suite green: **150 passed, 0 failed**. Renamed the
+mislabelled cache `SOLUSDT_perpetual_1d_12m.csv` → `SOLUSDT_perpetual_1h_6m.csv`
+(4,182 **hourly** bars ≈ 6 months, not daily/12-month). `load_data.py` detects
+intraday and resamples to daily regardless of name.
+
+---
+
+## 🔧 ASTRA-Derived Discovery-Pipeline Hardening (2026-07-14)
+
+Distilled from ASTRA's 2026-07-11→14 re-architecture (the AlphaEvolve-based
+re-architecture + measure→fix→re-measure cycle in
+`~/Desktop/Discovery-Pipeline-Lessons-for-Sibling-Projects.md`). Three additive
+mechanisms layered on the evolution layer — they *add* to the verification crown
+jewel; nothing *replaces* it. **One ASTRA idea was deliberately NOT adopted:** a
+literature-novelty "Gate 2" is incoherent for trading (an edge being "in the
+literature" says nothing about whether it's tradeable on crypto, and a real
+microstructure edge would be wrongly rejected). SLATE's Gate-2 analogue is the
+realistic-cost OOS gate it already has.
+
+1. **Unified write chokepoint** (`program_database.py`, ASTRA §7.1) —
+   `append_verified(program, verification)` is the single write path for a
+   gate-verified candidate and **requires a machine-verification block** (`gate`
+   + `real_data_result` + `program_hash`). Both `add()` and `append_verified()`
+   **structurally refuse** gate-rejected (`fitness_score == -inf`) candidates, so
+   a reject can never become a niche elite (the −inf-elite hole) or reach disk.
+   The controller routes every real candidate through `append_verified`; seeds
+   carry a `seed:discovery_db_profitable` block. Pinned by regression tests in
+   `test_evolution_program_database.py`; a guarded `ALTER` adds `verification_json`
+   to existing DBs.
+2. **Funnel diagnostic** (`verdict_log.py`, ASTRA §4/§7.2) — every evaluated
+   candidate emits one JSONL line to `slate_core/evolution_verdicts.jsonl`
+   (gitignored; `SLATE_VERDICT_LOG` overrides) carrying its **death-stage**
+   (`correctness → too_few_trades → not_profitable → no_oos_edge →
+   overfit_fitness → validation_failed → eval_crash → passed`) plus IS/OOS edges,
+   family/regime, and a code hash. Written *inside* the search process,
+   independent of stdout. Logged at compile-fail / too_complex / gate-reject / pass.
+3. **Proposer primed toward non-obvious edges** (`prompt_sampler.py` +
+   `meta_prompt_db.py`, ASTRA §7.5/§6/§7.6) — the evolution prompt carries
+   **ALPHA DIRECTIONS** (regime-conditional / residual / non-linear /
+   multi-variable-interaction / vol-&-volume-structure) and a **KNOWN-DEAD
+   PATTERNS** blacklist (bare RSI, MA crossovers, generic momentum, MACD,
+   Bollinger touch — must be ingredients, not the whole signal).
+
+Suite: **181 passed / 0 failed** (+31 tests). An autouse `conftest.py` fixture
+redirects the verdict logger to tmp during tests.
+
+---
+
+## 🔧 Funnel-Sharpening + Acting on the Diagnosis (2026-07-15)
+
+A first read of the live funnel (~176 candidates) surfaced two diagnostic
+weaknesses and two search pathologies.
+
+**(a) Sharper funnel.**
+- `death_stage` is now the **first (causally-earliest) failing gate**, not a
+  priority scan — previously every multi-gate reject was over-labeled
+  `overfit_fitness`. A new `failed_gates` list on each `CandidateVerdict`
+  preserves the full co-failure set (`verdict_log.py`).
+- **Rejected candidates now carry family/regime labels** (the classifiers run
+  right after the correctness gate in `fitness_evaluator.py`, not only on the
+  pass-branch) — so the funnel shows WHAT kind of signal fails.
+
+**(b) Acting on the diagnosis** (candidates overfit IS ~4,400 vs OOS ~92, 0–1 OOS trades):
+- **Seed-archetype diversity** (`evolvable_strategy.SEED_ARCHETYPES` +
+  `controller.pick_seed_parent`): an empty population now rotates among
+  momentum / mean-reversion / breakout archetypes instead of always mutating
+  `BASE_SIGNAL_CODE`.
+- **Trade-frequency directive** (`prompt_sampler.TRADE_FREQUENCY_DIRECTIVE`):
+  the prompt steers the LLM away from near-dormant (mostly-flat) signals.
+
+Suite: **190 passed / 0 failed** (+9 tests).
+
+---
+
+## 🔧 Activity-Credit in the Fitness Function (2026-07-15)
+
+The "+92 OOS edge" was a flat position beating a losing buy-hold, not a real
+edge. A prompt-only trade-frequency directive nudged OOS trading 0%→~20% only,
+so the pressure moved INTO THE FITNESS FUNCTION (`fitness_evaluator.py`):
+- **`signal_market_activity`** = fraction of OOS bars a signal holds a position.
+- **Activity-credit**: `exposure_factor = clip(oos_activity / activity_floor, 0, 1)`,
+  then `fitness = oos_edge * exposure_factor - overfit_penalty`. A dormant signal's
+  "edge" is discounted to ~0; a signal active on ≥ `activity_floor` (default 0.20)
+  keeps full credit. No flat bonus → a hyperactive loser can't farm fitness.
+- Carried into the funnel verdict as `oos_activity`.
+
+Verified live (oos_activity in verdicts) but dormancy still persisted: even active
+candidates overfit IS≫OOS. This **refuted dormancy as the cause** and pointed at
+the overfit gap. Suite: **193 passed / 0 failed** (+3 tests).
+
+---
+
+## 🔧 Data Lever + Complexity Cap (2026-07-15)
+
+The funnel localized the bottleneck to the **overfit gap (IS≈4,420 vs OOS≈92)**,
+driven by too few daily bars (~175). Two structural levers:
+
+- **Data lever** (`load_data.py` + new cache): default source is now
+  `sol_data_cache/SOLUSDT_perpetual_1d_36m.csv` — **1,080 real daily SOLUSDT-perp
+  bars** (2023-08 → present) fetched from Binance, so IS/OOS2 are ~540/216 bars
+  instead of ~87/35. The loader still resamples intraday→daily if handed an
+  intraday file. No synthetic data.
+- **Complexity cap** (`signal_sandbox.signal_complexity` +
+  `controller.EvolutionConfig.max_signal_complexity`, default 200 AST nodes):
+  over-expressive signals are rejected pre-eval (funnel death-stage `too_complex`)
+  so they can't memorize in-sample noise. Archetypes are 69–97 nodes; the cap is a
+  tunable guardrail (raise/lower `max_signal_complexity`).
+
+Suite: **195 passed / 0 failed** (+2 tests).

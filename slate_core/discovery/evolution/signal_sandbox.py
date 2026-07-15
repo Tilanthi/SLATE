@@ -141,6 +141,22 @@ def compile_signal(code: str) -> SignalFn:
     return wrapped
 
 
+def signal_complexity(code: str) -> int:
+    """AST node count of the signal_fn body — a cheap proxy for overfitting
+    capacity (more nodes = more capacity to memorize in-sample noise). Powers the
+    complexity cap: a signal too expressive for the available data is rejected
+    before evaluation. Returns the whole-module node count if signal_fn is absent
+    (such code fails the sandbox anyway)."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "signal_fn":
+            return sum(1 for _ in ast.walk(node))
+    return sum(1 for _ in ast.walk(tree))
+
+
 def safe_eval_signal(fn: SignalFn, df, i, params=None, timeout_s: float = 2.0) -> int:
     """Call a (sandboxed) signal fn with a SIGALRM timeout; 0 on timeout/error.
 

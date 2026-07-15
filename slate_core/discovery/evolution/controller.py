@@ -26,7 +26,7 @@ from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
 from slate_core.discovery.evolution.llm_pool import LLMPool
 from slate_core.discovery.evolution.program_database import Program, ProgramDatabase
 from slate_core.discovery.evolution.prompt_sampler import PromptSampler, PromptObjective
-from slate_core.discovery.evolution.signal_sandbox import compile_signal
+from slate_core.discovery.evolution.signal_sandbox import compile_signal, signal_complexity
 from slate_core.discovery.evolution.subprocess_eval import eval_fitness_subprocess
 from slate_core.discovery.evolution.verdict_log import (
     CandidateVerdict, log_candidate_verdict, verdict_from_fitness_result,
@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 class EvolutionConfig:
     edge_type_default: str = "momentum"
     regime_default: str = "unknown"
+    max_signal_complexity: int = 200   # AST-node cap: reject over-expressive signals
+                                       # (regularization against overfitting a small sample)
 
 
 def _seed_parent(config: EvolutionConfig) -> Program:
@@ -115,6 +117,23 @@ async def evolution_step(
             is_edge=0.0, oos_edge=0.0, n_trades_oos=0, overfit_gap=0.0, timestamp="",
         ))
         return None
+
+    # Complexity cap (regularization): reject over-expressive signals that could
+    # memorize in-sample noise on a small sample, before spending an evaluation.
+    if cfg.max_signal_complexity > 0:
+        complexity = signal_complexity(new_code)
+        if complexity > cfg.max_signal_complexity:
+            logger.info("candidate rejected: complexity %d > cap %d",
+                        complexity, cfg.max_signal_complexity)
+            log_candidate_verdict(CandidateVerdict(
+                candidate_id=candidate_id, death_stage="too_complex", evaluated=False,
+                fitness_score=float("-inf"),
+                rejection_reason=f"complexity={complexity}>{cfg.max_signal_complexity}",
+                family="", regime="", parent_id=parent_prog.candidate_id,
+                program_hash=hashlib.sha256(new_code.encode("utf-8")).hexdigest()[:16],
+                is_edge=0.0, oos_edge=0.0, n_trades_oos=0, overfit_gap=0.0, timestamp="",
+            ))
+            return None
 
     edge_type = parent_prog.family or cfg.edge_type_default
 

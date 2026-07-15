@@ -118,6 +118,49 @@ def test_pick_seed_parent_rotates_archetypes():
     assert len(seen) >= 2            # not always the same archetype
 
 
+# ---------------------------------------------------------------------------
+# Complexity cap (regularization): cap evolved-signal AST size so it can't
+# overfit a tiny sample.
+# ---------------------------------------------------------------------------
+
+def test_signal_complexity_counts_ast_nodes():
+    from slate_core.discovery.evolution.signal_sandbox import signal_complexity
+    simple = "def signal_fn(df, i, params):\n    return 1\n"
+    bigger = ("def signal_fn(df, i, params):\n"
+              "    a = df['close'].iloc[i]\n"
+              "    b = df['close'].iloc[i-1]\n"
+              "    c = df['close'].iloc[i-2]\n"
+              "    if a > b and b > c:\n"
+              "        return 1\n"
+              "    if a < b and b < c:\n"
+              "        return -1\n"
+              "    return 0\n")
+    assert signal_complexity(simple) > 0
+    assert signal_complexity(simple) < signal_complexity(bigger)
+
+
+def test_over_complex_candidate_rejected_as_too_complex(sol_slice, monkeypatch):
+    """A candidate whose code exceeds max_signal_complexity is rejected pre-eval
+    (saves the subprocess) and logged 'too_complex' so the funnel shows the
+    regularization pressure."""
+    from slate_core.discovery.evolution.evolvable_strategy import SEED_ARCHETYPES
+    breakout_code = dict(SEED_ARCHETYPES)["breakout"]     # 97 AST nodes
+    db = ProgramDatabase(ProgramDBConfig())               # empty -> archetype parent
+    recorded = []
+    monkeypatch.setattr(
+        "slate_core.discovery.evolution.controller.log_candidate_verdict",
+        lambda v: recorded.append(v),
+    )
+    prog = asyncio.run(evolution_step(
+        db, PromptSampler(), _mock_pool(canned=breakout_code), sol_slice,
+        config=EvolutionConfig(max_signal_complexity=50),
+        rng=random.Random(0),
+    ))
+    assert prog is None
+    assert len(recorded) == 1
+    assert recorded[0].death_stage == "too_complex"
+
+
 def test_gate_rejected_candidate_is_not_stored(sol_slice):
     """Fix 6: a candidate that compiles but FAILS the fitness gate must not be
     added to the database (no -inf elites polluting the population)."""

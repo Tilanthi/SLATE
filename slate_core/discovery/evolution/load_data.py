@@ -1,16 +1,17 @@
-"""Market-data loader for the evolution layer (fixes the hourly-data issue).
+"""Market-data loader for the evolution layer.
 
-The file `sol_data_cache/SOLUSDT_perpetual_1h_6m.csv` is a JSON array of
-HOURLY bars despite the "1d" name and CLAUDE.md's "daily" claim. SLATE's research
-finds edges on the daily timeframe, so this loader resamples intraday data to
-daily OHLCV. (The existing closed-loop discovery still loads raw hourly data —
-a known, separate issue; this helper is the reusable fix.)
+Default source is `sol_data_cache/SOLUSDT_perpetual_1d_36m.csv` — ~1,080 REAL
+daily SOLUSDT-perp bars (2023-08 → present) fetched from Binance, so IS/OOS
+splits are measured on hundreds of bars, not ~35 (the overfit-from-tiny-sample
+problem). The loader still resamples to daily if handed an intraday file (e.g.
+the legacy hourly 6-month cache), preserving the documented daily-timeframe edge.
+The closed-loop discovery loads its own data separately.
 """
 from __future__ import annotations
 
 import pandas as pd
 
-REAL_DATA_DEFAULT = "sol_data_cache/SOLUSDT_perpetual_1h_6m.csv"
+REAL_DATA_DEFAULT = "sol_data_cache/SOLUSDT_perpetual_1d_36m.csv"
 
 
 def load_ohlcv(path: str = REAL_DATA_DEFAULT) -> pd.DataFrame:
