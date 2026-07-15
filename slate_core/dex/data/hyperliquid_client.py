@@ -72,3 +72,9 @@ class HLClient:
 
     def meta(self) -> Dict[str, Any]:
         return self._post({"type": "meta"}) or {}
+
+    def l2_book(self, coin: str) -> Dict[str, Any]:
+        """Real-time L2 order-book snapshot (<=20 levels/side): {levels:[bids,asks]}.
+        Not historical — to backtest maker queue position you accumulate these over
+        time or plug in a third-party historical L2/trade feed."""
+        return self._post({"type": "l2Book", "coin": coin}) or {}

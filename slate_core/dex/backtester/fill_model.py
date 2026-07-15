@@ -13,6 +13,7 @@ from slate_core.dex.backtester.economics import (
     HLFeeSchedule, min_notional_ok, oracle_ok,
 )
 from slate_core.dex.strategies.action import Order
+from typing import Optional
 
 
 def bar_fill(order: Order, o: float, h: float, l: float, c: float,
@@ -52,3 +53,26 @@ def bar_fill(order: Order, o: float, h: float, l: float, c: float,
         if h >= px:                            # resting ask touched
             return True, px, True, None        # maker fill at the ask
         return False, 0.0, False, None
+
+
+def bar_fill_l2(order: Order, o: float, h: float, l: float, c: float,
+                oracle_px: float, schedule: HLFeeSchedule,
+                queue_ahead: Optional[float], bar_volume: Optional[float],
+                fill_share: float = 0.5
+                ) -> Tuple[bool, float, bool, Optional[str]]:
+    """Queue-aware maker fill — graduates market-making from INDICATIVE (touched =
+    filled) to DEFINITIVE: a resting maker fills only if the bar's traded volume at
+    the level consumes the queue resting ahead of it. Taker fills and rejections are
+    unchanged. queue_ahead/bar_volume None => falls back to the bar proxy.
+
+    Without per-level historical trade data we approximate traded-at-level as
+    bar_volume * fill_share; a real L2/trade feed (third-party, or accumulated
+    l2_book snapshots) supplies exact values via the same call signature.
+    """
+    filled, fpx, maker, rej = bar_fill(order, o, h, l, c, oracle_px, schedule)
+    if rej or not filled:
+        return filled, fpx, maker, rej
+    if maker and queue_ahead is not None and bar_volume is not None:
+        if queue_ahead > bar_volume * fill_share:
+            return False, 0.0, False, None     # queued behind; not filled this bar
+    return filled, fpx, maker, rej

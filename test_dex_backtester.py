@@ -9,7 +9,9 @@ from slate_core.dex.strategies.action import DexStrategy, Order
 
 def _df(rows):
     idx = pd.date_range("2026-01-01", periods=len(rows), freq="1h")
-    return pd.DataFrame(rows, columns=["open", "high", "low", "close"], index=idx)
+    df = pd.DataFrame(rows, columns=["open", "high", "low", "close"], index=idx)
+    df["volume"] = 100.0
+    return df
 
 
 class _BuyHold(DexStrategy):
@@ -67,3 +69,21 @@ def test_rebate_earns_cash_when_maker_rate_negative():
     r = DexBacktester(cfg).backtest(_MakerEnter(), df)
     assert r.maker_fills == 1
     assert r.total_rebates > 0 and r.total_fees == 0.0     # maker <0 => pure rebate
+
+
+class _MakerBuy(DexStrategy):
+    def act(self, state):
+        if state.i < 2:
+            return [Order("B", px=state.close * 0.99, sz=1, tif="Alo")]
+        return []
+
+
+def test_l2_provider_blocks_maker_fills_vs_bar_proxy():
+    """With an L2 provider returning a huge queue, maker fills are blocked
+    (definitive); without it, the bar proxy fills them (indicative)."""
+    df = _df([(100, 101, 99, 100.5)] * 4)
+    r_proxy = DexBacktester(DexBacktestConfig(warmup=0, funding_interval_bars=0)).backtest(_MakerBuy(), df)
+    r_l2 = DexBacktester(DexBacktestConfig(warmup=0, funding_interval_bars=0,
+                                           l2_provider=lambda side, px: 1e9)).backtest(_MakerBuy(), df)
+    assert r_proxy.total_trades > 0          # proxy: touched = filled
+    assert r_l2.total_trades == 0            # definitive: queue never consumed

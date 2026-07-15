@@ -17,10 +17,10 @@ from __future__ import annotations
 import math
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from slate_core.dex.backtester.economics import HLFeeSchedule, fee_for
-from slate_core.dex.backtester.fill_model import bar_fill
+from slate_core.dex.backtester.fill_model import bar_fill, bar_fill_l2
 from slate_core.dex.strategies.action import BarState, DexStrategy, Order
 
 
@@ -32,6 +32,10 @@ class DexBacktestConfig:
     funding_interval_bars: int = 8     # HL funding ~8h; on 1h bars every 8 bars
     funding_rate: float = 0.0          # constant funding rate per interval (v1 proxy)
     warmup: int = 20
+    l2_provider: Optional[Callable[[str, float], float]] = None
+    # If set, (side, px) -> queue_ahead (resting size ahead of a maker order). The
+    # backtester then uses queue-aware maker fills (bar_fill_l2) instead of the bar
+    # proxy — graduating market-making from indicative to definitive. None => proxy.
 
 
 @dataclass
@@ -84,7 +88,7 @@ class DexBacktester:
         # i+1, so a strategy that acts on df.iloc[:i+1] can never trade on future info.
         pending: List[Order] = []
 
-        def _apply(order: Order, o, h, l, c):
+        def _apply(order: Order, o, h, l, c, volume):
             nonlocal cash, position, maker_fills, taker_fills
             nonlocal total_fees, total_rebates
             dirn = 1.0 if order.side == "B" else -1.0
@@ -96,7 +100,13 @@ class DexBacktester:
             if equity > 0 and abs(new_pos * c) > equity * cfg.max_leverage:
                 rejections["capped"] += 1
                 return
-            filled, fpx, maker, rej = bar_fill(order, o, h, l, c, oracle_px=c, schedule=sch)
+            if cfg.l2_provider is not None:
+                queue = cfg.l2_provider(order.side, order.px)
+                filled, fpx, maker, rej = bar_fill_l2(
+                    order, o, h, l, c, oracle_px=c, schedule=sch,
+                    queue_ahead=queue, bar_volume=volume)
+            else:
+                filled, fpx, maker, rej = bar_fill(order, o, h, l, c, oracle_px=c, schedule=sch)
             if rej:
                 rejections[rej] += 1
                 return
@@ -125,9 +135,10 @@ class DexBacktester:
             row = df.iloc[i]
             o, h, l, c = (float(row[k]) for k in ("open", "high", "low", "close"))
             last_close = c
+            volume = float(row.get("volume", 0.0) or 0.0)
             # 1) fill orders decided at the previous bar against THIS bar
             for order in pending:
-                _apply(order, o, h, l, c)
+                _apply(order, o, h, l, c, volume)
             pending = []
             # 2) funding accrual on the current position
             if cfg.funding_interval_bars and (i % cfg.funding_interval_bars == 0) and position != 0:

@@ -157,6 +157,34 @@ def signal_complexity(code: str) -> int:
     return sum(1 for _ in ast.walk(tree))
 
 
+def compile_function(code: str, fn_name: str = "quote_fn"):
+    """Validate + compile an evolved function with a NON-signal return type (e.g.
+    a market-maker's quote params `(half_spread_bps, inv_skew_bps, size)`). Same
+    AST cage as compile_signal, but NO {-1,0,1} clamping — the raw return value is
+    passed through (None on runtime error). Lets the DEX evolution evolve quoting
+    logic, not just directional signals. Raises SandboxError on rule violation or
+    if `fn_name` is not defined."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        raise SandboxError(f"syntax error: {exc.msg}") from exc
+    _validate(tree)
+    sandbox_globals: Dict[str, Any] = {"__builtins__": _SAFE_BUILTINS, "np": _SAFE_NP}
+    exec(compile(tree, "<signal_sandbox>", "exec"), sandbox_globals)  # noqa: S102 - gated
+    fn = sandbox_globals.get(fn_name)
+    if not callable(fn):
+        raise SandboxError(f"code must define {fn_name}")
+
+    def wrapped(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception:  # noqa: BLE001 - any runtime error => caller treats as no-quote
+            return None
+
+    wrapped.__name__ = fn_name
+    return wrapped
+
+
 def safe_eval_signal(fn: SignalFn, df, i, params=None, timeout_s: float = 2.0) -> int:
     """Call a (sandboxed) signal fn with a SIGALRM timeout; 0 on timeout/error.
 

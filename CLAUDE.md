@@ -236,13 +236,22 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
   rebates, oracle rejection, min-notional, leverage cap, funding), and a richer
   `act(state)->list[Order]` action model with **Directional** (maker-routed) and
   **MarketMaker** (two-sided quoting + inventory skew + rebate) archetypes.
-- **Honest v1 limits:** bar-level maker fills approximate queue/adverse-selection
-  (true MM realism needs L2 data, deferred); funding uses a constant rate.
-  Backtester is **lookahead-safe** (decide at bar i, fill at i+1). Paper/discovery
-  only — never places live HL orders.
+- **L2/trade feed (definitive MM fills):** `bar_fill_l2` adds a queue gate (a maker
+  fills only if the bar's traded volume consumes the queue ahead of it); the
+  backtester takes an optional `l2_provider` (pluggable seam; `HLClient.l2_book`
+  supplies real-time snapshots). Without a provider it falls back to the bar proxy
+  (indicative). Dense historical L2/trade data needs a third-party feed.
+- **Evolvable MM quoting:** the market-maker's `quote_fn(state)->(half_spread_bps,
+  inv_skew_bps, size)` is sandbox-compiled (`compile_function`, no {-1,0,1} clamp)
+  and evolved via `dex_mm_evolution_step` + `evaluate_dex_mm_fitness` (same crown
+  jewel). The service `target` selects directional (default) vs market_maker.
+- **Honest v1 limits:** funding uses a constant rate; bar-level fills without an
+  L2 provider are indicative. Backtester is **lookahead-safe** (decide at bar i,
+  fill at i+1). Paper/discovery only — never places live HL orders.
 - **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
-  `SLATE_PIPELINE=dex` (default `cex`; CEX and DEX are mutually exclusive at
-  autostart). Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
+  `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=market_maker`
+  (default `directional`). Suite: **233 passed / 0 failed** (+8 DEX tests).
+  Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
 
 ---
 

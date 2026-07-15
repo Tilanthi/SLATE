@@ -65,3 +65,29 @@ def test_mm_skews_down_and_stops_bidding_at_max_long():
     flat_ask = [o for o in flat if o.side == "A"][0].px
     long_ask = [o for o in long_max if o.side == "A"][0].px
     assert long_ask < flat_ask                            # skewed down to encourage selling
+
+
+# ---- evolvable quoting logic ----
+
+def test_compile_function_returns_raw_callable():
+    import pytest
+    from slate_core.discovery.evolution.signal_sandbox import compile_function, SandboxError
+    fn = compile_function("def quote_fn(state):\n    return (10.0, 2.0, 0.5)\n", "quote_fn")
+    assert fn(None) == (10.0, 2.0, 0.5)                  # NO {-1,0,1} clamping
+    with pytest.raises(SandboxError):
+        compile_function("def quote_fn(state):\n    import os\n    return (1, 1, 1)\n",
+                         "quote_fn")
+
+
+def test_mm_uses_evolved_quote_fn():
+    calls = {"n": 0}
+
+    def qf(state):
+        calls["n"] += 1
+        return (20.0, 0.0, 0.5)                          # 20bps half-spread
+
+    s = MarketMakerStrategy(quote_fn=qf, max_size=2.0)
+    orders = s.act(_state(close=100.0, position=0.0))
+    assert calls["n"] == 1
+    buy = [o for o in orders if o.side == "B"][0]
+    assert abs(buy.px - 100.0 * (1 - 0.002)) < 1e-6      # bid at 20bps below mid

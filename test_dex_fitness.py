@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 
-from slate_core.dex.evolution.dex_fitness import evaluate_dex_fitness
+from slate_core.dex.evolution.dex_fitness import evaluate_dex_fitness, evaluate_dex_mm_fitness
 from slate_core.discovery.evolution.fitness_evaluator import FitnessResult
 
 
@@ -31,3 +31,11 @@ def test_dex_fitness_runs_and_labels_momentum():
     res = evaluate_dex_fitness(mom, df, candidate_id="mom")
     assert isinstance(res, FitnessResult)
     assert res.family_label == "" or res.family_label in {"momentum", "mean_reversion", "other"}
+
+
+def test_dex_mm_fitness_runs_and_labels_market_maker():
+    df = _syn_df()
+    qf = lambda st: (15.0, 2.0, 0.5)                     # fixed quote params
+    res = evaluate_dex_mm_fitness(qf, df, candidate_id="mm")
+    assert isinstance(res, FitnessResult)
+    assert res.family_label == "market_maker"

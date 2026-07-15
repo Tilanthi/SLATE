@@ -69,3 +69,50 @@ def dex_eval_fitness_subprocess(code: str, df, config: Optional[FitnessConfig] =
         return FitnessResult(**payload)
     except Exception as exc:  # noqa: BLE001
         return _rejected(candidate_id, f"eval: malformed result ({type(exc).__name__})")
+
+
+def _mm_worker(code: str, df, config: FitnessConfig, candidate_id: str,
+               cpu_s: int, q: "mp.Queue") -> None:
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_CPU, (cpu_s, cpu_s))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from slate_core.discovery.evolution.signal_sandbox import compile_function
+        from slate_core.dex.evolution.dex_fitness import evaluate_dex_mm_fitness
+        fn = compile_function(code, "quote_fn")
+        result = evaluate_dex_mm_fitness(fn, df, config=config, candidate_id=candidate_id)
+        q.put(("ok", dataclasses.asdict(result)))
+    except Exception as exc:  # noqa: BLE001
+        q.put(("error", f"{type(exc).__name__}: {str(exc)[:160]}"))
+
+
+def dex_mm_eval_fitness_subprocess(code: str, df, config: Optional[FitnessConfig] = None,
+                                   candidate_id: str = "", timeout_s: float = 60.0,
+                                   cpu_s: int = 20) -> FitnessResult:
+    """Subprocess-isolated MM (quote_fn) fitness eval. Mirrors the directional one
+    but compiles a quote_fn and evaluates the market-maker archetype."""
+    cfg = config or FitnessConfig()
+    ctx = mp.get_context("spawn")
+    q: "mp.Queue" = ctx.Queue()
+    proc = ctx.Process(target=_mm_worker, args=(code, df, cfg, candidate_id, cpu_s, q))
+    proc.start()
+    proc.join(timeout_s)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(5)
+        if proc.is_alive() and hasattr(proc, "kill"):
+            proc.kill()
+            proc.join(2)
+        return _rejected(candidate_id, f"eval timeout (>{timeout_s:.0f}s / >{cpu_s}s CPU)")
+    try:
+        status, payload = q.get(timeout=5)
+    except Exception:  # noqa: BLE001
+        return _rejected(candidate_id, "eval: no result (child crashed)")
+    if status == "error":
+        return _rejected(candidate_id, f"eval error: {payload}")
+    try:
+        return FitnessResult(**payload)
+    except Exception as exc:  # noqa: BLE001
+        return _rejected(candidate_id, f"eval: malformed result ({type(exc).__name__})")

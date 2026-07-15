@@ -11,7 +11,10 @@ so the funnel (verdict_log) and chokepoint (ProgramDatabase) work unchanged.
 """
 from __future__ import annotations
 
+import math
 from typing import Callable, Optional
+
+import numpy as np
 
 from slate_core.discovery.evolution.fitness_evaluator import (
     FitnessConfig, FitnessResult, check_signal_correctness,
@@ -19,7 +22,9 @@ from slate_core.discovery.evolution.fitness_evaluator import (
 )
 from slate_core.discovery.perpetual_futures_backtest import add_signal_indicators
 from slate_core.dex.backtester.dex_backtester import DexBacktester, DexBacktestConfig
+from slate_core.dex.strategies.action import BarState
 from slate_core.dex.strategies.directional import DirectionalStrategy
+from slate_core.dex.strategies.market_maker import MarketMakerStrategy, _parse_quote
 
 SignalFn = Callable[..., int]
 
@@ -106,6 +111,112 @@ def evaluate_dex_fitness(signal_fn: SignalFn, df, config: Optional[FitnessConfig
         base.rejection_reason = "; ".join(reasons)
         return base
 
+    base.evaluated = True
+    base.fitness_score = candidate_fitness
+    return base
+
+
+# ---------------------------------------------------------------------------
+# Market-maker fitness: evolve the QUOTING logic (quote_fn), not a directional
+# signal. Same two-window + overfit + activity + min_fitness discipline.
+# ---------------------------------------------------------------------------
+
+def _df_vol_regime(df) -> str:
+    rets = np.diff(np.log(df["close"].astype(float).values))
+    rv = float(np.std(rets)) if len(rets) > 2 else 0.0
+    if rv < 0.01:
+        return "low_vol"
+    if rv < 0.02:
+        return "med_vol"
+    return "high_vol"
+
+
+def check_quote_correctness(quote_fn, df, probe_window: int = 30):
+    """Probe quote_fn over a short window; reject if it crashes or returns
+    non-finite / out-of-range quote params."""
+    start = min(probe_window, max(0, len(df) - 1))
+    for i in range(20, start):
+        row = df.iloc[i]
+        state = BarState(i=i, open=float(row["open"]), high=float(row["high"]),
+                         low=float(row["low"]), close=float(row["close"]),
+                         history=df.iloc[: i + 1])
+        try:
+            params = quote_fn(state)
+        except Exception as exc:  # noqa: BLE001
+            return False, f"exception at bar {i}: {exc}"
+        if params is None:
+            continue
+        half, skew, size = _parse_quote(params)
+        if not (math.isfinite(half) and math.isfinite(skew) and math.isfinite(size)):
+            return False, f"non-finite quote at bar {i}"
+        if not (1.0 <= half <= 1000.0 and 0.0 <= size <= 1e6):
+            return False, f"out-of-range quote at bar {i}: half={half}, size={size}"
+    return True, ""
+
+
+def evaluate_dex_mm_fitness(quote_fn, df, config: Optional[FitnessConfig] = None,
+                            candidate_id: str = "") -> FitnessResult:
+    cfg = config or FitnessConfig()
+    base = FitnessResult(
+        evaluated=False, fitness_score=float("-inf"),
+        oos_vs_buyhold=0.0, is_vs_buyhold=0.0, overfit_gap=0.0,
+        overfit_penalty=0.0, n_trades_is=0, n_trades_oos=0,
+        validation_score=1.0, candidate_id=candidate_id,
+        family_label="market_maker", regime_label="",
+    )
+    df = add_signal_indicators(df.copy())
+    ok, reason = check_quote_correctness(quote_fn, df, probe_window=cfg.probe_window)
+    if not ok:
+        base.rejection_reason = f"correctness: {reason}"
+        return base
+    base.regime_label = _df_vol_regime(df)
+
+    n = len(df)
+    if n < 60:
+        base.rejection_reason = "too_few_bars"
+        return base
+    cut1, cut2 = int(n * 0.5), int(n * 0.8)
+    is_df, oos1, oos2 = df.iloc[:cut1], df.iloc[cut1:cut2], df.iloc[cut2:]
+    bt = DexBacktester(DexBacktestConfig(warmup=min(cfg.probe_window, 20),
+                                         funding_interval_bars=0))
+    strat = MarketMakerStrategy(quote_fn=quote_fn)
+    is_r = bt.backtest(strat, is_df)
+    o1 = bt.backtest(strat, oos1)
+    o2 = bt.backtest(strat, oos2)
+
+    is_edge = is_r.total_pnl - _buyhold_pnl(is_df)
+    o1_edge = o1.total_pnl - _buyhold_pnl(oos1)
+    o2_edge = o2.total_pnl - _buyhold_pnl(oos2)
+    base.is_vs_buyhold = is_edge
+    base.oos_vs_buyhold = min(o1_edge, o2_edge)
+    base.n_trades_is = is_r.total_trades
+    base.n_trades_oos = min(o1.total_trades, o2.total_trades)
+    base.oos_activity = (o1.bars_in_market / max(1, o1.n_bars)
+                         + o2.bars_in_market / max(1, o2.n_bars)) / 2.0
+    avg_oos = (o1_edge + o2_edge) / 2.0
+    base.overfit_gap = max(0.0, is_edge - avg_oos)
+    base.overfit_penalty = base.overfit_gap * cfg.overfit_penalty_weight
+    exposure = (max(0.0, min(1.0, base.oos_activity / cfg.activity_floor))
+                if cfg.activity_floor > 0 else 1.0)
+    base.exposure_factor = exposure
+    candidate_fitness = base.oos_vs_buyhold * exposure - base.overfit_penalty
+    base.metrics_is = is_r.to_dict()
+    base.metrics_oos = {"oos1": o1.to_dict(), "oos2": o2.to_dict()}
+
+    reasons = []
+    if cfg.require_absolute_oos_profit and o1.total_pnl <= 0:
+        reasons.append(f"oos1_total_profit={o1.total_pnl:.2f}<=0")
+    if cfg.require_absolute_oos_profit and o2.total_pnl <= 0:
+        reasons.append(f"oos2_total_profit={o2.total_pnl:.2f}<=0")
+    if o1.total_trades < cfg.min_trades:
+        reasons.append(f"oos1_trades={o1.total_trades}<{cfg.min_trades}")
+    if o2.total_trades < cfg.min_trades:
+        reasons.append(f"oos2_trades={o2.total_trades}<{cfg.min_trades}")
+    if candidate_fitness < cfg.min_fitness:
+        reasons.append(f"fitness={candidate_fitness:.1f}<{cfg.min_fitness}")
+    if reasons:
+        base.rejection_reason = "; ".join(reasons)
+        return base
     base.evaluated = True
     base.fitness_score = candidate_fitness
     return base

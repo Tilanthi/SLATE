@@ -126,7 +126,7 @@ DEX_AVAILABLE = False
 DEX_SERVICE = None
 try:
     from slate_core.dex.evolution.dex_service import DexEvolutionService
-    DEX_SERVICE = DexEvolutionService()
+    DEX_SERVICE = DexEvolutionService(target=os.getenv("SLATE_DEX_TARGET", "directional"))
     DEX_AVAILABLE = True
     logger.info("🔁 DEX evolution service available (Hyperliquid)")
 except Exception as e:

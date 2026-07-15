@@ -18,7 +18,7 @@ from slate_core.discovery.evolution.llm_pool import LLMPool, LLMPoolConfig
 from slate_core.discovery.evolution.program_database import ProgramDBConfig, ProgramDatabase
 from slate_core.dex.data.load_data import REAL_DATA_DEFAULT, load_candles
 from slate_core.dex.evolution.dex_controller import (
-    DexPromptSampler, run_dex_evolution,
+    DexMMPromptSampler, DexPromptSampler, dex_mm_evolution_step, run_dex_evolution,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,17 +31,20 @@ class DexEvolutionService:
                  persist_path: str = DEX_EVOLUTION_DB_DEFAULT,
                  llm_client: Optional[LLMClient] = None,
                  gate_preset: str = "exploration",
-                 interval_s: float = 60.0, steps_per_cycle: int = 2):
+                 interval_s: float = 60.0, steps_per_cycle: int = 2,
+                 target: str = "directional"):
         self.data_path = data_path
         self.gate_preset = gate_preset
         self.interval_s = interval_s
         self.steps_per_cycle = steps_per_cycle
+        self.target = target                  # "directional" | "market_maker"
         self.fitness_config = (FitnessConfig.exploration() if gate_preset == "exploration"
                                else FitnessConfig.strict())
         self.evolution_config = EvolutionConfig()
         self.db = ProgramDatabase(ProgramDBConfig(persist_path=persist_path))
         self.db.load()
-        self.sampler = DexPromptSampler()
+        self.sampler = (DexMMPromptSampler() if target == "market_maker"
+                        else DexPromptSampler())
         self.llm = llm_client or get_llm_client(LLMConfig())
         self.pool = LLMPool(self.llm, self.llm, LLMPoolConfig())
         self._task: Optional[asyncio.Task] = None
@@ -93,11 +96,20 @@ class DexEvolutionService:
         while self._running:
             try:
                 df = self._load_df()
-                produced = await run_dex_evolution(
-                    self.db, self.sampler, self.pool, df,
-                    n_steps=self.steps_per_cycle,
-                    config=self.evolution_config, fitness_config=self.fitness_config,
-                )
+                if self.target == "market_maker":
+                    produced = []
+                    for _ in range(self.steps_per_cycle):
+                        p = await dex_mm_evolution_step(
+                            self.db, self.sampler, self.pool, df,
+                            config=self.evolution_config, fitness_config=self.fitness_config)
+                        if p is not None:
+                            produced.append(p)
+                else:
+                    produced = await run_dex_evolution(
+                        self.db, self.sampler, self.pool, df,
+                        n_steps=self.steps_per_cycle,
+                        config=self.evolution_config, fitness_config=self.fitness_config,
+                    )
                 self.stats["cycles"] += 1
                 self.stats["produced"] += len(produced)
                 self.stats["rejected"] += max(0, self.steps_per_cycle - len(produced))

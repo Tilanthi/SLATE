@@ -89,3 +89,19 @@ def test_dex_step_compile_failure_logged(monkeypatch):
     prog = asyncio.run(dex_evolution_step(db, DexPromptSampler(), _mock_pool(canned=bad), _df()))
     assert prog is None
     assert len(recorded) == 1 and recorded[0].death_stage == "compile"
+
+
+def test_dex_mm_step_stores_verified_candidate(monkeypatch):
+    """Step 3: the MM evolution step evolves quote_fn, routes through the
+    chokepoint, and logs a verdict."""
+    from slate_core.dex.evolution.dex_controller import dex_mm_evolution_step, DexMMPromptSampler
+    db = ProgramDatabase(ProgramDBConfig(persist_path=None))   # empty -> MM base parent
+    monkeypatch.setattr("slate_core.dex.evolution.dex_controller.dex_mm_eval_fitness_subprocess", _passing)
+    recorded = []
+    monkeypatch.setattr("slate_core.dex.evolution.dex_controller.log_dex_verdict",
+                        lambda v: recorded.append(v))
+    canned = "def quote_fn(state):\n    return (12.0, 3.0, 0.5)\n"
+    prog = asyncio.run(dex_mm_evolution_step(db, DexMMPromptSampler(), _mock_pool(canned=canned), _df()))
+    assert prog is not None
+    assert prog.verification.get("gate") == "dex_mm_passed_two_window"
+    assert len(recorded) == 1 and recorded[0].death_stage == "passed"

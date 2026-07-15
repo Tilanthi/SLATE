@@ -2,7 +2,7 @@
 from slate_core.dex.backtester.economics import (
     HLFeeSchedule, fee_for, min_notional_ok, oracle_ok,
 )
-from slate_core.dex.backtester.fill_model import bar_fill
+from slate_core.dex.backtester.fill_model import bar_fill, bar_fill_l2
 from slate_core.dex.strategies.action import Order
 
 SCH = HLFeeSchedule()
@@ -80,3 +80,29 @@ def test_oracle_rejected_when_price_far():
     o = Order("B", px=200, sz=1)                       # 100% from oracle
     filled, fpx, maker, rej = bar_fill(o, *_bar(), oracle_px=100, schedule=SCH)
     assert not filled and rej == "oracle_rejected"
+
+
+# ---- queue-aware maker fill (L2) ----
+
+def test_bar_fill_l2_blocks_maker_when_queue_exceeds_volume():
+    o = Order("B", px=99.5, sz=1, tif="Limit")         # touched (low 99 <= 99.5)
+    blocked = bar_fill_l2(o, *_bar(), oracle_px=100, schedule=SCH,
+                          queue_ahead=500, bar_volume=10)
+    assert not blocked[0] and blocked[3] is None        # queued behind, no reject
+    fills = bar_fill_l2(o, *_bar(), oracle_px=100, schedule=SCH,
+                        queue_ahead=1, bar_volume=10)
+    assert fills[0] and fills[2]                        # small queue -> maker fill
+
+
+def test_bar_fill_l2_taker_unaffected_by_queue():
+    o = Order("B", px=100.5, sz=1)                     # crosses open -> taker
+    r = bar_fill_l2(o, *_bar(), oracle_px=100, schedule=SCH,
+                    queue_ahead=999, bar_volume=1)
+    assert r[0] and not r[2]                            # taker fills regardless of queue
+
+
+def test_bar_fill_l2_none_queue_falls_back_to_proxy():
+    o = Order("B", px=99.5, sz=1)
+    r = bar_fill_l2(o, *_bar(), oracle_px=100, schedule=SCH,
+                    queue_ahead=None, bar_volume=None)
+    assert r[0] and r[2]                                # proxy: touched = filled
