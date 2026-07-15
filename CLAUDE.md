@@ -218,6 +218,32 @@ Google DeepMind's AlphaEvolve (2025).
   disable with `SLATE_EVOLUTION_AUTOSTART=0`).
 - **Plan:** `docs/superpowers/plans/2026-07-11-alphaevolve-evolution.md` (all 6 phases).
 
+## 🔁 DEX Discovery Layer (Hyperliquid)
+
+A separate discovery pipeline for Hyperliquid (DEX), built to exploit what CEX
+can't: **maker rebates** (zero gas; maker 0.015% < taker 0.045%, negative-maker
+rebates at high maker-fraction) and **sub-daily timescales**. CEX code is
+untouched; the DEX layer lives in `slate_core/dex/` with its own DB
+(`slate_core/dex_evolution.db`) and verdict log (`slate_core/dex_verdicts.jsonl`).
+
+- **Reuse:** the venue-agnostic crown jewel is shared — write chokepoint
+  (`append_verified`), funnel (`verdict_log`), AST sandbox + complexity cap,
+  `FitnessResult`/two-window/overfit/activity gates, `ProgramDatabase`, `LLMPool`.
+  The DEX evolved unit is a CEX-form `signal_fn(df,i,params)->{-1,0,1}`, so the
+  sandbox/SEARCH-REPLACE machinery is reused verbatim.
+- **DEX-specific:** `dex/data/` (first-party HL candles + funding, 5,000-candle
+  accumulating store), `dex/backtester/` (bar-level: maker/taker fee split +
+  rebates, oracle rejection, min-notional, leverage cap, funding), and a richer
+  `act(state)->list[Order]` action model with **Directional** (maker-routed) and
+  **MarketMaker** (two-sided quoting + inventory skew + rebate) archetypes.
+- **Honest v1 limits:** bar-level maker fills approximate queue/adverse-selection
+  (true MM realism needs L2 data, deferred); funding uses a constant rate.
+  Backtester is **lookahead-safe** (decide at bar i, fill at i+1). Paper/discovery
+  only — never places live HL orders.
+- **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
+  `SLATE_PIPELINE=dex` (default `cex`; CEX and DEX are mutually exclusive at
+  autostart). Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
+
 ---
 
 ## 🛡️ Safety & Constraints

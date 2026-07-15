@@ -55,6 +55,7 @@ logs/
 
 # Funnel verdict log (runtime diagnostic, ASTRA §7.2 — accumulates across runs)
 slate_core/evolution_verdicts.jsonl
+slate_core/dex_verdicts.jsonl
 
 # Environment variables
 .env

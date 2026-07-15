@@ -120,6 +120,18 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Evolution service not available: {e}")
 
+# DEX evolution service (Hyperliquid). Separate from CEX. Selected at startup by
+# SLATE_PIPELINE=dex (default cex); the /api/dex/* endpoints are always available.
+DEX_AVAILABLE = False
+DEX_SERVICE = None
+try:
+    from slate_core.dex.evolution.dex_service import DexEvolutionService
+    DEX_SERVICE = DexEvolutionService()
+    DEX_AVAILABLE = True
+    logger.info("🔁 DEX evolution service available (Hyperliquid)")
+except Exception as e:
+    logger.warning(f"⚠️ DEX evolution service not available: {e}")
+
 # ============================================================================
 # API Routes - Health & Status
 # ============================================================================
@@ -326,6 +338,36 @@ async def evolution_seed(limit: int = 200):
 
 
 # ============================================================================
+# DEX (Hyperliquid) evolution — separate pipeline
+# ============================================================================
+
+@app.get("/api/dex/status")
+async def dex_status():
+    """Status of the DEX (Hyperliquid) evolution loop."""
+    if not DEX_AVAILABLE:
+        return {"status": "unavailable", "message": "DEX service not initialized"}
+    return {"status": "available", **DEX_SERVICE.status()}
+
+
+@app.post("/api/dex/start")
+async def dex_start():
+    """Start the DEX evolution loop in the background."""
+    if not DEX_AVAILABLE:
+        raise HTTPException(status_code=503, detail="DEX service not available")
+    started = await DEX_SERVICE.start()
+    return {"started": started, "status": DEX_SERVICE.status()}
+
+
+@app.post("/api/dex/stop")
+async def dex_stop():
+    """Stop the DEX evolution loop."""
+    if not DEX_AVAILABLE:
+        raise HTTPException(status_code=503, detail="DEX service not available")
+    await DEX_SERVICE.stop()
+    return {"stopped": True, "status": DEX_SERVICE.status()}
+
+
+# ============================================================================
 # Startup Event - World-Class Discovery Only
 # ============================================================================
 
@@ -383,17 +425,25 @@ async def startup_event():
     logger.info("✅ Closed-Loop AI System Initialized with auto-restart protection")
 
     # Start the evolution loop alongside closed-loop discovery (env-gated).
-    # SLATE_EVOLUTION_AUTOSTART=0 disables it. Uses 'exploration' gates by default.
+    # SLATE_PIPELINE selects CEX (default) vs DEX (Hyperliquid) evolution.
+    # SLATE_EVOLUTION_AUTOSTART=0 disables the CEX autostart. Exploration gates.
     import os as _os
-    if _os.getenv("SLATE_EVOLUTION_AUTOSTART", "1") == "1" and EVOLUTION_AVAILABLE:
+    pipeline = _os.getenv("SLATE_PIPELINE", "cex").lower()       # "cex" (default) | "dex"
+    if pipeline != "dex" and _os.getenv("SLATE_EVOLUTION_AUTOSTART", "1") == "1" and EVOLUTION_AVAILABLE:
         try:
             EVOLUTION_SERVICE.seed(limit=200)
             await EVOLUTION_SERVICE.start()
-            logger.info("🧬 Evolution loop started alongside closed-loop discovery "
-                        "(preset=%s, llm=%s)", EVOLUTION_SERVICE.gate_preset,
-                        EVOLUTION_SERVICE.llm.name)
+            logger.info("🧬 CEX Evolution loop started (preset=%s, llm=%s)",
+                        EVOLUTION_SERVICE.gate_preset, EVOLUTION_SERVICE.llm.name)
         except Exception as e:
-            logger.warning(f"⚠️ Evolution autostart failed: {e}")
+            logger.warning(f"⚠️ CEX evolution autostart failed: {e}")
+    if pipeline == "dex" and DEX_AVAILABLE:
+        try:
+            await DEX_SERVICE.start()
+            logger.info("🔁 DEX Evolution loop started (venue=hyperliquid, preset=%s, llm=%s)",
+                        DEX_SERVICE.gate_preset, DEX_SERVICE.llm.name)
+        except Exception as e:
+            logger.warning(f"⚠️ DEX evolution autostart failed: {e}")
 
 
 async def start_continuous_discovery():

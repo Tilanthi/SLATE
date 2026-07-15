@@ -1,0 +1,55 @@
+"""Loader + accumulating store for Hyperliquid candle data.
+
+Because the first-party candle API only exposes the most recent 5,000 candles,
+the store is *accumulating*: `refresh_store` polls candles since the last stored
+open time and appends, so history grows over time across runs. No synthetic data.
+"""
+from __future__ import annotations
+
+import json
+import os
+from typing import Optional
+
+import pandas as pd
+
+from slate_core.dex.data.hyperliquid_client import HLClient
+
+REAL_DATA_DEFAULT = "sol_data_cache/HYPERLIQUID_SOL_1h.json"
+# HL candles: t=openTime(ms), T=closeTime(ms), o/h/l/c/v, n, i, s
+_CAN_KEYS = ["t", "T", "o", "h", "l", "c", "v", "n", "i", "s"]
+
+
+def load_candles(path: str = REAL_DATA_DEFAULT) -> pd.DataFrame:
+    """Load the JSON-array candle store into an OHLCV frame on a DatetimeIndex."""
+    df = pd.read_json(path)
+    df = df.rename(columns={"o": "open", "h": "high", "l": "low",
+                            "c": "close", "v": "volume"})
+    df["timestamp"] = pd.to_datetime(df["t"], unit="ms")
+    df = df[["timestamp", "open", "high", "low", "close", "volume"]] \
+        .set_index("timestamp").sort_index()
+    for col in ("open", "high", "low", "close", "volume"):
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df.dropna(subset=["close"])
+
+
+def refresh_store(path: str = REAL_DATA_DEFAULT, coin: str = "SOL",
+                  interval: str = "1h", client: Optional[HLClient] = None) -> int:
+    """Fetch candles newer than the last stored open time and append (dedup by t).
+    Returns the number of new candles appended."""
+    client = client or HLClient()
+    existing = []
+    if os.path.exists(path):
+        with open(path) as f:
+            existing = json.load(f)
+    last_t = max((c["t"] for c in existing), default=None)
+    start = (last_t + 1) if last_t is not None else None
+    new = client.candles(coin, interval, start_ms=start)
+    have = {c["t"] for c in existing}
+    fresh = [c for c in new if c["t"] not in have]
+    if not fresh:
+        return 0
+    merged = existing + fresh
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(merged, f)
+    return len(fresh)
