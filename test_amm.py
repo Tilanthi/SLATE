@@ -94,3 +94,88 @@ def test_apy_computed():
     r = LPBacktester(LPBacktestConfig(capital=10000)).backtest(always_enter, df)
     assert isinstance(r.apy, float)
     assert -1.0 < r.apy < 10.0  # sanity: APY between -100% and +1000%
+
+
+# ---- lp_fitness ----
+
+def test_lp_seeds_compile():
+    from slate_core.amm.lp_seeds import LP_SEED_ARCHETYPES
+    from slate_core.discovery.evolution.signal_sandbox import compile_function
+    for _fam, code in LP_SEED_ARCHETYPES:
+        compile_function(code, "lp_fn")
+
+
+def test_lp_fitness_runs_and_labels():
+    from slate_core.amm.lp_fitness import evaluate_lp_fitness
+    from slate_core.discovery.evolution.fitness_evaluator import FitnessResult
+    df = _flat_df(n=300)
+    always_enter = lambda bar: {"action": "ENTER", "range_bps": 20}
+    res = evaluate_lp_fitness(always_enter, df, candidate_id="lp1")
+    assert isinstance(res, FitnessResult)
+    assert res.family_label == "lp"
+
+
+def test_lp_fitness_rejects_hold_only():
+    from slate_core.amm.lp_fitness import evaluate_lp_fitness
+    df = _flat_df(n=300)
+    hold = lambda bar: {"action": "HOLD"}
+    res = evaluate_lp_fitness(hold, df, candidate_id="hold")
+    assert res.evaluated is False  # never enters → 0 rebalances → rejected
+
+
+def test_lp_fitness_tight_range_profitable_on_flat():
+    from slate_core.amm.lp_fitness import evaluate_lp_fitness
+    from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
+    df = _flat_df(n=300)
+    tight = lambda bar: {"action": "ENTER", "range_bps": 10}
+    # LP strategies legitimately have few rebalances (enter once, stay in)
+    cfg = FitnessConfig(min_trades=1)
+    res = evaluate_lp_fitness(tight, df, candidate_id="tight", config=cfg)
+    # On flat stablecoin data, tight LP should be profitable (fees > IL)
+    assert res.evaluated is True
+
+
+def test_lp_pick_seed_parent_rotates():
+    import random as _r
+    from slate_core.amm.lp_seeds import lp_pick_seed_parent
+    from slate_core.discovery.evolution.controller import EvolutionConfig
+    rng = _r.Random(0)
+    seen = {lp_pick_seed_parent(EvolutionConfig(), rng=rng).candidate_id for _ in range(30)}
+    assert len(seen) >= 2
+    assert all(cid.startswith("seed:lp:") for cid in seen)
+
+
+# ---- lp_controller ----
+
+def test_lp_step_stores_verified_candidate(monkeypatch):
+    import asyncio
+    from slate_core.discovery.evolution.program_database import Program, ProgramDatabase, ProgramDBConfig
+    from slate_core.discovery.evolution.llm_client import MockLLMClient, LLMConfig
+    from slate_core.discovery.evolution.llm_pool import LLMPool, LLMPoolConfig
+    from slate_core.discovery.evolution.fitness_evaluator import FitnessResult
+    from slate_core.amm.lp_controller import lp_evolution_step, LPPromptSampler
+
+    def _passing(*a, **kw):
+        return FitnessResult(evaluated=True, fitness_score=500.0,
+                             oos_vs_buyhold=500.0, is_vs_buyhold=600.0,
+                             overfit_gap=100.0, overfit_penalty=20.0,
+                             n_trades_is=2, n_trades_oos=2, validation_score=1.0,
+                             candidate_id="t", family_label="lp", regime_label="stablecoin")
+    db = ProgramDatabase(ProgramDBConfig(persist_path=None))
+    recorded = []
+    monkeypatch.setattr("slate_core.amm.lp_controller.lp_eval_fitness_subprocess", _passing)
+    monkeypatch.setattr("slate_core.amm.lp_controller.log_lp_verdict",
+                        lambda v: recorded.append(v))
+    canned = "def lp_fn(bar):\n    return {'action': 'ENTER', 'range_bps': 20}\n"
+
+    def _mock_pool(canned=None):
+        s = MockLLMClient(LLMConfig(), canned=canned) if canned else MockLLMClient(LLMConfig())
+        f = MockLLMClient(LLMConfig(), canned=canned) if canned else MockLLMClient(LLMConfig())
+        return LLMPool(s, f, LLMPoolConfig(), rng=__import__('random').Random(0))
+
+    df = _flat_df(n=60)
+    prog = asyncio.run(lp_evolution_step(
+        db, LPPromptSampler(), _mock_pool(canned=canned), df))
+    assert prog is not None
+    assert prog.verification.get("gate") == "lp_passed_two_window"
+    assert len(recorded) == 1 and recorded[0].death_stage == "passed"

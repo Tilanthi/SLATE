@@ -138,6 +138,17 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ DEX evolution service not available: {e}")
 
+# AMM LP evolution service (Uniswap V3 LP). Selected via SLATE_PIPELINE=amm.
+AMM_AVAILABLE = False
+AMM_SERVICE = None
+try:
+    from slate_core.amm.lp_service import LPEvolutionService
+    AMM_SERVICE = LPEvolutionService()
+    AMM_AVAILABLE = True
+    logger.info("🏦 AMM LP evolution service available (Uniswap V3 stablecoin LP)")
+except Exception as e:
+    logger.warning(f"⚠️ AMM LP evolution service not available: {e}")
+
 # ============================================================================
 # API Routes - Health & Status
 # ============================================================================
@@ -373,6 +384,28 @@ async def dex_stop():
     return {"stopped": True, "status": DEX_SERVICE.status()}
 
 
+@app.get("/api/amm/status")
+async def amm_status():
+    """Status of the AMM LP evolution loop."""
+    if not AMM_AVAILABLE:
+        return {"status": "unavailable", "message": "AMM service not initialized"}
+    return {"status": "available", **AMM_SERVICE.status()}
+
+@app.post("/api/amm/start")
+async def amm_start():
+    if not AMM_AVAILABLE:
+        raise HTTPException(status_code=503, detail="AMM service not available")
+    started = await AMM_SERVICE.start()
+    return {"started": started, "status": AMM_SERVICE.status()}
+
+@app.post("/api/amm/stop")
+async def amm_stop():
+    if not AMM_AVAILABLE:
+        raise HTTPException(status_code=503, detail="AMM service not available")
+    await AMM_SERVICE.stop()
+    return {"stopped": True, "status": AMM_SERVICE.status()}
+
+
 # ============================================================================
 # Startup Event - World-Class Discovery Only
 # ============================================================================
@@ -434,8 +467,8 @@ async def startup_event():
     # SLATE_PIPELINE selects CEX (default) vs DEX (Hyperliquid) evolution.
     # SLATE_EVOLUTION_AUTOSTART=0 disables the CEX autostart. Exploration gates.
     import os as _os
-    pipeline = _os.getenv("SLATE_PIPELINE", "cex").lower()       # "cex" (default) | "dex"
-    if pipeline != "dex" and _os.getenv("SLATE_EVOLUTION_AUTOSTART", "1") == "1" and EVOLUTION_AVAILABLE:
+    pipeline = _os.getenv("SLATE_PIPELINE", "cex").lower()       # "cex"|"dex"|"amm"
+    if pipeline not in ("dex", "amm") and _os.getenv("SLATE_EVOLUTION_AUTOSTART", "1") == "1" and EVOLUTION_AVAILABLE:
         try:
             EVOLUTION_SERVICE.seed(limit=200)
             await EVOLUTION_SERVICE.start()
@@ -443,6 +476,13 @@ async def startup_event():
                         EVOLUTION_SERVICE.gate_preset, EVOLUTION_SERVICE.llm.name)
         except Exception as e:
             logger.warning(f"⚠️ CEX evolution autostart failed: {e}")
+    if pipeline == "amm" and AMM_AVAILABLE:
+        try:
+            await AMM_SERVICE.start()
+            logger.info("🏦 AMM LP Evolution loop started (pair=%s, llm=%s)",
+                        AMM_SERVICE.pair, AMM_SERVICE.llm.name)
+        except Exception as e:
+            logger.warning(f"⚠️ AMM LP evolution autostart failed: {e}")
     if pipeline == "dex" and DEX_AVAILABLE:
         try:
             await DEX_SERVICE.start()

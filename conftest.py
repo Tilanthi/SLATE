@@ -41,6 +41,18 @@ def _redirect_verdict_log(tmp_path):
         _EVALUATED_HASHES.clear()
     except Exception:
         pass
+    # Redirect the DEX + AMM verdict loggers (separate module-level instances).
+    try:
+        import slate_core.dex.evolution.dex_controller as _dex_ctrl
+        _dex_ctrl._dex_logger = VerdictLogger(str(tmp_path / "test_dex_verdicts.jsonl"))
+    except Exception:
+        pass
+    try:
+        import slate_core.amm.lp_controller as _lp_ctrl
+        _lp_ctrl._lp_logger = VerdictLogger(str(tmp_path / "test_lp_verdicts.jsonl"))
+        _lp_ctrl._LP_EVALUATED_HASHES.clear()
+    except Exception:
+        pass
     # Redirect the DEX verdict logger (separate module-level instance, NOT the
     # CEX singleton — without this, DEX controller tests leak mock verdicts into
     # the production dex_verdicts.jsonl).
