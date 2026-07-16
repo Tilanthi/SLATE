@@ -145,6 +145,52 @@ def test_lp_pick_seed_parent_rotates():
     assert all(cid.startswith("seed:lp:") for cid in seen)
 
 
+# ---- delta-neutral LP + perp hedge ----
+
+def _eth_like_df(n=365, start=2000.0):
+    """ETH-like price: moderate volatility (~3%/day)."""
+    idx = pd.date_range("2026-01-01", periods=n, freq="1D")
+    rng = np.random.RandomState(42)
+    close = start * np.cumprod(1 + rng.normal(0, 0.03, n))
+    return pd.DataFrame({"open": close, "high": close * 1.02, "low": close * 0.98,
+                         "close": close, "volume": [5e8] * n}, index=idx)
+
+
+def test_delta_neutral_runs_and_earns_fees():
+    from slate_core.amm.delta_neutral import backtest_delta_neutral, DeltaNeutralConfig
+    df = _eth_like_df()
+    r = backtest_delta_neutral(df, DeltaNeutralConfig(capital=10000, range_bps=200))
+    assert r.lp_fees > 0           # earned swap fees
+    assert r.perp_price_pnl != 0   # hedge produced price PnL
+    assert isinstance(r.apy, float)
+
+
+def test_delta_neutral_il_offset_by_short():
+    """The perp short should provide price PnL that partially offsets the LP IL."""
+    from slate_core.amm.delta_neutral import backtest_delta_neutral, DeltaNeutralConfig
+    df = _eth_like_df(n=120)
+    r = backtest_delta_neutral(df, DeltaNeutralConfig(capital=10000, range_bps=200))
+    # The short produces price PnL (positive or negative) that interacts with IL
+    assert r.perp_price_pnl != 0.0
+    assert r.lp_il < 0  # IL is a loss
+    # Net of the two should be less extreme than IL alone (hedge helps)
+    net = r.lp_il + r.perp_price_pnl
+    assert net > r.lp_il  # hedge improved the outcome
+
+
+def test_delta_neutral_flat_price_pure_yield():
+    """On a flat price (no IL), delta-neutral = LP fees - funding - gas."""
+    from slate_core.amm.delta_neutral import backtest_delta_neutral, DeltaNeutralConfig
+    idx = pd.date_range("2026-01-01", periods=120, freq="1D")
+    close = np.array([2000.0] * 120)  # perfectly flat
+    df = pd.DataFrame({"open": close, "high": close, "low": close,
+                       "close": close, "volume": [5e8] * 120}, index=idx)
+    r = backtest_delta_neutral(df, DeltaNeutralConfig(capital=10000, perp_funding_8h=0.0))
+    assert abs(r.lp_il) < 1.0           # ~zero IL on flat price
+    assert abs(r.perp_price_pnl) < 1.0   # ~zero perp PnL on flat price
+    assert r.lp_fees > 0                 # still earned fees
+
+
 # ---- lp_controller ----
 
 def test_lp_step_stores_verified_candidate(monkeypatch):
