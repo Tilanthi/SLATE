@@ -6,12 +6,20 @@ splits are measured on hundreds of bars, not ~35 (the overfit-from-tiny-sample
 problem). The loader still resamples to daily if handed an intraday file (e.g.
 the legacy hourly 6-month cache), preserving the documented daily-timeframe edge.
 The closed-loop discovery loads its own data separately.
+
+Binance funding history is merged into the daily candles as a `funding` column
+(forward-filled from 8h events) — enabling funding-reversal / funding-carry
+archetypes.
 """
 from __future__ import annotations
+
+import json
+import os
 
 import pandas as pd
 
 REAL_DATA_DEFAULT = "sol_data_cache/SOLUSDT_perpetual_1d_36m.csv"
+FUNDING_DATA_DEFAULT = "sol_data_cache/BINANCE_SOL_FUNDING.json"
 
 
 def load_ohlcv(path: str = REAL_DATA_DEFAULT) -> pd.DataFrame:
@@ -41,9 +49,33 @@ def resample_to_daily(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def merge_funding(df: pd.DataFrame,
+                  funding_path: str = FUNDING_DATA_DEFAULT) -> pd.DataFrame:
+    """Merge Binance funding history into the candle df as a forward-filled
+    `funding` column. Reads BINANCE_SOL_FUNDING.json ({fundingTime (ms),
+    fundingRate (str)}). Pre-funding bars get 0.0. Returns df unchanged if the
+    file is absent or malformed."""
+    if not os.path.exists(funding_path):
+        return df
+    try:
+        records = json.load(open(funding_path))
+        fr = pd.DataFrame(records)
+        fr["time"] = pd.to_datetime(fr["fundingTime"], unit="ms")
+        fr["rate"] = fr["fundingRate"].astype(float)
+        fr = fr.set_index("time").sort_index()
+        fr = fr[~fr.index.duplicated(keep="last")]
+        funded = df.copy()
+        funded["funding"] = fr["rate"].reindex(funded.index, method="ffill").fillna(0.0)
+        return funded
+    except Exception:
+        return df
+
+
 def load_daily_data(path: str = REAL_DATA_DEFAULT) -> pd.DataFrame:
-    """Load OHLCV and resample to daily if the source is intraday."""
+    """Load OHLCV and resample to daily if the source is intraday, then merge
+    Binance funding history as a `funding` column."""
     df = load_ohlcv(path)
     if is_intraday(df):
-        return resample_to_daily(df)
+        df = resample_to_daily(df)
+    df = merge_funding(df)
     return df

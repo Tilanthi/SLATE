@@ -68,6 +68,36 @@ SEED_ARCHETYPES = [
      "        return -1\n"
      "    return 0\n"
      "# EVOLVE-BLOCK-END\n"),
+    ("funding_reversal",
+     "# EVOLVE-BLOCK-START\n"
+     "def signal_fn(df, i, params):\n"
+     "    \"\"\"Funding reversal: long on extreme negative funding (short squeeze).\"\"\"\n"
+     "    if 'funding' not in df.columns or i < 30:\n"
+     "        return 0\n"
+     "    fr = df['funding'].iloc[i]\n"
+     "    if fr == 0.0:\n"
+     "        return 0\n"
+     "    hist = df['funding'].iloc[max(0, i - 90):i + 1]\n"
+     "    p1 = np.percentile(hist, 1)\n"
+     "    if fr <= p1:\n"
+     "        return 1\n"
+     "    return 0\n"
+     "# EVOLVE-BLOCK-END\n"),
+    ("funding_carry",
+     "# EVOLVE-BLOCK-START\n"
+     "def signal_fn(df, i, params):\n"
+     "    \"\"\"Funding carry: short when funding above median (longs pay).\"\"\"\n"
+     "    if 'funding' not in df.columns or i < 30:\n"
+     "        return 0\n"
+     "    fr = df['funding'].iloc[i]\n"
+     "    if fr == 0.0:\n"
+     "        return 0\n"
+     "    hist = df['funding'].iloc[max(0, i - 90):i + 1]\n"
+     "    med = np.median(hist)\n"
+     "    if fr > med and fr > 0.00005:\n"
+     "        return -1\n"
+     "    return 0\n"
+     "# EVOLVE-BLOCK-END\n"),
 ]
 
 

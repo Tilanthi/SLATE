@@ -529,8 +529,12 @@ class PerpetualFuturesBacktester:
                 hours_since_funding += hours_per_bar  # Fix 2: actual bar frequency
 
                 if hours_since_funding >= config.funding_rate_interval_hours:
-                    # Calculate funding payment
-                    funding_rate = self.calculate_funding_rate(current_funding_rate)
+                    # Use real funding from df['funding'] if available (F1.2);
+                    # fall back to synthetic generator for backward compatibility.
+                    if "funding" in df.columns and pd.notna(df.iloc[i].get("funding")):
+                        funding_rate = float(df.iloc[i]["funding"])
+                    else:
+                        funding_rate = self.calculate_funding_rate(current_funding_rate)
 
                     # Funding is applied to position value
                     position_value = position["shares"] * current_price
