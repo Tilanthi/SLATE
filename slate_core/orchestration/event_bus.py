@@ -38,7 +38,7 @@ class EventType(Enum):
 
     # Market events
     MARKET_TICK = "market.tick"
-    MARKET_VOLATILITY spike = "market.volatility_spike"
+    MARKET_VOLATILITY_SPIKE = "market.volatility_spike"
     MARKET_REGIME_CHANGE = "market.regime_change"
 
     # System events

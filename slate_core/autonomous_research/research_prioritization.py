@@ -51,7 +51,7 @@ class ResearchOpportunity:
 
     # Priority components
     expected_information_gain: float  # 0-1
-    resource_requirement: float  0-1 (1 = most expensive)
+    resource_requirement: float  # 0-1 (1 = most expensive)
     time_sensitivity: float  # 0-1 (1 = most urgent)
     market_applicability: float  # 0-1 (1 = broadly applicable)
 

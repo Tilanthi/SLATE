@@ -22,6 +22,8 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 # Import existing discovery system
 try:
     from .realistic_backtester import (
@@ -118,8 +120,6 @@ try:
 except ImportError:
     logger.warning("Advanced backtest module not available")
     AdvancedBacktestSimulator = None
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass

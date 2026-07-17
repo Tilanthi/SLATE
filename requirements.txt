@@ -10,3 +10,4 @@ pyarrow==25.0.0
 requests==2.32.5
 httpx==0.28.1
 scikit-learn==1.8.0
+backoff>=2.0.0

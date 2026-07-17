@@ -5,6 +5,12 @@ SLATE Enhanced Discovery Endpoints
 Add these endpoints to slate_core/server.py to enable enhanced discovery.
 """
 
+from fastapi import APIRouter
+
+# These endpoints are designed to be mounted via app.include_router(router)
+# in server.py. The 'app' reference is provided by the importing context.
+app = APIRouter()
+
 from slate_core.server_enhanced import get_enhanced_integration, reset_enhanced_integration
 
 

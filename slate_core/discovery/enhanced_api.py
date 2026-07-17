@@ -8,6 +8,8 @@ API endpoints for the enhanced discovery system with all advanced modules.
 from fastapi import APIRouter, HTTPException, Response
 from typing import List, Dict, Optional
 import logging
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 
 from .enhanced_discovery import (

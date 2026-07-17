@@ -208,7 +208,7 @@ assets or markets and positions to profit from convergence.
             entry='\n'.join([f"• {e}" for e in entry_conditions]),
             exit='\n'.join([f"• {e}" for e in exit_conditions]),
             risk='\n'.join([f"• {r}" for r in risk_management]),
-            return=historical_performance.get('total_return', 0),
+            total_return=historical_performance.get('total_return', 0),
             sharpe=historical_performance.get('sharpe_ratio', 0),
             drawdown=risk_metrics.get('max_drawdown', 0)
         )
