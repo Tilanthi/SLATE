@@ -11,8 +11,16 @@ from __future__ import annotations
 import re
 
 # Anchor a SEARCH/REPLACE block. Tolerant of extra spaces after the keywords.
+# The closing `>>>>>>> REPLACE` terminator is OPTIONAL: live LLMs (notably GLM
+# via the Z.ai proxy) frequently emit the `<<<<<<< SEARCH` + `=======` half but
+# OMIT the terminator. Requiring it made such a block parse as ZERO blocks, so
+# apply_diff returned the raw text — still containing the `<<<<<<<` / `=======`
+# markers — verbatim as a "full rewrite", which then failed to compile. That was
+# the root cause of the AMM layer's ~98% compile-stage attrition. The replacement
+# is now taken up to the next SEARCH block, an explicit terminator, or EOF.
 _BLOCK_RE = re.compile(
-    r"<<<<<<<\s*SEARCH\n(.*?)\n=======\n(.*?)\n>>>>>>>\s*REPLACE",
+    r"<<<<<<<\s*SEARCH\n(.*?)\n=======\n(.*?)"
+    r"(?=\n<<<<<<<\s*SEARCH|\n>>>>>>>\s*REPLACE|\Z)",
     re.DOTALL,
 )
 

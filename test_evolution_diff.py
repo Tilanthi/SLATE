@@ -33,6 +33,64 @@ def test_apply_diff_passthrough_when_no_blocks():
     assert apply_diff("old code here", full) == full
 
 
+# ---------------------------------------------------------------------------
+# Missing-terminator robustness.
+#
+# Live LLMs (notably GLM via the Z.ai proxy) frequently emit a SEARCH/REPLACE
+# block with the opening `<<<<<<< SEARCH` and the `=======` separator but OMIT
+# the closing `>>>>>>> REPLACE` terminator. The strict _BLOCK_RE regex requires
+# all three markers, so such a block was treated as "no blocks found" and the
+# raw text (still containing the `<<<<<<<` / `=======` markers) was returned
+# verbatim as a full rewrite — which then failed to compile. This was the root
+# cause of the AMM layer's ~98% compile-stage attrition. The parser must apply
+# a terminator-less block by taking the replacement as everything after the
+# `=======` separator.
+# ---------------------------------------------------------------------------
+
+def test_apply_diff_handles_missing_replace_terminator():
+    code = "def lp_fn(bar):\n    return {'action': 'HOLD'}\n"
+    # No `>>>>>>> REPLACE` terminator — this is the GLM output we observed.
+    diff = ("<<<<<<< SEARCH\n"
+            "    return {'action': 'HOLD'}\n"
+            "=======\n"
+            "    return {'action': 'ENTER', 'range_bps': 20}\n")
+    out = apply_diff(code, diff)
+    assert "ENTER" in out and "'action': 'HOLD'" not in out
+    # The leftover SEARCH/======= markers must NOT leak into the result.
+    assert "<<<" not in out and "====" not in out and "REPLACE" not in out
+
+
+def test_apply_diff_missing_terminator_produces_compilable_code():
+    code = ("def lp_fn(bar):\n"
+            "    close = float(bar['close'])\n"
+            "    return {'action': 'HOLD'}\n")
+    diff = ("<<<<<<< SEARCH\n"
+            "    return {'action': 'HOLD'}\n"
+            "=======\n"
+            "    if close > 1.0:\n"
+            "        return {'action': 'ENTER', 'range_bps': 20}\n"
+            "    return {'action': 'HOLD'}\n")  # no >>>>>>> REPLACE
+    out = apply_diff(code, diff)
+    # The whole point: the result must be valid Python (no marker text).
+    compile(out, "<test>", "exec")
+
+
+def test_apply_diff_multiple_blocks_last_missing_terminator():
+    code = "a = 1\nb = 2\nc = 3\n"
+    diff = ("<<<<<<< SEARCH\na = 1\n=======\na = 10\n>>>>>>> REPLACE\n"
+            "<<<<<<< SEARCH\nb = 2\n=======\nb = 20\n")  # 2nd block no terminator
+    out = apply_diff(code, diff)
+    assert "a = 10" in out and "b = 20" in out and "c = 3" in out
+    assert "<<<" not in out and "====" not in out
+
+
+def test_apply_diff_missing_terminator_still_raises_when_search_absent():
+    # A terminator-less block whose SEARCH text isn't in the current code must
+    # still surface as a ValueError (not silently pass through as full rewrite).
+    with pytest.raises(ValueError):
+        apply_diff("x = 1", "<<<<<<< SEARCH\ny = 2\n=======\nz = 3\n")
+
+
 def test_base_signal_code_compiles_and_runs():
     fn = compile_signal(BASE_SIGNAL_CODE)
     df = pd.DataFrame({"close": [1.0, 2.0, 1.5, 3.0]})

@@ -270,3 +270,41 @@ blind removal would have cascaded or broken the suite. Confined to dead/legacy a
 guarded by `data/__init__.py`; no runtime impact.
 
 Suite: **273 passed / 0 failed**. Server restarted via `launchctl` per CLAUDE.md.
+
+---
+
+## 🐛 AMM compile-attrition root cause — missing SEARCH/REPLACE terminator (2026-07-17)
+
+The AMM LP evolution layer was rejecting **~98% of candidates at the compile
+stage** (`syntax error: invalid syntax`), wasting nearly all compute before any
+strategy was ever evaluated. Systematic debugging (live instrumentation of the
+`pool.generate → extract_code_block → apply_diff → compile_function` chain)
+found the root cause — and it was **not** a prompt problem.
+
+### Root cause
+GLM (via the Z.ai proxy) consistently emits a SEARCH/REPLACE block with the
+opening `<<<<<<< SEARCH` and the `=======` separator but **omits the closing
+`>>>>>>> REPLACE` terminator** (6/6 captured failing samples; separator correct,
+terminator absent). The strict `_BLOCK_RE` regex required all three markers, so
+such a block parsed as **zero** blocks. `apply_diff` then fell through to its
+verbatim "full-rewrite" branch, returning the raw text — which still contained
+the `<<<<<<<` / `=======` markers — and `compile_function` choked on them. The
+few survivors were rare marker-free full rewrites. The bug lived in the shared
+`evolvable_strategy.apply_diff`, so it affected CEX/DEX/AMM evolution alike.
+
+### Fix
+`_BLOCK_RE` now makes the `>>>>>>> REPLACE` terminator **optional** via a
+lookahead — the replacement extends to the next SEARCH block, an explicit
+terminator, or EOF. One targeted change to the root cause; existing complete-
+block and full-rewrite paths unchanged. TDD: 4 new failing tests in
+`test_evolution_diff.py` (one reproduced the exact live `SyntaxError`), then
+green.
+
+### Verification
+- Suite: **277 passed / 0 failed** (+4 tests).
+- **Live**: compile-stage rate dropped **~99% → 31%** over 16 fresh verdicts.
+  The residual 31% are now genuine LLM code-quality errors (empty `if` blocks,
+  missing colons, unterminated strings), not parser artifacts. The other 69%
+  now reach real IS/OOS evaluation and die legitimately at the activity/
+  profitability gate (`oos1_rebalances=0<5`) — where the funnel *should* kill
+  them, instead of being wasted on syntax.
