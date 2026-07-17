@@ -100,13 +100,11 @@ The infrastructure is sound and well-instrumented; the remaining work is the sci
 
 **CLAUDE.md is now a quick reference. For detailed information, see:**
 
-- **[CLAUDE_TRADING_FULL.md](CLAUDE_TRADING_FULL.md)** - Complete trading rules, research findings, critical constraints
-- **[CLAUDE_PHASE2_INTELLIGENCE.md](CLAUDE_PHASE2_INTELLIGENCE.md)** - Trading Intelligence Layer details (5 core components)
-- **[CLAUDE_ANALYTICS.md](CLAUDE_ANALYTICS.md)** - Performance metrics, analytics capabilities, data analysis findings
-- **[CLAUDE_ARCHITECTURE.md](CLAUDE_ARCHITECTURE.md)** - System architecture, file locations, API endpoints
-- **[CLAUDE_OPERATIONAL_STATUS.md](CLAUDE_OPERATIONAL_STATUS.md)** - Current live operational status and system state
-- **[CLAUDE_COMMANDS.md](CLAUDE_COMMANDS.md)** - Complete command reference for all operations
-- **[CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md)** - Dated change records (correctness fixes, ASTRA hardening, funnel, data lever, complexity cap)
+- **[CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md)** - Dated change records
+- **[CLAUDE_DOCUS.md](CLAUDE_DOCUS.md)** - DEX Discovery Layer (Hyperliquid) detailed reference
+- **[CLAUDE_AMM.md](CLAUDE_AMM.md)** - AMM LP Layer (Uniswap V3 yield) detailed reference
+- **[CLAUDE_TRADING_FULL.md](CLAUDE_TRADING_FULL.md)** - Trading rules, research findings
+- **[CLAUDE_ARCHITECTURE.md](CLAUDE_ARCHITECTURE.md)** - Architecture, file locations, API endpoints
 
 ---
 
@@ -114,53 +112,40 @@ The infrastructure is sound and well-instrumented; the remaining work is the sci
 
 ### **Server Operations**
 ```bash
-# Start SLATE server
-python3 -m slate_core.server
-
-# Check health
-curl http://127.0.0.1:8788/health | jq '.'
-
-# Restart server (MANDATORY after code changes)
-pkill -f "python3 -m slate_core.server" && sleep 2 && python3 -m slate_core.server
+python3 -m slate_core.server              # start
+curl http://127.0.0.1:8788/health | jq   # health
 ```
 
 ### **Discovery Operations**
 ```bash
-# Discovery status
-curl http://127.0.0.1:8788/api/closed-loop/status | jq '.'
-
-# Start discovery cycle
-curl -X POST "http://127.0.0.1:8788/api/closed-loop/discovery/start" | jq '.'
-
-# System performance
-curl http://127.0.0.1:8788/api/closed-loop/performance | jq '.'
+curl http://127.0.0.1:8788/api/closed-loop/status | jq
+curl -X POST "http://127.0.0.1:8788/api/closed-loop/discovery/start" | jq
 ```
 
-### **Evolution Operations** (AlphaEvolve-style loop)
+### **Evolution Operations**
 ```bash
-# Evolution status (running, niches, best fitness, cycle counts)
-curl http://127.0.0.1:8788/api/evolution/status | jq '.'
-
-# Start / stop the background evolution loop
-curl -X POST http://127.0.0.1:8788/api/evolution/start | jq '.'
-curl -X POST http://127.0.0.1:8788/api/evolution/stop  | jq '.'
-
-# Seed the population from existing discoveries
-curl -X POST "http://127.0.0.1:8788/api/evolution/seed?limit=200" | jq '.'
+curl http://127.0.0.1:8788/api/evolution/status | jq
+curl -X POST http://127.0.0.1:8788/api/evolution/start | jq
+curl -X POST http://127.0.0.1:8788/api/evolution/stop  | jq
 ```
-The loop **autostarts** with the server (disable with `SLATE_EVOLUTION_AUTOSTART=0`).
-It uses the `exploration` gate preset and GLM via the Z.ai proxy by default.
+
+### **DEX Operations** (`SLATE_PIPELINE=dex`)
+```bash
+curl http://127.0.0.1:8788/api/dex/status | jq
+curl -X POST http://127.0.0.1:8788/api/dex/start | jq
+```
+
+### **AMM Operations** (`SLATE_PIPELINE=amm`)
+```bash
+curl http://127.0.0.1:8788/api/amm/status | jq
+curl -X POST http://127.0.0.1:8788/api/amm/start | jq
+```
 
 ### **Database Operations**
 ```bash
-# Access database
-sqlite3 slate_core/slate_realistic_discoveries.db
-
-# Count discoveries
 sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetual_discoveries;"
-
-# Check validated strategies
-sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetual_discoveries WHERE passed_validation > 0;"
+sqlite3 slate_core/dex_evolution.db "SELECT COUNT(*) FROM evolution_population;"
+sqlite3 slate_core/amm_evolution.db "SELECT COUNT(*) FROM evolution_population;"
 ```
 
 ---
@@ -193,129 +178,30 @@ git branch --show-current  # Should show: main
 
 ## 🧬 Evolution Layer (AlphaEvolve-style)
 
-A second discovery engine that **evolves executable signal code** via LLM-guided
-evolution, running alongside the hypothesis-driven closed-loop. Adapted from
-Google DeepMind's AlphaEvolve (2025).
+Evolves executable signal code via LLM-guided evolution. Adapted from AlphaEvolve (2025).
+**Endpoints:** `/api/evolution/{status,start,stop,seed}` (autostarts on boot;
+disable `SLATE_EVOLUTION_AUTOSTART=0`). LLM: GLM via Z.ai proxy (no separate key).
 
-- **Why two engines:** the closed-loop searches *parameters* of fixed templates;
-  the evolution layer searches the *signal logic itself* (much larger space), but
-  inside a hard overfit-resistant cage.
-- **Overfitting is the crux.** Unlike AlphaEvolve's ground-truth evaluators,
-  SLATE's backtest is an inductive proxy, so the fitness function is built to
-  resist curve-fitting: correctness gate → IS/OOS split → overfit penalty →
-  absolute-profit gate → **two-window gate** (must profit on two independent OOS
-  windows). Evolved code runs in an AST sandbox (no imports/dunder/network),
-  clamped to `{-1,0,1}`, never touching the safety envelope.
-- **LLM with no Anthropic key:** the user runs GLM via Claude Code, which routes
-  through Z.ai's Anthropic-protocol-compatible proxy (`ANTHROPIC_BASE_URL` /
-  `ANTHROPIC_AUTH_TOKEN`). `evolution/llm_client.py` reuses that proxy via the
-  `anthropic` SDK (model `claude-sonnet-5`), so **no separate key is needed**.
-  A deterministic Mock backend keeps the evolution tests offline (part of the 150-test green suite).
-- **Expected behavior:** most candidates are **rejected** by the gates — that is
-  the point. The loop accumulates the rare programs that are genuinely profitable
-  OOS on two windows.
-- **Endpoints:** `/api/evolution/{status,start,stop,seed}` (autostarts on boot;
-  disable with `SLATE_EVOLUTION_AUTOSTART=0`).
-- **Plan:** `docs/superpowers/plans/2026-07-11-alphaevolve-evolution.md` (all 6 phases).
+- Overfit cage: correctness gate → IS/OOS split → overfit penalty → absolute-profit
+  gate → **two-window gate** → walk-forward (5 folds). AST sandbox (no imports/dunder/network).
+- **Funding archetypes**: `funding_reversal` (long on extreme negative funding — short squeeze)
+  + `funding_carry` (short on high funding). Real Binance funding merged into candles + backtester.
+- **Plan:** `docs/superpowers/plans/2026-07-11-alphaevolve-evolution.md`.
 
 ## 🔁 DEX Discovery Layer (Hyperliquid)
 
-A separate discovery pipeline for Hyperliquid (DEX), built to exploit what CEX
-can't: **maker rebates** (zero gas; maker 0.015% < taker 0.045%, negative-maker
-rebates at high maker-fraction) and **sub-daily timescales**. CEX code is
-untouched; the DEX layer lives in `slate_core/dex/` with its own DB
-(`slate_core/dex_evolution.db`) and verdict log (`slate_core/dex_verdicts.jsonl`).
-
-- **Reuse:** the venue-agnostic crown jewel is shared — write chokepoint
-  (`append_verified`), funnel (`verdict_log`), AST sandbox + complexity cap,
-  `FitnessResult`/two-window/overfit/activity gates, `ProgramDatabase`, `LLMPool`.
-  The DEX evolved unit is a CEX-form `signal_fn(df,i,params)->{-1,0,1}`, so the
-  sandbox/SEARCH-REPLACE machinery is reused verbatim.
-- **DEX-specific:** `dex/data/` (first-party HL candles + funding, 5,000-candle
-  accumulating store), `dex/backtester/` (bar-level: maker/taker fee split +
-  rebates, oracle rejection, min-notional, leverage cap, funding), and a richer
-  `act(state)->list[Order]` action model with **Directional** (Market-executed —
-  Alo/post-only left ~40% of candidates 0-trade on 1h data, a fill confound;
-  maker-rebate capture is the **MarketMaker** archetype's job) and **MarketMaker**
-  (two-sided quoting + inventory skew + rebate) archetypes.
-- **L2/trade feed (definitive MM fills):** `bar_fill_l2` adds a queue gate (a maker
-  fills only if the bar's traded volume consumes the queue ahead of it); the
-  backtester takes an optional `l2_provider` (pluggable seam; `HLClient.l2_book`
-  supplies real-time snapshots). Without a provider it falls back to the bar proxy
-  (indicative). Dense historical L2/trade data needs a third-party feed.
-- **Evolvable MM quoting:** the market-maker's `quote_fn(state)->(half_spread_bps,
-  inv_skew_bps, size)` is sandbox-compiled (`compile_function`, no {-1,0,1} clamp)
-  and evolved via `dex_mm_evolution_step` + `evaluate_dex_mm_fitness` (same crown
-  jewel). The service `target` selects directional (default) vs market_maker.
-- **Honest v1 limits:** funding uses a constant rate; bar-level fills without an
-  L2 provider are indicative. Backtester is **lookahead-safe** (decide at bar i,
-  fill at i+1). Paper/discovery only — never places live HL orders.
-- **Complexity cap:** DEX uses **350** AST nodes (vs CEX 200) — measured DEX
-  signals cluster at 201-350 (p50=277, p90=341), so cap 200 rejected 68% pre-eval
-  and starved the funnel. The overfit gate is the primary defense; the cap is a
-  secondary guardrail that now blocks only the baroque tail (>350). Tunable via
-  `DexEvolutionService(max_signal_complexity=...)`.
-- **Validation (overfit defense):** DEX directional fitness uses **anchored
-  walk-forward** — 5 folds, each training on all data up to a block and testing on
-  the next; a candidate must profit on **all** independent OOS folds (not one
-  split), a far stronger overfit defense. Selectable via
-  `EvolutionConfig.validation` ("walkforward", DEX default | "two_window").
-- **Discovery performance (P1–P5):** (P1) concurrent eval (`concurrency=4`) +
-  hash-dedup. (P2) 5 anomaly seed archetypes (funding-carry, residual-MR, vol-regime,
-  liquidation-aware, imbalance-fade)
-  + real per-bar funding. (P3) **multi-market data** — SOL/BTC/ETH fetched;
-  `load_markets`. (P4) a **pairs/stat-arb backtester** (`PairsBacktester`, $-neutral
-  2-leg spread) + spread-z-score archetype + `evaluate_dex_pairs_fitness` — the
-  market-neutral multi-leg edge class. (P5) failure-feedback injected into the prompt.
-  Pairs is a **runnable evolution target** (`SLATE_DEX_TARGET=pairs`; evolves
-  `spread_fn`), alongside `directional` (default) and `market_maker`.
-- **Slippage model:** taker fills walk the book (default 1bps); maker fills get
-  their exact price. Models the HL incentive: maker avoids slippage. Configurable
-  via `HLFeeSchedule.slippage_bps`.
-- **L2 microstructure infrastructure:** a launchd accumulator (`com.slate.l2accumulator`)
-  captures L2 snapshots (1/sec, 20 levels) + WebSocket trades for SOL/BTC/ETH, building
-  tick-level history continuously. A tick-level backtester (`l2_tick_backtester.py`)
-  replays L2 event-by-event, simulating imbalance-scalping (inspired by analysis of a
-  profitable HL wallet: $1,297/3 days, 67% win rate, 5-7s holds, 99% maker entry).
-  **The real HL edge lives at sub-second timescales with L2 data — not candle bars.**
-  Next: refine the tick model (maker-queue, multi-coin, trend filter), check free
-  historical sources (Dwellir, SonarX), re-run when data is sufficient.
-- **Honest state:** 0 stored discoveries across ALL bar-level experiments (5 strategy
-  classes, 3 timescales, 3 markets). The edge is real (proven) but lives at a finer
-  resolution than candle bars capture. The L2 accumulator + tick backtester are the
-  infrastructure to reach it.
-- **Run it:** `/api/dex/{status,start,stop}` (always available). Autostart via
-  `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=` `directional`
-  (default) | `market_maker` | `pairs` | `cross_market`. Pairs legs configurable via
-  `SLATE_DEX_COIN`/`SLATE_DEX_COIN_B`; data file via `SLATE_DEX_DATA_PATH`.
-  Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
+Separate pipeline exploiting **maker rebates** (zero gas, maker 0.015% < taker 0.045%)
+and **sub-daily timescales**. `slate_core/dex/`, own DB + verdict log. CEX untouched.
+**Endpoints:** `/api/dex/{status,start,stop}`. Autostart: `SLATE_PIPELINE=dex`.
+Targets: `SLATE_DEX_TARGET=` `directional` | `market_maker` | `pairs` | `cross_market`.
+**→ See [CLAUDE_DOCUS.md](CLAUDE_DOCUS.md) for full details.**
 
 ## 🏦 AMM LP Layer (Uniswap V3 Yield)
 
-A third discovery engine for **yield provision** (not speculation): provides concentrated
-liquidity on Uniswap V3 stablecoin pairs, earning swap fees while managing IL. The dex.pdf
-analysis identifies this as a 5–15% APY structural edge. Lives in `slate_core/amm/`.
-
-- **AMM math** (`amm_math.py`): Uniswap V3 formulas (tick↔price, liquidity↔amounts, IL).
-- **LP backtester** (`lp_backtester.py`): simulates LP positions — accrues swap fees
-  (pool_volume × fee_tier × your share), tracks IL, gas, rebalancing. Lookahead-safe.
-  **Backtested result: 10.8% APY on USDC/USDT at ±20bps range, ~$0 IL.**
-- **Delta-neutral** (`delta_neutral.py`): LP + perp short hedge. Removes IL in ranging
-  markets; **loses in trending markets** (SOL 7x = −68% APY). Needs a regime filter.
-- **LP evolution** (`lp_controller.py` + `lp_service.py`): evolves `lp_fn(bar)` via LLM
-  evolution, optimizing range width + entry/exit timing. Separate `amm_verdicts.jsonl` +
-  `amm_evolution.db`. Selected via `SLATE_PIPELINE=amm`; endpoints `/api/amm/{status,start,stop}`.
-- **LP fitness** (`lp_fitness.py`): two-window IS/OOS evaluator using APY% (time-normalized)
-  as the headline. `min_trades=1` (LP strategies rebalance rarely).
-- **CEX funding archetypes**: `funding_reversal` (long on extreme negative funding — short
-  squeeze) + `funding_carry` (short on high funding) added to `SEED_ARCHETYPES`.
-  Real Binance funding merged into daily candles + backtester (`df['funding']`).
-  `load_daily_data(trim_to_funding=True)` drops pre-funding bars so IS/OOS covers funded data.
-- **Codebase audit** (2026-07-17): all 214 `slate_core` Python files parse cleanly and import
-  successfully. Fixed 5 broken files (3 syntax errors + 2 NameErrors) — same truncation
-  pattern as ASTRA. `backoff` dependency added.
-- **Run it:** `/api/amm/{status,start,stop}`. Autostart via `SLATE_PIPELINE=amm`.
-  Suite: **273 passed / 0 failed**.
+Yield provision (not speculation): concentrated liquidity on stablecoin pairs, 10.8% APY
+backtested. `slate_core/amm/`. **Endpoints:** `/api/amm/{status,start,stop}`.
+Autostart: `SLATE_PIPELINE=amm`.
+**→ See [CLAUDE_AMM.md](CLAUDE_AMM.md) for full details.**
 
 ---
 
