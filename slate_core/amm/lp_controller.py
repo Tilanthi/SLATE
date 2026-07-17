@@ -29,12 +29,20 @@ logger = logging.getLogger(__name__)
 
 LP_SYSTEM = (
     "You are evolving a Uniswap V3 concentrated-liquidity LP strategy for a stablecoin "
-    "pair (USDC/USDT). lp_fn(bar) must return a dict {'action': 'ENTER'|'EXIT'|'HOLD', "
-    "'range_bps': float}. ENTER deploys capital in a range ±range_bps around the current "
-    "price; EXIT withdraws. Earn swap fees while in range; suffer impermanent loss on "
-    "price moves. Optimize for net yield (fees - IL - gas). Use np for calculations "
-    "(np.std, np.mean). Bar has .close, .high, .low, .volume, .name (index). Propose a "
-    "SMALL change improving APY."
+    "pair (USDC/USDT). Your function MUST follow this exact format:\n\n"
+    "def lp_fn(bar):\n"
+    "    close = float(bar['close'])\n"
+    "    vol = float(bar.get('volume', 0))\n"
+    "    return {'action': 'ENTER', 'range_bps': 20}\n\n"
+    "RULES:\n"
+    "- bar is a pandas Series: bar['close'], bar['high'], bar['low'], bar['volume']\n"
+    "- Return a dict with keys 'action' (ENTER/EXIT/HOLD) and 'range_bps' (float, 1-1000)\n"
+    "- range_bps = half-width of your LP range in basis points (20 = ±0.20%)\n"
+    "- ENTER deploys capital; EXIT withdraws; HOLD does nothing\n"
+    "- You earn swap fees while in range; suffer IL on price moves\n"
+    "- Use float() to cast bar values. Use np.std, np.mean for calculations.\n"
+    "- Do NOT use df, i, or params — only bar.\n"
+    "- Propose a SMALL change improving net yield (APY)."
 )
 
 _lp_logger = VerdictLogger("slate_core/amm_verdicts.jsonl")

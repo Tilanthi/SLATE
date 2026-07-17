@@ -71,11 +71,19 @@ def merge_funding(df: pd.DataFrame,
         return df
 
 
-def load_daily_data(path: str = REAL_DATA_DEFAULT) -> pd.DataFrame:
+def load_daily_data(path: str = REAL_DATA_DEFAULT, trim_to_funding: bool = True) -> pd.DataFrame:
     """Load OHLCV and resample to daily if the source is intraday, then merge
-    Binance funding history as a `funding` column."""
+    Binance funding history as a `funding` column. If trim_to_funding and the
+    funding column is present, drop pre-funding bars (where funding==0.0 at the
+    start of the series) so IS/OOS splits cover real funding data."""
     df = load_ohlcv(path)
     if is_intraday(df):
         df = resample_to_daily(df)
     df = merge_funding(df)
+    if trim_to_funding and "funding" in df.columns:
+        # Find the first bar with nonzero funding; trim everything before it
+        nonzero = (df["funding"] != 0.0)
+        if nonzero.any() and not nonzero.iloc[0]:
+            first_real = nonzero.idxmax()
+            df = df.loc[first_real:]
     return df

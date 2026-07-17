@@ -36,8 +36,10 @@ def check_lp_correctness(lp_fn: LPFn, df, probe_window: int = 30):
 
 def evaluate_lp_fitness(lp_fn: LPFn, df, config: Optional[FitnessConfig] = None,
                       candidate_id: str = "") -> FitnessResult:
-    """Two-window LP fitness: IS / OOS1 / OOS2. Gates on absolute profit."""
-    cfg = config or FitnessConfig()
+    """Two-window LP fitness: IS / OOS1 / OOS2. Gates on absolute profit.
+    LP strategies have very few rebalances (enter once, stay in), so min_trades
+    defaults to 1 (not 10) unless overridden."""
+    cfg = config or FitnessConfig(min_trades=1)
     base = FitnessResult(
         evaluated=False, fitness_score=float("-inf"),
         oos_vs_buyhold=0.0, is_vs_buyhold=0.0, overfit_gap=0.0,
