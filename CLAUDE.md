@@ -183,7 +183,11 @@ Evolves executable signal code via LLM-guided evolution. Adapted from AlphaEvolv
 disable `SLATE_EVOLUTION_AUTOSTART=0`). LLM: GLM via Z.ai proxy (no separate key).
 
 - Overfit cage: correctness gate → IS/OOS split → overfit penalty → absolute-profit
-  gate → **two-window gate** → walk-forward (5 folds). AST sandbox (no imports/dunder/network).
+  gate → **two-window gate** (terminal). AST sandbox (no imports/dunder/network). NOTE:
+  `EvolutionConfig.validation` advertises a `"walkforward"` option but it is **dead config** —
+  `subprocess_eval` always calls `evaluate_fitness_two_window`; no walk-forward step runs in this
+  funnel. Walk-forward *does* exist elsewhere: DEX directional fitness (`dex_fitness.py`, anchored
+  multi-fold) and closed-loop pluralistic validation (`rigorous_validation.py`).
 - **Funding archetypes**: `funding_reversal` (long on extreme negative funding — short squeeze)
   + `funding_carry` (short on high funding). Real Binance funding merged into candles + backtester.
 - **Plan:** `docs/superpowers/plans/2026-07-11-alphaevolve-evolution.md`.
@@ -275,4 +279,4 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*
-*Last Updated: 2026-07-15 (data lever: default to ~1,080 real daily SOL bars `SOLUSDT_perpetual_1d_36m.csv` so IS/OOS are ~540/216 bars, not ~87/35; complexity cap: reject over-complex evolved signals pre-eval (death-stage `too_complex`). CLAUDE.md pruned — detailed change records moved to `CLAUDE_CHANGELOG.md`. Earlier 2026-07-15: activity-credit in fitness; funnel-sharpening (`death_stage`=first gate + `failed_gates`, reject labels, archetype diversity, trade-frequency directive). 2026-07-14: ASTRA-derived write chokepoint `append_verified` + funnel `verdict_log.py` + proposer priming (ALPHA DIRECTIONS / KNOWN-DEAD PATTERNS); deliberately did NOT adopt ASTRA's literature-novelty Gate 2 (incoherent for trading). 🔴 core backtester + fetcher were gitignored → now tracked; behavioural MAP-Elites niches; `min_fitness` gate; LICENSE + pinned `requirements.txt`; dead legacy tests removed → full suite green **195 passed/0 failed**.)*
+*Last Updated: 2026-07-17 (full `slate_core` audit: 214 files, 273 tests green. Fixed 3 real bugs — **closed loop now loads daily bars** (`load_daily_data`, both `server.py` call sites; was hourly `1h_6m.csv` → every `rolling(20)` was 20 hours not 20 days); **feedback learning now receives real hypotheses** (`run_rigorous_validation` passes 1:1-paired `strategy_hypotheses` instead of `[]`, so patterns are actually extracted); **logger defined before guarded imports** (was a latent `NameError`). Also fixed: latent `LP_SEED_ARCHETYPES` import; `*_pct` double-divide (`total_return`/`max_drawdown` were 100× too small); dead imports (server + amm); stale docstring/dead `hasattr` branches/orphan comment; deleted stale `realistic_backtester.cpython-314.pyc`. Doc correction: core evolution overfit cage ends at the **two-window gate** — `EvolutionConfig.validation`'s `walkforward` is dead config, not a 5-fold step. Earlier 2026-07-15: data lever (~1,080 daily SOL bars so IS/OOS ~540/216, not ~87/35); complexity cap (death-stage `too_complex`); activity-credit in fitness; funnel-sharpening; CLAUDE.md pruned → detailed records in `CLAUDE_CHANGELOG.md`. 2026-07-14: ASTRA-derived write chokepoint `append_verified` + funnel `verdict_log.py` + proposer priming; 🔴 core backtester + fetcher were gitignored → now tracked; behavioural MAP-Elites niches; `min_fitness` gate; LICENSE + pinned `requirements.txt`.)*

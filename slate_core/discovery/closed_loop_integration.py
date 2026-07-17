@@ -15,7 +15,7 @@ This integration layer replaces the previous swarm-based approach with systemati
 scientific discovery as described in the research paper.
 
 Usage:
-    from slate_core.discovery.enhanced_discovery_integration import get_enhanced_discovery_system
+    from slate_core.discovery.closed_loop_integration import get_enhanced_discovery_system
 
     system = get_enhanced_discovery_system()
     results = system.run_enhanced_discovery_cycle()
@@ -218,10 +218,15 @@ class EnhancedDiscoveryIntegration:
         # Convert PerpetualBacktestResult object to dict
         return {
             'sharpe_ratio': backtest_result.sharpe_ratio,
-            'total_return': backtest_result.total_return_pct / 100,  # Convert percentage to decimal
+            # NOTE: despite the _pct names, total_return_pct and max_drawdown_pct are
+            # already decimal fractions (e.g. 0.15 for +15%, 0.20 for 20% drawdown) —
+            # see perpetual_futures_backtest.py (total_profit/initial_capital,
+            # drawdown_usdt/running_max). Do NOT divide by 100 again; the validation
+            # system consumes these as decimals (its MC noise stddev is ~0.03).
+            'total_return': backtest_result.total_return_pct,
             'win_rate': backtest_result.win_rate,
             'total_trades': backtest_result.total_trades,
-            'max_drawdown': backtest_result.max_drawdown_pct / 100,  # Convert percentage to decimal
+            'max_drawdown': backtest_result.max_drawdown_pct,
             'profit_factor': backtest_result.profit_factor if hasattr(backtest_result, 'profit_factor') else 0,
             'total_profit': backtest_result.total_profit_usdt,
             'initial_capital': backtest_result.initial_capital,
@@ -236,6 +241,10 @@ class EnhancedDiscoveryIntegration:
         """Run rigorous statistical validation on all strategies"""
         try:
             all_validation_reports = []
+            # Collected 1:1 with all_validation_reports so feedback learning can pair
+            # each validation outcome with the hypothesis that produced it. Without this
+            # the learning loop zips against an empty list and extracts zero patterns.
+            strategy_hypotheses = []
 
             # Validate discovered strategies
             if discovery_results.get('status') == 'success':
@@ -265,6 +274,9 @@ class EnhancedDiscoveryIntegration:
                         )
 
                         all_validation_reports.append(validation_report)
+                        # Capture the hypothesis that generated this strategy (kept in lockstep
+                        # with the report above) so feedback learning can pattern-match on it.
+                        strategy_hypotheses.append(strategy_result.hypothesis.to_dict())
 
                     except Exception as e:
                         logger.warning(f"Validation failed for strategy: {e}")
@@ -289,6 +301,9 @@ class EnhancedDiscoveryIntegration:
                         )
 
                         all_validation_reports.append(validation_report)
+                        # Hybrid strategies are already dicts (hybrid_results['hybrid_strategies']
+                        # are s.to_dict()); pass the strategy dict as its own hypothesis context.
+                        strategy_hypotheses.append(strategy)
 
                     except Exception as e:
                         logger.warning(f"Hybrid validation failed: {e}")
@@ -303,6 +318,7 @@ class EnhancedDiscoveryIntegration:
                 'successful': successful,
                 'success_rate': successful / total if total > 0 else 0,
                 'validation_reports': [r.to_dict() for r in all_validation_reports],
+                'strategy_hypotheses': strategy_hypotheses,
                 'deployment_recommendations': self.summarize_recommendations(all_validation_reports)
             }
 
@@ -655,10 +671,14 @@ class EnhancedDiscoveryIntegration:
             # Convert to format expected by learning system
             learning_data = [self.convert_validation_for_learning(report) for report in validation_reports]
 
-            # Run learning cycle
+            # Run learning cycle. Pair each validation outcome with the hypothesis that
+            # produced it (collected 1:1 in run_rigorous_validation) so the pattern
+            # extractor has real context — otherwise zip() runs over an empty list and
+            # no patterns/biases are ever learned.
+            strategy_hypotheses = validation_results.get('strategy_hypotheses', [])
             learning_summary = self.feedback_learning.learn_from_validation_cycle(
                 learning_data,
-                []  # Hypotheses would be passed here in full implementation
+                strategy_hypotheses
             )
 
             # Get recommendations for next cycle

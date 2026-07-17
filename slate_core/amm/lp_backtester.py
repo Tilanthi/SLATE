@@ -18,9 +18,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from slate_core.amm.amm_math import (
-    amounts_for_liquidity, impermanent_loss, in_range, liquidity_for_amounts,
-)
+from slate_core.amm.amm_math import impermanent_loss, in_range
 
 LPFn = Callable[..., Optional[Tuple[str, float]]]
 

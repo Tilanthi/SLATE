@@ -42,11 +42,19 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+# Configure logging FIRST so the guarded imports below can log safely in their
+# except-ImportError handlers (otherwise a failed import raises NameError on `logger`
+# and crashes module load before `app` is even created).
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Closed-Loop Discovery Integration
 try:
     from slate_core.discovery.closed_loop_integration import (
         get_enhanced_discovery_system,
-        EnhancedDiscoveryIntegration
     )
     CLOSED_LOOP_AVAILABLE = True
     WORLD_CLASS_AVAILABLE = True  # For backwards compatibility
@@ -58,22 +66,13 @@ except ImportError as e:
 # Startup Coordinator for auto-restart and continuous discovery
 try:
     from slate_core.startup_coordinator import (
-        get_startup_coordinator,
         initialize_with_discovery,
-        record_user_activity,
         ensure_discovery_running
     )
     STARTUP_COORDINATOR_AVAILABLE = True
 except ImportError as e:
     STARTUP_COORDINATOR_AVAILABLE = False
     logger.warning(f"Startup coordinator not available: {e}")
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
@@ -254,34 +253,19 @@ async def start_closed_loop_discovery():
         raise HTTPException(status_code=503, detail="Closed-loop discovery not available")
 
     try:
-        import pandas as pd
-        import json
-
         logger.info("🧠 Starting Closed-Loop Discovery via API")
 
-        # Load market data with proper parsing
-        with open('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv', 'r') as f:
-            content = f.read()
-
-        all_data = []
-        for line in content.strip().split('\n'):
-            if line.strip():
-                try:
-                    data_list = json.loads(line.strip())
-                    if isinstance(data_list, list):
-                        all_data.extend(data_list)
-                except:
-                    continue
-
-        df = pd.DataFrame(all_data)
+        # Load market data — daily SOLUSDT-perp bars (the data lever: ~1,080 daily
+        # bars so IS/OOS splits are measured on hundreds of bars, not ~35). The
+        # closed loop MUST use the same daily source as the evolution layer — feeding
+        # the hourly cache here made every rolling(20) window 20 hours, not 20 days.
+        from slate_core.discovery.evolution.load_data import load_daily_data
+        df = load_daily_data('sol_data_cache/SOLUSDT_perpetual_1d_36m.csv')
 
         if df is None or len(df) < 50:
             raise HTTPException(status_code=400, detail="Insufficient market data for discovery")
 
-        # Convert timestamp to date
-        df['date'] = pd.to_datetime(df['timestamp'])
-
-        logger.info(f"✅ Market data loaded: {len(df)} days")
+        logger.info(f"✅ Market data loaded: {len(df)} daily bars")
 
         # Run discovery cycle
         from slate_core.discovery.closed_loop_integration import get_enhanced_discovery_system
@@ -517,14 +501,12 @@ async def start_continuous_discovery():
                 logger.info("🧠 Starting closed-loop discovery cycle (no user activity)")
 
                 try:
-                    # Load market data properly
-                    import pandas as pd
-
-                    # Load JSON data file (not CSV format despite extension)
-                    df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
-                    df['timestamp'] = pd.to_datetime(df['timestamp'])
-                    df.set_index('timestamp', inplace=True)
-                    logger.info(f"✅ Market data loaded: {len(df)} days")
+                    # Load daily SOLUSDT-perp bars (daily-timeframe edge; same source
+                    # as the evolution layer). The closed loop must not backtest hourly
+                    # bars while declaring a 1d timeframe.
+                    from slate_core.discovery.evolution.load_data import load_daily_data
+                    df = load_daily_data('sol_data_cache/SOLUSDT_perpetual_1d_36m.csv')
+                    logger.info(f"✅ Market data loaded: {len(df)} daily bars")
 
                     # Run discovery cycle
                     from slate_core.discovery.closed_loop_integration import get_enhanced_discovery_system

@@ -193,3 +193,80 @@ driven by too few daily bars (~175). Two structural levers:
   tunable guardrail (raise/lower `max_signal_complexity`).
 
 Suite: **195 passed / 0 failed** (+2 tests).
+
+---
+
+## 🔧 Full `slate_core` Audit (2026-07-17)
+
+A four-layer audit (byte-compile → AST import-resolution → live runtime smoke →
+parallel deep call-graph/signature/resource audits of server↔endpoints, evolution,
+DEX+AMM, closed-loop+data-refs). 214 files, ~76,600 lines, 27 subpackages. The
+critical path is sound (compiles clean, all entry points import, 10/10 endpoints
+200, **273 tests green**), but the audit found three real correctness bugs plus a
+catalog of dead code. All fixed below.
+
+### 🔴 CRITICAL — closed loop ran on hourly data, not daily
+`server.py:263` and `:524` loaded `SOLUSDT_perpetual_1h_6m.csv` (≈4,182 hourly
+bars) directly into the closed loop with **no daily resample**, while the
+evolution layer used the correct daily file. Every `rolling(20)` window was 20
+*hours*, not 20 days; backtest metrics were semantically wrong and the logs
+mislabeled them as "{n} days". This contradicted the headline "1,080 daily bars"
+data lever. **Fix:** both call sites now `from …load_data import load_daily_data;
+df = load_daily_data('sol_data_cache/SOLUSDT_perpetual_1d_36m.csv')`, logging
+"{n} daily bars". (This was the known "hourly-as-daily" issue, now closed.)
+
+### 🟠 MODERATE — feedback learning was structurally inert
+`closed_loop_integration.run_feedback_learning` called
+`learn_from_validation_cycle(learning_data, [])` — the second arg (hypotheses)
+was always empty, so the `zip(...)` in `feedback_learning.py:578` never iterated
+and `patterns_extracted`/`biases_updated` were 0 every cycle. "Level 4" learned
+nothing. **Fix:** `run_rigorous_validation` now collects `strategy_hypotheses`
+1:1 with each validation report (`strategy_result.hypothesis.to_dict()` for
+discovered strategies; the strategy dict for hybrid ones), returns it, and
+`run_feedback_learning` passes it through.
+
+### 🟠 MODERATE — `logger` referenced before defined
+`server.py` called `logger.warning(...)` inside `except ImportError` blocks
+*before* `logger = logging.getLogger(__name__)` was defined. Today both imports
+succeed so it works; the moment either fails, the graceful-degradation handler
+itself crashes with `NameError`. **Fix:** moved `logging.basicConfig` +
+`logger = …` above the first guarded import.
+
+### Other correctness / hygiene fixes
+- **`LP_SEED_ARCHETYPES` latent `NameError`** (`amm/lp_controller.py:79`) — referenced
+  but not imported; added to the existing `lp_seeds` import (fallback was the only
+  thing keeping it alive).
+- **`*_pct` double-divide** (`closed_loop_integration.convert_backtest_result_to_dict`)
+  — divided already-decimal `total_return_pct`/`max_drawdown_pct` by 100 again,
+  feeding the validator values 100× too small (e.g. 0.20 drawdown → 0.002; the
+  MC noise stddev 0.03 then swamped the signal). Removed the `/100`; fields are
+  decimals by construction (`total_profit/initial_capital`, `drawdown_usdt/running_max`).
+- **Dead imports removed** — `server.py` (`EnhancedDiscoveryIntegration`,
+  `get_startup_coordinator`, `record_user_activity`, inline `pd`/`json`);
+  `amm/lp_service.py` (`log_lp_verdict`); `amm/lp_backtester.py`
+  (`amounts_for_liquidity`, `liquidity_for_amounts` — verified the other two
+  `amm_math` imports *are* live before touching them).
+- **Dead branches / stale text** — `closed_loop_discovery.py` two `hasattr` checks
+  on fields guaranteed (or impossible) on `StrategyHypothesis`; stale module name
+  in `closed_loop_integration.py` docstring; orphan comment fragment in
+  `dex_fitness.py`. Deleted stale `discovery/__pycache__/realistic_backtester.cpython-314.pyc`.
+
+### Doc correction — walk-forward is not in the core evolution funnel
+CLAUDE.md claimed the evolution overfit cage ended in "walk-forward (5 folds)".
+It does not: `EvolutionConfig.validation` advertises a `"walkforward"` option but
+it is **dead config** — `subprocess_eval` always calls `evaluate_fitness_two_window`,
+and no dispatch reads `cfg.validation`. The two-window gate is the terminal gate.
+Walk-forward genuinely exists *elsewhere* (DEX directional fitness
+`dex_fitness.py`, anchored multi-fold; closed-loop pluralistic validation
+`rigorous_validation.py`). CLAUDE.md corrected.
+
+### Left alone (deliberately)
+The audit's "dead code" list was re-verified before any deletion: several flagged
+items turned out to be **live or tested** (`signal_sandbox.safe_eval_signal`,
+`niche.compute_niche`, `server.py`'s `_os`, `amm_math.impermanent_loss`/`in_range`,
+and the `adaptive_*`/`enhanced_*`/`cache`/`normalizer` legacy cluster referenced by
+`adaptive_api.py`/`config/manager.py`/`event_bus.py`). These were *not* deleted —
+blind removal would have cascaded or broken the suite. Confined to dead/legacy and
+guarded by `data/__init__.py`; no runtime impact.
+
+Suite: **273 passed / 0 failed**. Server restarted via `launchctl` per CLAUDE.md.

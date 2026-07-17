@@ -1544,14 +1544,16 @@ class ClosedLoopDiscoveryEngine:
             def signal_function(df, i, params):
                 return 0
 
-        # Extract parameters from hypothesis
-        parameters = hypothesis.parameters if hasattr(hypothesis, 'parameters') else {}
+        # Extract parameters from hypothesis (parameters is always present on
+        # StrategyHypothesis — has a field(default_factory=dict)).
+        parameters = hypothesis.parameters
 
         # Run the actual perpetual futures backtest
         result = backtester.backtest_strategy(
             df=df,
             strategy_name=hypothesis.name,
-            strategy_description=hypothesis.description if hasattr(hypothesis, 'description') else f"Closed-loop AI {hypothesis.name}",
+            # StrategyHypothesis has no description field — always synthesize one.
+            strategy_description=f"Closed-loop AI {hypothesis.name}",
             edge_type="closed_loop_discovery",
             signal_function=signal_function,
             parameters=parameters

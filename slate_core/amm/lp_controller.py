@@ -23,7 +23,7 @@ from slate_core.discovery.evolution.verdict_log import (
     CandidateVerdict, VerdictLogger, verdict_from_fitness_result,
 )
 from slate_core.amm.lp_subprocess_eval import lp_eval_fitness_subprocess
-from slate_core.amm.lp_seeds import lp_pick_seed_parent
+from slate_core.amm.lp_seeds import LP_SEED_ARCHETYPES, lp_pick_seed_parent
 
 logger = logging.getLogger(__name__)
 

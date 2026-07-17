@@ -15,7 +15,7 @@ from slate_core.discovery.evolution.llm_client import LLMClient, LLMConfig, get_
 from slate_core.discovery.evolution.llm_pool import LLMPool, LLMPoolConfig
 from slate_core.discovery.evolution.program_database import ProgramDBConfig, ProgramDatabase
 from slate_core.amm.lp_controller import (
-    LPPromptSampler, run_lp_evolution_parallel, log_lp_verdict,
+    LPPromptSampler, run_lp_evolution_parallel,
 )
 from slate_core.amm.pool_data import load_pool_data
 

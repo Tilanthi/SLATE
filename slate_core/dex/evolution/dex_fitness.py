@@ -320,7 +320,6 @@ def evaluate_dex_pairs_fitness(spread_signal, dfA, dfB,
     base.evaluated = True
     base.fitness_score = candidate_fitness
     return base
-# signal. Same two-window + overfit + activity + min_fitness discipline.
 # ---------------------------------------------------------------------------
 
 def _df_vol_regime(df) -> str:
