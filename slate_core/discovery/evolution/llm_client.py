@@ -44,7 +44,10 @@ class LLMConfig:
     api_key: Optional[str] = None               # default: env ANTHROPIC_AUTH_TOKEN
     strong_model: str = _DEFAULT_STRONG
     fast_model: str = _DEFAULT_FAST
-    max_tokens: int = 1024
+    max_tokens: int = 2048  # was 1024 — GLM truncated evolved fn bodies before the
+                            # return statement (9/10 AMM candidates had no return →
+                            # HOLD forever → 0 rebalances). 2048 leaves room for the
+                            # full function after its preamble.
     temperature: float = 0.9
     timeout: float = 60.0
 

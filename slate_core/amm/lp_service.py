@@ -36,8 +36,15 @@ class LPEvolutionService:
         self.interval_s = interval_s
         self.steps_per_cycle = steps_per_cycle
         self.concurrency = concurrency
-        self.fitness_config = (FitnessConfig.exploration() if gate_preset == "exploration"
-                               else FitnessConfig.strict())
+        # LP semantics differ from CEX: an LP position is "entered once, held" —
+        # rebalance count is NOT an activity proxy (unlike CEX trade count). The
+        # CEX presets gate on min_trades=5 (exploration) / 10 (strict), which rejects
+        # correct enter-and-hold LPs for "low churn". Override to 1 and rely on
+        # activity_floor (fraction of bars in position) to demand real deployment.
+        _preset = (FitnessConfig.exploration() if gate_preset == "exploration"
+                   else FitnessConfig.strict())
+        _preset.min_trades = 1
+        self.fitness_config = _preset
         self.evolution_config = EvolutionConfig(max_signal_complexity=350)
         self.db = ProgramDatabase(ProgramDBConfig(persist_path=persist_path))
         self.db.load()

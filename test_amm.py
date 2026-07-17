@@ -225,3 +225,28 @@ def test_lp_step_stores_verified_candidate(monkeypatch):
     assert prog is not None
     assert prog.verification.get("gate") == "lp_passed_two_window"
     assert len(recorded) == 1 and recorded[0].death_stage == "passed"
+
+
+# ---------------------------------------------------------------------------
+# LP evolution config regressions.
+#
+# Two config bugs starved the AMM funnel of survivors:
+#  (1) LLM max_tokens=1024 truncated evolved fn bodies before the `return`
+#      statement (9/10 failing candidates had no return → HOLD forever →
+#      0 rebalances). Must be large enough for a full function.
+#  (2) The CEX `min_trades` preset (5/10) was applied to LP, but LP semantics
+#      are "enter once, stay in" — rebalance count is NOT an activity proxy.
+#      Must be 1 so a correct enter-and-hold LP isn't rejected for low churn.
+# ---------------------------------------------------------------------------
+
+def test_llm_config_max_tokens_allows_full_functions():
+    from slate_core.discovery.evolution.llm_client import LLMConfig
+    assert LLMConfig().max_tokens >= 2048
+
+
+def test_lp_service_min_trades_is_one(tmp_path):
+    from slate_core.amm.lp_service import LPEvolutionService
+    from slate_core.discovery.evolution.llm_client import LLMClient
+    svc = LPEvolutionService(persist_path=str(tmp_path / "lp.db"),
+                             llm_client=LLMClient())
+    assert svc.fitness_config.min_trades == 1

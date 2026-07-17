@@ -308,3 +308,45 @@ green.
   now reach real IS/OOS evaluation and die legitimately at the activity/
   profitability gate (`oos1_rebalances=0<5`) — where the funnel *should* kill
   them, instead of being wasted on syntax.
+
+---
+
+## 🐛 AMM LP strategies never entered — truncated LLM output (2026-07-17)
+
+Once candidates compiled, ~69% still died at `oos1_rebalances=0<5` — they ran
+but **never entered a position**. Systematic debugging (capturing the code of
+gate-failing candidates) found the root cause was neither a timid prompt nor
+the activity gate, but **three compounding issues**:
+
+### Root cause
+1. **LLM output truncated before the `return`** (dominant, 9/10 failures).
+   `LLMConfig.max_tokens` was **1024**. GLM spent the budget on a verbose
+   `# Strategy / # Rationale / # 1… # 2…` preamble and got cut off mid-comment,
+   *before writing any `return`*. The function compiled (Python needs no
+   `return`) but returned `None` → the backtester defaulted to HOLD every bar
+   → zero entries, forever. Of 10 captured failing candidates, 9 had **no
+   `return` statement at all**.
+2. **The prompt encouraged the verbosity** that caused (1), and didn't state
+   that an LP earns fees *only while ENTERed* — so the LLM over-conditioned
+   entry on compound single-bar volatility/residual thresholds.
+3. **`min_trades=5`** (the CEX `exploration` preset, applied to LP) then killed
+   the candidates that *did* complete and enter — because correct LP behaviour
+   is "enter once, stay in" (n_rebalances≈1), which the CEX churn gate rejects.
+   The `lp_fitness` code comment itself says LP should use `min_trades=1`.
+
+### Fix (three complementary changes, all confirmed by evidence)
+- `llm_client.LLMConfig.max_tokens`: **1024 → 2048** (room for the full fn body
+  after its preamble).
+- `lp_controller.LP_SYSTEM`: require CONCISE code-only output, mandate that the
+  function **ends with a `return`**, and steer toward being ENTERed (single-bar
+  regime detection is unreliable; USDC/USDT deviates only ~4 bps from peg).
+- `lp_service`: override `min_trades=1` for LP (rely on `activity_floor` for the
+  real "did it deploy capital" test, not rebalance churn).
+
+### Verification
+- Suite: **279 passed / 0 failed** (+2 config regression tests).
+- **Live**: over 18 fresh verdicts post-fix — **0 compile failures, 0
+  never-entered, and 50% PASSED** (vs ~0.4% historically). New top survivor
+  `ammlp:b227b05a`: OOS APY +10.2%, **zero overfit gap**, `n_trades_oos=1`
+  (the enter-and-hold behaviour the `min_trades` fix now correctly permits).
+  The AMM layer now produces genuinely profitable, non-overfit LP strategies.
