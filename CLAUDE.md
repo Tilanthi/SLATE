@@ -288,8 +288,34 @@ untouched; the DEX layer lives in `slate_core/dex/` with its own DB
   `SLATE_PIPELINE=dex` (default `cex`); DEX target via `SLATE_DEX_TARGET=` `directional`
   (default) | `market_maker` | `pairs` | `cross_market`. Pairs legs configurable via
   `SLATE_DEX_COIN`/`SLATE_DEX_COIN_B`; data file via `SLATE_DEX_DATA_PATH`.
-  Suite: **255 passed / 0 failed**.
   Plan: `docs/superpowers/plans/2026-07-15-dex-hyperliquid-discovery.md`.
+
+## 🏦 AMM LP Layer (Uniswap V3 Yield)
+
+A third discovery engine for **yield provision** (not speculation): provides concentrated
+liquidity on Uniswap V3 stablecoin pairs, earning swap fees while managing IL. The dex.pdf
+analysis identifies this as a 5–15% APY structural edge. Lives in `slate_core/amm/`.
+
+- **AMM math** (`amm_math.py`): Uniswap V3 formulas (tick↔price, liquidity↔amounts, IL).
+- **LP backtester** (`lp_backtester.py`): simulates LP positions — accrues swap fees
+  (pool_volume × fee_tier × your share), tracks IL, gas, rebalancing. Lookahead-safe.
+  **Backtested result: 10.8% APY on USDC/USDT at ±20bps range, ~$0 IL.**
+- **Delta-neutral** (`delta_neutral.py`): LP + perp short hedge. Removes IL in ranging
+  markets; **loses in trending markets** (SOL 7x = −68% APY). Needs a regime filter.
+- **LP evolution** (`lp_controller.py` + `lp_service.py`): evolves `lp_fn(bar)` via LLM
+  evolution, optimizing range width + entry/exit timing. Separate `amm_verdicts.jsonl` +
+  `amm_evolution.db`. Selected via `SLATE_PIPELINE=amm`; endpoints `/api/amm/{status,start,stop}`.
+- **LP fitness** (`lp_fitness.py`): two-window IS/OOS evaluator using APY% (time-normalized)
+  as the headline. `min_trades=1` (LP strategies rebalance rarely).
+- **CEX funding archetypes**: `funding_reversal` (long on extreme negative funding — short
+  squeeze) + `funding_carry` (short on high funding) added to `SEED_ARCHETYPES`.
+  Real Binance funding merged into daily candles + backtester (`df['funding']`).
+  `load_daily_data(trim_to_funding=True)` drops pre-funding bars so IS/OOS covers funded data.
+- **Codebase audit** (2026-07-17): all 214 `slate_core` Python files parse cleanly and import
+  successfully. Fixed 5 broken files (3 syntax errors + 2 NameErrors) — same truncation
+  pattern as ASTRA. `backoff` dependency added.
+- **Run it:** `/api/amm/{status,start,stop}`. Autostart via `SLATE_PIPELINE=amm`.
+  Suite: **273 passed / 0 failed**.
 
 ---
 
