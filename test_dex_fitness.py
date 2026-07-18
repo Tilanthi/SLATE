@@ -43,6 +43,19 @@ def test_dex_mm_fitness_runs_and_labels_market_maker():
     assert res.family_label == "market_maker"
 
 
+def test_dex_mm_fitness_walkforward_default_uses_absolute_profit():
+    # MM defaults to walk-forward; 500 bars is enough for 5 folds. A market-maker
+    # is an absolute-profit strategy, so the per-fold gate is raw PnL>0 (rebates
+    # net of adverse selection + fees), NOT edge-vs-buy-and-hold.
+    df = _syn_df(500)
+    qf = lambda st: (15.0, 2.0, 0.5)
+    res = evaluate_dex_mm_fitness(qf, df, candidate_id="wf_mm")  # default walkforward
+    assert isinstance(res, FitnessResult)
+    assert res.family_label == "market_maker"
+    # fold-level absolute PnLs must be recorded regardless of pass/fail
+    assert "fold_oos_pnls" in (res.metrics_oos or {})
+
+
 def test_dex_cross_market_runs_and_labels():
     df = _syn_df(400)
     markets = {"SOL": df, "BTC": df.copy()}

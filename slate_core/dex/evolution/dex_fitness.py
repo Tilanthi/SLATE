@@ -72,7 +72,7 @@ def make_walkforward_folds(df, n_folds: int = WALKFORWARD_FOLDS
     return folds
 
 
-def _walkforward_eval(strat, bt, df, cfg, base) -> FitnessResult:
+def _walkforward_eval(strat, bt, df, cfg, base, bench_buyhold: bool = True) -> FitnessResult:
     folds = make_walkforward_folds(df, WALKFORWARD_FOLDS)
     if len(folds) < 3:
         base.rejection_reason = "too_few_folds"
@@ -81,8 +81,11 @@ def _walkforward_eval(strat, bt, df, cfg, base) -> FitnessResult:
     for is_df, oos_df in folds:
         is_r = bt.backtest(strat, is_df)
         oos_r = bt.backtest(strat, oos_df)
-        is_edges.append(is_r.total_pnl - _buyhold_pnl(is_df))
-        oos_edges.append(oos_r.total_pnl - _buyhold_pnl(oos_df))
+        # Directional signals are benchmarked vs buy-and-hold; market-makers are
+        # absolute-profit strategies (rebates net of adverse selection + fees), so
+        # bench_buyhold=False uses raw PnL rather than an edge-vs-buyhold.
+        is_edges.append(is_r.total_pnl - (_buyhold_pnl(is_df) if bench_buyhold else 0.0))
+        oos_edges.append(oos_r.total_pnl - (_buyhold_pnl(oos_df) if bench_buyhold else 0.0))
         oos_pnls.append(oos_r.total_pnl)
         oos_trades.append(oos_r.total_trades)
         oos_acts.append(oos_r.bars_in_market / max(1, oos_r.n_bars))
@@ -356,7 +359,8 @@ def check_quote_correctness(quote_fn, df, probe_window: int = 30):
 
 
 def evaluate_dex_mm_fitness(quote_fn, df, config: Optional[FitnessConfig] = None,
-                            candidate_id: str = "") -> FitnessResult:
+                            candidate_id: str = "",
+                            validation: str = "walkforward") -> FitnessResult:
     cfg = config or FitnessConfig()
     base = FitnessResult(
         evaluated=False, fitness_score=float("-inf"),
@@ -381,6 +385,12 @@ def evaluate_dex_mm_fitness(quote_fn, df, config: Optional[FitnessConfig] = None
     bt = DexBacktester(DexBacktestConfig(warmup=min(cfg.probe_window, 20),
                                          funding_interval_bars=0))
     strat = MarketMakerStrategy(quote_fn=quote_fn)
+    # MM is an absolute-profit strategy (rebates net of adverse selection + fees),
+    # so walk-forward validation benchmarks raw PnL per fold (bench_buyhold=False),
+    # not an edge-vs-buy-and-hold. This closes the robustness gap where MM was
+    # previously validated on a single IS/OOS split while scoring on OOS edge.
+    if validation == "walkforward":
+        return _walkforward_eval(strat, bt, df, cfg, base, bench_buyhold=False)
     is_r = bt.backtest(strat, is_df)
     o1 = bt.backtest(strat, oos1)
     o2 = bt.backtest(strat, oos2)

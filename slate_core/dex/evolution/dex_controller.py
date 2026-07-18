@@ -45,7 +45,10 @@ DEX_SYSTEM = (
     "earn the spread rather than cross it. Reach past textbook TA toward "
     "regime-conditional / residual / microstructure-aware edges. The signal reads "
     "OHLCV + injected EMAs and returns {-1,0,1}. Propose a SMALL, targeted change "
-    "that improves net-of-fee OUT-OF-SAMPLE PnL without increasing overfit."
+    "that improves net-of-fee OUT-OF-SAMPLE PnL without increasing overfit. "
+    "Be CONCISE: write CODE, not a rationale (at most one short comment) — your output "
+    "is token-limited, and a function truncated before its return earns nothing. The "
+    "signal MUST end with `return` of one of {-1, 0, 1}."
 )
 
 # Separate funnel log for the DEX pipeline (CEX uses evolution_verdicts.jsonl).
@@ -247,7 +250,12 @@ DEX_MM_SYSTEM = (
     "quote around mid, an inventory skew (positive leans quotes down when long), and "
     "an order size. Earn the spread + maker rebate while managing inventory and "
     "adverse selection. state has .close, .position, .high, .low, .i, .history "
-    "(OHLCV+EMA frame to bar i). Propose a SMALL change improving net-of-fee OOS PnL."
+    "(OHLCV+EMA frame to bar i). Propose a SMALL change improving net-of-fee OOS PnL. "
+    "Be CONCISE: write CODE, not a rationale (at most one short comment) — your output "
+    "is token-limited, and a long preamble gets cut off before the return, leaving a "
+    "function that earns NOTHING. quote_fn MUST end with "
+    "`return (half_spread_bps, inv_skew_bps, size)`; never return None or a zero spread "
+    "(that opts out of the market and earns nothing)."
 )
 
 
@@ -362,7 +370,9 @@ DEX_PAIRS_SYSTEM = (
     "dfB, i) must return 1 (long A / short B), -1 (reverse), or 0 (flat); A and B are "
     "two aligned perp OHLCV frames. Exploit mean-reversion or momentum of their spread "
     "(log price-ratio z-score, or returns differential). Use np (np.log, np.std, np.mean) "
-    "— no imports. Propose a SMALL change improving net-of-fee OUT-OF-SAMPLE PnL."
+    "— no imports. Propose a SMALL change improving net-of-fee OUT-OF-SAMPLE PnL. "
+    "Be CONCISE: write CODE, not a rationale (at most one short comment); spread_fn MUST "
+    "end with `return` of 1 / -1 / 0 — a function truncated before its return earns nothing."
 )
 
 

@@ -350,3 +350,58 @@ the activity gate, but **three compounding issues**:
   `ammlp:b227b05a`: OOS APY +10.2%, **zero overfit gap**, `n_trades_oos=1`
   (the enter-and-hold behaviour the `min_trades` fix now correctly permits).
   The AMM layer now produces genuinely profitable, non-overfit LP strategies.
+
+---
+
+## 🎯 Strategic pivot — DEX market-maker is now the primary discovery pipeline (2026-07-18)
+
+Per directive: the pipeline's job is finding DEX (and lesser CEX) strategies with
+genuine alpha after brutally honest costs. The 24/7 server was running
+`SLATE_PIPELINE=amm` — i.e. pointed at the AMM yield-clones (a known ~10% yield,
+not alpha) — while the DEX layer (the one with honest rebate economics and a
+structural maker-edge) sat idle, and the CEX directional search had failed
+0/1,783. That was the misallocation.
+
+### Investigation: was the DEX MM edge real?
+The 12 existing DEX `market_maker` survivors all showed **negative IS but
+positive OOS** PnL. Systematic check: NOT a bug. The data is 5,002 hourly SOL
+bars, 122.6→77.7 (a −35% crash); the IS window is that crash (75 bps vol, 107 bps
+range — maximally hostile for a market maker: adverse selection runs it over), so
+a negative IS is textbook-correct and **validates the backtester's adverse-
+selection modeling**. The positive OOS is the rebate edge captured in calmer /
+two-sided regimes.
+
+### Fixes
+- **Walk-forward for market-makers** (`dex_fitness.py`). The anomaly revealed MM
+  was validated on a single IS/OOS split while the directional path got multi-fold
+  walk-forward — a robustness gap (MM scored directly on OOS edge). `_walkforward_eval`
+  now takes a `bench_buyhold` flag; MM routes through it with `bench_buyhold=False`
+  (an MM is an absolute-profit strategy — rebates net of adverse selection + fees —
+  not an edge-vs-buyhold), gated on **raw PnL > 0 in every fold**. `evaluate_dex_mm_fitness`
+  defaults to `validation="walkforward"`.
+- **DEX prompt anti-truncation** (`dex_controller.py`). `DEX_SYSTEM`,
+  `DEX_MM_SYSTEM`, `DEX_PAIRS_SYSTEM` now mandate concise code-only output + a
+  terminal `return` (same root cause as the AMM truncation fix; GLM was spending
+  its token budget on rationale and getting cut off before the return).
+- **Repoint the 24/7 server to DEX market-maker** (launchd plist, outside repo):
+  `SLATE_PIPELINE=amm`→`dex` **and** `SLATE_DEX_TARGET=market_maker` (the DEX
+  service defaults to `directional` = taker fees = the CEX dead-end, so the
+  target must be set explicitly). AMM paused; CEX closed-loop discovery continues
+  in the background as the "lesser extent".
+
+### Verification (live)
+- Suite: **280 passed / 0 failed** (+1 MM walk-forward test).
+- DEX MM post-fix (12 fresh verdicts): **0% compile** (was 71% — the shared
+  SEARCH/REPLACE fix + prompt fix), 12/12 `market_maker` family, candidates now
+  reach the honest walk-forward gates. 0 passes in the initial 12-sample window —
+  the strict 5-fold gate at work; sustained running determines whether walk-
+  forward-confirmed MM rebate alpha exists. Complexity cap (350) left as-is: the
+  58% `too_complex` is the overfit guardrail working, not a misconfig.
+
+### Honest status
+The pipeline is now AIMED AT the right edge (DEX maker rebates) with honest
+economics and walk-forward gates. Whether a walk-forward-confirmed rebate edge
+survives the brutal-cost gate is the open empirical question — this work removes
+the engineering blockers (idle pipeline, compile attrition, weak validation) that
+were preventing the question from being answered, not a claim that alpha has been
+found.
