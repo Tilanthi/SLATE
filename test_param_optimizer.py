@@ -9,7 +9,7 @@ import os
 import tempfile
 
 from slate_core.dex.evolution.param_optimizer import (
-    PARAM_SPACE, evaluate_mm_params, mm_param_step,
+    PARAM_SPACE, MMPheromoneStore, evaluate_mm_params, mm_param_step,
 )
 from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
 from slate_core.discovery.evolution.program_database import (
@@ -72,3 +72,28 @@ def test_param_space_bounds_match_market_maker():
     # Sanity: the optimized knobs are exactly the MM strategy's parameter surface.
     assert set(PARAM_SPACE) == {"half_spread_bps", "inv_skew_bps", "size"}
     assert PARAM_SPACE["size"][1] <= 2.0         # cannot exceed max_inventory default
+
+
+def test_pheromone_store_guides_toward_discovery():
+    # A DISCOVERY pheromone at a tight spread should pull a wide params vector
+    # toward it (stigmergic guidance).
+    store = MMPheromoneStore()
+    good = {"half_spread_bps": 5.0, "inv_skew_bps": 0.0, "size": 0.5}
+    store.deposit(good, fitness_score=40.0, fold_pnls=[40.0] * 5, regime="low_vol")
+    assert store.size() == 1
+    wide = {"half_spread_bps": 200.0, "inv_skew_bps": 0.0, "size": 0.5}
+    guided = store.guide(wide)
+    # half_spread should move DOWN toward 5, not stay at 200.
+    assert guided["half_spread_bps"] < wide["half_spread_bps"]
+
+
+def test_pheromone_store_deposits_avoidance_on_loss():
+    # A money-losing candidate deposits an AVOIDANCE signal; a never-filled one
+    # (pnl ~ 0) deposits nothing.
+    store = MMPheromoneStore()
+    store.deposit({"half_spread_bps": 2.0, "inv_skew_bps": 0.0, "size": 0.5},
+                  fitness_score=float("-inf"), fold_pnls=[-20.0, -15.0], regime="high_vol")
+    assert store.size() == 1   # AVOIDANCE deposited
+    store.deposit({"half_spread_bps": 100.0, "inv_skew_bps": 0.0, "size": 0.5},
+                  fitness_score=float("-inf"), fold_pnls=[0.0, 0.0], regime="low_vol")
+    assert store.size() == 1   # never-filled -> no new signal

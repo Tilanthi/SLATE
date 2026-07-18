@@ -57,3 +57,28 @@ def test_random_params_in_bounds():
         p = random_params(BOUNDS, rng=rng)
         for k, (lo, hi) in BOUNDS.items():
             assert lo <= p[k] <= hi
+
+
+# --- Verified HL fee schedule (economics.py) ---
+from slate_core.dex.backtester.economics import (
+    hl_perp_fee_schedule, HL_PERP_FEE_TIERS, HL_MAKER_REBATE_TIERS,
+)
+
+
+def test_hl_retail_fee_is_positive_maker_cost():
+    s = hl_perp_fee_schedule()                       # defaults: retail
+    assert s.taker == 0.00045 and s.maker == 0.00015  # +0.045% / +0.015% (costs)
+
+
+def test_hl_maker_fee_reaches_zero_at_volume_tier4():
+    s = hl_perp_fee_schedule(volume_14d_usd=600_000_000)   # >$500M tier 4
+    assert s.maker == 0.0                                   # maker free at scale
+    assert 0 < s.taker < 0.00045
+
+
+def test_hl_rebate_tier_overrides_maker_negative():
+    # Whale-gated rebate tier (>0.5% of venue maker volume) -> negative maker.
+    s = hl_perp_fee_schedule(maker_share_of_venue=0.006)
+    assert s.maker == -0.00001                              # -0.001% rebate
+    s3 = hl_perp_fee_schedule(maker_share_of_venue=0.04)    # >3.0% -> tier 3
+    assert s3.maker == -0.00003                             # -0.003%

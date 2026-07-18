@@ -30,8 +30,82 @@ from slate_core.discovery.evolution.verdict_log import (
 )
 from slate_core.dex.backtester.mm_tick_backtester import MMPolicy, backtest_mm
 from slate_core.dex.backtester.economics import HLFeeSchedule
+from slate_core.swarm.pheromone_hypothesis_mapper import PheromoneHypothesisMapper
+from slate_core.swarm.swarm_discovery import PheromoneSignal, PheromoneType
 
 logger = logging.getLogger(__name__)
+
+
+class MMPheromoneStore:
+    """Stigmergic memory for the MM parameter search (native swarm intelligence).
+
+    Deposits DISCOVERY pheromones at profitable parameter regions and AVOIDANCE
+    pheromones at losing ones; `guide()` blends a parameter vector toward/away
+    from them via `PheromoneHypothesisMapper`. This is collective learning on top
+    of the GA + MAP-Elites: pheromones persist + decay across steps, so later
+    mutations are biased toward regions where prior candidates succeeded — the
+    stigmergic signal the swarm layer was built to provide. Thread-safe (the
+    service runs concurrent steps).
+    """
+
+    def __init__(self, max_signals: int = 256, guidance_strength: float = 0.25,
+                 strength_scale: float = 50.0):
+        import threading
+        self._mapper = PheromoneHypothesisMapper(guidance_strength=guidance_strength)
+        self._signals: List[PheromoneSignal] = []
+        self._lock = threading.Lock()
+        self._max = max_signals
+        self._scale = strength_scale      # fitness PnL that maps to full strength
+
+    def _loc(self, params: Dict[str, float]) -> str:
+        return ",".join(f"{k}={float(params[k]):.4f}" for k in sorted(params))
+
+    def deposit(self, params: Dict[str, float], fitness_score: float,
+                fold_pnls: Optional[List[float]] = None, regime: str = "unknown") -> None:
+        """Record a DISCOVERY (passed) or AVOIDANCE (lost money) pheromone.
+
+        No signal for never-filled candidates (uninformative: pnl ~= 0).
+        """
+        from datetime import datetime
+        worst = min(fold_pnls) if fold_pnls else (fitness_score if fitness_score != float("-inf") else 0.0)
+        if fitness_score != float("-inf") and fitness_score > 0:
+            ptype, raw = PheromoneType.DISCOVERY, fitness_score
+        elif worst < -1e-6:
+            ptype, raw = PheromoneType.AVOIDANCE, abs(worst)
+        else:
+            return   # never filled / flat — nothing to learn here
+        strength = max(0.1, min(1.0, raw / self._scale))
+        sig = PheromoneSignal(
+            pheromone_type=ptype, location=self._loc(params), strength=strength,
+            source_agent="mm_param_opt", timestamp=datetime.now(),
+            metadata={"regime": regime, "fitness": fitness_score},
+        )
+        with self._lock:
+            self._signals.append(sig)
+            if len(self._signals) > self._max:
+                self._signals = self._signals[-self._max:]
+
+    def guide(self, params: Dict[str, float]) -> Dict[str, float]:
+        """Blend `params` toward DISCOVERY regions and away from AVOIDANCE ones."""
+        with self._lock:
+            sigs = list(self._signals)
+        if not sigs:
+            return dict(params)
+        try:
+            guided = self._mapper.map_pheromones_to_parameters(sigs, dict(params), "market_maker")
+            # Keep only our known MM keys + floats (the mapper is generic).
+            return {k: float(guided.get(k, params[k])) for k in params}
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("pheromone guidance failed: %s", str(exc)[:120])
+            return dict(params)
+
+    def size(self) -> int:
+        with self._lock:
+            return len(self._signals)
+
+
+# Module-level default store (one evolving MM population -> one stigmergic memory).
+_pheromones = MMPheromoneStore()
 
 # The parameter surface the optimizer searches (bounds match MarketMakerStrategy).
 PARAM_SPACE = {
@@ -171,17 +245,20 @@ async def mm_param_step(db: ProgramDatabase, snaps: List[dict],
                         config: Optional[Any] = None,
                         fitness_config: Optional[FitnessConfig] = None,
                         schedule: Optional[HLFeeSchedule] = None,
+                        pheromone_store: Optional["MMPheromoneStore"] = None,
                         rng=None) -> Optional[Program]:
     """One native optimization step: sample parent -> mutate -> evaluate -> store.
 
     No LLM. Parent comes from the ProgramDatabase (MAP-Elites `sample()`);
-    variation is Gaussian mutation (+ occasional crossover with an inspiration).
-    Survivors are persisted via the `append_verified` chokepoint. Auto-seeds the
-    baseline MM policies if the population is empty.
+    variation is Gaussian mutation (+ occasional crossover with an inspiration),
+    BIASED by stigmergic pheromones when a store is provided. Survivors are
+    persisted via the `append_verified` chokepoint. Auto-seeds the baseline MM
+    policies if the population is empty.
     """
     import random as _r
     r = rng or _r.Random()
     fcfg = fitness_config or FitnessConfig.exploration()
+    store = pheromone_store if pheromone_store is not None else _pheromones
 
     parent, inspirations = db.sample()
     # Seed if there is no parameter-bearing elite to mutate (empty DB, or only
@@ -192,13 +269,15 @@ async def mm_param_step(db: ProgramDatabase, snaps: List[dict],
             for n in db.occupied_niches()
         )
         if not has_param_elite:
-            await seed_mm_population(db, snaps, fcfg)
+            await seed_mm_population(db, snaps, fcfg, schedule=schedule)
         parent, inspirations = db.sample()
 
     if parent is not None and parent.parameters:
         params = dict(parent.parameters)
         if inspirations and inspirations[0].parameters and r.random() < 0.3:
             params = uniform_crossover(params, inspirations[0].parameters, rng=r)
+        # Stigmergic guidance: blend toward profitable / away from losing regions.
+        params = store.guide(params)
         params = gaussian_mutate(params, PARAM_SPACE, sigma=0.10, rng=r)
     else:
         params = random_params(PARAM_SPACE, rng=r)     # fallback (shouldn't usually trigger)
@@ -214,6 +293,14 @@ async def mm_param_step(db: ProgramDatabase, snaps: List[dict],
 
     _opt_logger.log(verdict_from_fitness_result(
         fitness, candidate_id=candidate_id, parent_id=parent_id, program_hash=program_hash))
+
+    # Deposit a pheromone so future mutations learn from this outcome.
+    fold_pnls = (fitness.metrics_oos or {}).get("fold_pnls")
+    try:
+        store.deposit(params, fitness.fitness_score, fold_pnls=fold_pnls,
+                      regime=fitness.regime_label or "unknown")
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("pheromone deposit failed: %s", str(exc)[:120])
 
     if not fitness.evaluated:
         return None
@@ -283,5 +370,5 @@ async def seed_mm_population(db: ProgramDatabase, snaps: List[dict],
     return stored
 
 
-__all__ = ["PARAM_SPACE", "MM_SEED_PARAMS", "evaluate_mm_params",
-           "mm_param_step", "seed_mm_population", "mm_vol_regime"]
+__all__ = ["PARAM_SPACE", "MM_SEED_PARAMS", "MMPheromoneStore",
+           "evaluate_mm_params", "mm_param_step", "seed_mm_population", "mm_vol_regime"]

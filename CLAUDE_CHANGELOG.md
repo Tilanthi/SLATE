@@ -458,3 +458,44 @@ optimizer correctly rejects every candidate under brutal retail fees — this is
 the honest answer, not a failure: retail-scale perp MM has no alpha after costs.
 Whether rebate-tier MM survives adverse selection across walk-forward folds is
 the now-testable question.
+
+---
+
+## 🔬 Verified HL fees + stigmergic (pheromone) guidance wired in (2026-07-18)
+
+Two follow-ons to the native MM optimizer.
+
+### (1) Verified the actual Hyperliquid fee schedule (official docs, 2026-05-08)
+Encoded the real tier table into `economics.py` (`hl_perp_fee_schedule`):
+- **Perps volume tiers**: maker steps +0.015% → 0.012% → 0.008% → 0.004% →
+  **0.000% at >$500M 14d vol (tier 4)** → stays 0% to >$7B. Taker 0.045%→0.024%.
+- **Maker rebates** (separate, whale-gated): −0.001% / −0.002% / −0.003% at
+  >0.5% / 1.5% / 3.0% of the *venue's* maker volume.
+
+So the realistic MM inflection is **maker = 0% at $500M volume**, not the rebate
+(tiny + requires >0.5% of all venue maker volume). Default stays brutally-honest
+retail (+0.015%); tiers are selectable for hypothesis tests.
+
+### Empirical rebate test on real SOL L2 (8k strided snaps)
+| Fee regime | 1bps | 2bps | 5bps |
+|---|---|---|---|
+| retail +0.015% | **−17.0** | −6.6 | −1.4 |
+| tier-4 maker=0% | +0.4 | +2.0 | −0.8 |
+| rebate −0.003% | +3.8 | +3.7 | −0.7 |
+
+**Honest conclusion**: retail MM has no alpha (clear loss); at zero-maker scale
+it's break-even *within adverse-selection model uncertainty*; the whale rebate is
+a thin margin adverse selection can erase. The brutal-cost verdict holds.
+
+### (2) Pheromone-guided search wired into the optimizer
+`param_optimizer.MMPheromoneStore` deposits DISCOVERY pheromones at profitable
+param regions and AVOIDANCE at losing ones (never-filled → no signal); `guide()`
+blends the next mutation toward/away via `PheromoneHypothesisMapper` (the native
+swarm/stigmergy component — now actually exercised, not dormant). This adds
+collective learning on top of the GA + MAP-Elites: stigmergic memory persists +
+decays across steps, biasing later mutations toward where prior candidates
+succeeded. Thread-safe for concurrent steps; module-level default store.
+
+### Verification
+- Suite: **301 passed / 0 failed** (+5: fee-tier lookup, pheromone guide/avoid).
+- Live: MM native path still LLM-free; pheromone store active (deposits per step).
