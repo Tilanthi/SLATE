@@ -18,11 +18,13 @@ from slate_core.discovery.evolution.llm_pool import LLMPool, LLMPoolConfig
 from slate_core.discovery.evolution.program_database import ProgramDBConfig, ProgramDatabase
 from slate_core.dex.data.load_data import REAL_DATA_DEFAULT, load_candles, load_markets, merge_funding
 from slate_core.dex.data.hyperliquid_client import HLClient
+from slate_core.dex.backtester.l2_tick_backtester import load_l2_snapshots
 from slate_core.dex.evolution.dex_controller import (
     DexMMPromptSampler, DexPairsPromptSampler, DexPromptSampler, _run_steps_parallel,
     dex_cross_market_evolution_step, dex_failure_summary, dex_mm_evolution_step,
     dex_pairs_evolution_step, run_dex_evolution, run_dex_evolution_parallel,
 )
+from slate_core.dex.evolution.param_optimizer import mm_param_step
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,9 @@ class DexEvolutionService:
                  concurrency: int = 4,
                  coin: str = "SOL",
                  coin_b: str = "BTC",
-                 markets=None):
+                 markets=None,
+                 l2_data_path: Optional[str] = None,
+                 l2_stride: int = 3):
         self.data_path = data_path
         self.gate_preset = gate_preset
         self.interval_s = interval_s
@@ -49,6 +53,11 @@ class DexEvolutionService:
         self.concurrency = concurrency        # P1: candidate evals run concurrently
         self.coin = coin                      # P2: perp symbol for funding-data merge
         self.coin_b = coin_b                  # P4: second leg of the pairs target
+        # Native (non-LLM) market-making path: tick/L2 snapshots + GA parameter
+        # optimizer. The MM target no longer calls the LLM at all.
+        self.l2_data_path = l2_data_path or f"sol_data_cache/L2_{coin}.jsonl"
+        self.l2_stride = l2_stride            # subsample factor for search-pace
+        self._snaps = None
         self._hl = HLClient()
         self._dfA = None
         self._dfB = None
@@ -89,6 +98,16 @@ class DexEvolutionService:
             self._df = df
         return self._df
 
+    def _load_snaps(self):
+        """Load + subsample the accumulated L2 snapshots for the native MM path."""
+        if self._snaps is None:
+            snaps = load_l2_snapshots(self.l2_data_path)
+            if self.l2_stride and self.l2_stride > 1:
+                snaps = snaps[::self.l2_stride]
+            self._snaps = snaps
+            self._df = self._df or snaps  # so status() reports a row count
+        return self._snaps
+
     def _load_pair(self):
         """Load two aligned markets (coin, coin_b) for the pairs target."""
         if self._dfA is None:
@@ -114,6 +133,8 @@ class DexEvolutionService:
             "pipeline": "dex",
             "running": self._running,
             "venue": "hyperliquid",
+            "target": self.target,
+            "native": self.target == "market_maker",   # MM uses no LLM
             "gate_preset": self.gate_preset,
             "llm_backend": self.llm.name,
             "interval_s": self.interval_s,
@@ -123,6 +144,7 @@ class DexEvolutionService:
             "best_fitness": (best.fitness_score if best else None),
             "best_id": (best.candidate_id if best else None),
             "data_rows": (len(self._df) if self._df is not None else None),
+            "l2_snapshots": (len(self._snaps) if self._snaps is not None else None),
             "stats": dict(self.stats),
         }
 
@@ -146,10 +168,13 @@ class DexEvolutionService:
     async def _loop(self):
         while self._running:
             try:
+                snaps = None
                 if self.target == "pairs":
                     dfA, dfB = self._load_pair()
                 elif self.target == "cross_market":
                     markets_df = self._load_markets()
+                elif self.target == "market_maker":
+                    snaps = self._load_snaps()      # native MM path uses L2, not bars
                 else:
                     df = self._load_df()
                 try:                                   # P5: inject recent failure feedback
@@ -169,9 +194,11 @@ class DexEvolutionService:
                             config=self.evolution_config, fitness_config=self.fitness_config),
                         self.steps_per_cycle, self.concurrency)
                 elif self.target == "market_maker":
+                    # NATIVE path (no LLM): GA + MAP-Elites over (spread, skew, size)
+                    # evaluated by the tick/L2 backtester. The pool/sampler are unused.
                     produced = await _run_steps_parallel(
-                        lambda: dex_mm_evolution_step(
-                            self.db, self.sampler, self.pool, df,
+                        lambda: mm_param_step(
+                            self.db, snaps,
                             config=self.evolution_config, fitness_config=self.fitness_config),
                         self.steps_per_cycle, self.concurrency)
                 else:

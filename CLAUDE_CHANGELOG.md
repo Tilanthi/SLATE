@@ -405,3 +405,56 @@ survives the brutal-cost gate is the open empirical question — this work remov
 the engineering blockers (idle pipeline, compile attrition, weak validation) that
 were preventing the question from being answered, not a claim that alpha has been
 found.
+
+---
+
+## 🧠 Native (LLM-free) market-maker discovery on tick/L2 data (2026-07-18)
+
+Per directive: discovery choices must come from SLATE's **native intelligence**,
+not an LLM — the LLM is for I/O only; using it as the variation operator imports
+its textbook market priors (the consensus efficient markets have already priced).
+The DEX `market_maker` path previously used GLM to propose/mutate a `quote_fn`.
+It now uses a **native GA + MAP-Elites parameter optimizer** over a realistic
+**tick/L2 backtester** — zero LLM calls in the loop.
+
+### New components
+- **`dex/backtester/mm_tick_backtester.py`** — replays the accumulated L2
+  snapshots (`L2_SOL.jsonl`, ~234k snaps ~1s cadence) and simulates an MM. The
+  honest core is a **price-time-priority fill model**: a resting order fills only
+  after traded volume (book-depth delta) consumes the size resting at better
+  prices — `fill = min(size, max(0, traded − size_ahead))`. This *naturally*
+  models adverse selection (you only fill when directional pressure reaches your
+  level). Reuses `economics.HLFeeSchedule` (maker rebate/taker fee).
+- **`discovery/evolution/variation.py`** — native GA operators ported from the
+  isolated `intelligence/genetic_optimizer.py`: `gaussian_mutate`,
+  `uniform_crossover`, `tournament_select`, `random_params`. Pure functions, no
+  LLM, no new deps.
+- **`dex/evolution/param_optimizer.py`** — searches `(half_spread_bps,
+  inv_skew_bps, size)` via `ProgramDatabase` MAP-Elites + Gaussian mutation,
+  evaluated by walk-forward tick backtest (absolute net profit in **every** fold,
+  `bench_buyhold=False`). `seed_mm_population` seeds baseline policies.
+
+### Wiring (no LLM)
+- `dex_service`: `target="market_maker"` now dispatches to `mm_param_step`
+  (native) on the loaded L2 snapshots; the `pool`/`sampler` are unused for MM.
+- 24/7 launchd runs `SLATE_PIPELINE=dex` + `SLATE_DEX_TARGET=market_maker`.
+
+### Verification
+- Suite: **296 passed / 0 failed** (+16: tick-backtester fill model, variation
+  operators, optimizer convergence on a synthetic spread-capture landscape).
+- Live: `target=market_maker`, `native=true`, 56k L2 snapshots loaded; verdicts
+  flow as `dexmmseed:`/`dexmmopt:`; **zero** `pool.generate`/LLM references in
+  the three native modules.
+
+### Honest finding (the point of the exercise)
+At the **default retail maker fee (+0.015%)**, tight-spread MM **loses** on real
+SOL L2 — verified across spread widths (1bps→2759 fills but PnL −16; 10bps→1
+fill): captured spread (≤2bps round-trip) < fees (3bps round-trip). The loss is
+essentially all fees, not adverse selection (which the model does capture but
+which is small here). The **maker-rebate edge only exists at the negative-maker
+(rebate) tier**, which a pure-maker strategy would qualify for — that is an
+**unverified assumption** (`schedule` is now configurable to test it). The
+optimizer correctly rejects every candidate under brutal retail fees — this is
+the honest answer, not a failure: retail-scale perp MM has no alpha after costs.
+Whether rebate-tier MM survives adverse selection across walk-forward folds is
+the now-testable question.
