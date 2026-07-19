@@ -499,3 +499,58 @@ succeeded. Thread-safe for concurrent steps; module-level default store.
 ### Verification
 - Suite: **301 passed / 0 failed** (+5: fee-tier lookup, pheromone guide/avoid).
 - Live: MM native path still LLM-free; pheromone store active (deposits per step).
+
+---
+
+## 🧬 Phase A — structure-level GP market-maker (mechanism built; evaluator honesty = open blocker) (2026-07-19)
+
+Per directive: replace the 3-parameter sweep over a fixed textbook MM archetype
+with **structure-level evolution** (vary the quoting policy's FORM via genetic
+programming) + a **genuine multi-agent swarm** + **novelty pressure** against
+textbook forms — LLM-free, native. Phased A→B→C with gates.
+
+### Phase A delivered (the mechanism — unit-tested, sound)
+- `gp/genome.py`: expression-tree individual (3 sub-trees → half_spread/skew/size)
+  over a deliberately NON-textbook microstructure feature set (order-flow
+  imbalance, traded depth-deltas, queue-ahead, vol-of-vol, adverse-selection) +
+  arithmetic/logic/conditional functions; serializes to a sandbox-compiled
+  `policy_fn(state)`.
+- `gp/operators.py`: native GP operators (ramped-half-and-half init, subtree
+  crossover/mutation, point mutation, tournament) — no LLM.
+- `gp/fitness.py`: structure-level fitness — sandbox-compile → tick backtest →
+  walk-forward (absolute profit/fold) + **novelty_score vs textbook archetype
+  curves** (pushes behavior AWAY from the public/arbitraged form).
+- `gp/controller.py`: native evolution loop (sample→vary→eval→MAP-Elites store).
+- `mm_tick_backtester.py`: `SnapshotState` + a `policy_fn(state)` hook
+  (backward-compatible with the fixed MMPolicy).
+- `dex_service.py`: new `market_maker_gp` target (LLM-free; searches at the
+  maker=0% tier, the regime where active MM can be viable). Suite **317 green**.
+
+### Gate A — NOT cleanly passed (honest blocker)
+The GP **mechanism** is verified: it evolves structurally diverse, sandbox-safe,
+LLM-free policies, novelty pressure discriminates textbook vs non-textbook
+behavior, and it accumulates + climbs. BUT live evaluation exposed an
+**evaluator-honesty blocker**: the tick backtester's depth-delta fill model is
+**too optimistic** (understates adverse selection), so the GP exploits it — a
+simple 1bps MM scores a realistic ~5%/year, yet the GP finds policies scoring
+~200%/year, i.e. gaming the lenient fill model. Two real bugs were fixed:
+- **inventory-cap fill bug** (a bid fill wasn't capped to remaining capacity →
+  position could overshoot `max_inventory`, producing ±800%/fold); capped, max
+  |fold PnL| dropped 148k→~1.7k.
+- **plausibility guard** (`evaluate_gp_tree`): rejects any fold |PnL| > 5%
+  (already ~100× realistic MM) as `implausible_backtest_artifact` so artifacts
+  can't corrupt the population.
+
+These stop the egregious false positives, but the underlying optimism remains:
+even "sane-looking" GP results are overstated until the adverse-selection/fill
+model is hardened. **This is the Gate-A blocker and the required next step.**
+Phase B (swarm) is deliberately deferred until the evaluator is trustworthy — a
+swarm amplifying an optimistic evaluator would manufacture false positives faster.
+
+### Honest status
+Real progress: the native, LLM-free, structure-level GP infrastructure exists
+and is tested. But it cannot be trusted to find alpha yet because its evaluator
+(the tick MM backtester) overstates MM profitability — the same microstructure-
+fidelity limit flagged earlier (1s snapshots can't resolve sub-second queue races
+/ true adverse selection). Next: harden the fill/adverse-selection model (or
+constrain policies to conservative quote ranges) before believing GP results.

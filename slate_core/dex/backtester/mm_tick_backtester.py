@@ -30,8 +30,10 @@ identical to the bar-level venue model.
 """
 from __future__ import annotations
 
+import math
+from collections import deque
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence
+from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 from slate_core.dex.backtester.economics import HLFeeSchedule, fee_for, oracle_ok
 from slate_core.dex.backtester.l2_tick_backtester import load_l2_snapshots
@@ -43,6 +45,34 @@ class MMPolicy:
     half_spread_bps: float = 10.0     # half-width of the quoted spread around mid
     inv_skew_bps: float = 2.0         # inventory skew (quotes shift against position)
     size: float = 0.5                 # base order size (base units)
+
+
+# Per-snapshot microstructure state handed to an EVOLVED policy_fn. Field names
+# MUST match the GP feature terminals (slate_core/dex/evolution/gp/genome.py).
+@dataclass
+class SnapshotState:
+    i: int
+    mid: float
+    mid_ret1: float                # 1-snapshot mid return
+    mid_ret5: float                # 5-snapshot mid return
+    imbalance: float               # top-of-book order-flow imbalance (-1..1)
+    spread_bps: float              # bid-ask spread (bps)
+    depth_imb: float               # (bid_depth - ask_depth) / total
+    bid_consumed: float            # traded volume that hit bids this step (depth delta)
+    ask_consumed: float            # traded volume that hit asks this step
+    queue_ahead_bid: float         # size resting at the best bid (queue proxy)
+    queue_ahead_ask: float         # size resting at the best ask
+    inv_frac: float                # signed inventory fraction (-1..1)
+    vol_of_vol: float              # rolling stdev of recent mid returns (bps)
+    adv_recent: float              # recent adverse-selection cost (bps)
+    equity_slope: float            # recent equity-curve slope
+    equity_curve: List[float] = field(default_factory=list)
+    fill_rate: float = 0.0
+
+
+# An evolved policy maps state -> (half_spread_bps, inv_skew_bps, size) or None (abstain).
+PolicyFn = Callable[[SnapshotState], Optional[Tuple[float, float, float]]]
+Policy = Union[MMPolicy, PolicyFn]
 
 
 @dataclass
@@ -80,9 +110,45 @@ def _size_ahead_better_ask(asks: Sequence, our_ask_px: float) -> float:
     return float(sum(sz for px, sz in asks if px < our_ask_px)) if asks else 0.0
 
 
+def _build_snapshot_state(i, cur, cur_mid, bid_consumed, ask_consumed, inv_frac,
+                          mid_hist, adv_hist, eq_hist, equity_curve,
+                          maker_fills, quoted_snaps) -> SnapshotState:
+    """Build the per-snapshot microstructure state consumed by an evolved policy."""
+    bids = cur.get("bids") or []
+    asks = cur.get("asks") or []
+    bd = float(sum(sz for _, sz in bids))
+    ad = float(sum(sz for _, sz in asks))
+    depth_imb = (bd - ad) / (bd + ad) if (bd + ad) > 0 else 0.0
+    # recent mid returns + vol-of-vol (bps)
+    mids = list(mid_hist)
+    mid_ret1 = (mids[-1] / mids[-2] - 1.0) if len(mids) >= 2 and mids[-2] else 0.0
+    mid_ret5 = (mids[-1] / mids[-6] - 1.0) if len(mids) >= 6 and mids[-6] else 0.0
+    if len(mids) >= 6:
+        rets = [(mids[k] / mids[k - 1] - 1.0) for k in range(max(1, len(mids) - 20), len(mids)) if mids[k - 1]]
+        mean = sum(rets) / len(rets) if rets else 0.0
+        var = sum((r - mean) ** 2 for r in rets) / len(rets) if rets else 0.0
+        vol_of_vol = math.sqrt(var) * 10_000.0
+    else:
+        vol_of_vol = 0.0
+    adv_recent = sum(adv_hist) / len(adv_hist) if adv_hist else 0.0
+    eqs = list(eq_hist)
+    equity_slope = (eqs[-1] / eqs[-6] - 1.0) if len(eqs) >= 6 and eqs[-6] else 0.0
+    return SnapshotState(
+        i=i, mid=cur_mid, mid_ret1=mid_ret1, mid_ret5=mid_ret5,
+        imbalance=float(cur.get("imbalance", 0.0)),
+        spread_bps=float(cur.get("spread_bps", 0.0)),
+        depth_imb=depth_imb, bid_consumed=bid_consumed, ask_consumed=ask_consumed,
+        queue_ahead_bid=float(bids[0][1]) if bids else 0.0,
+        queue_ahead_ask=float(asks[0][1]) if asks else 0.0,
+        inv_frac=inv_frac, vol_of_vol=vol_of_vol, adv_recent=adv_recent,
+        equity_slope=equity_slope, equity_curve=list(equity_curve),
+        fill_rate=(maker_fills / quoted_snaps) if quoted_snaps else 0.0,
+    )
+
+
 def backtest_mm(
     snaps: List[dict],
-    policy: MMPolicy,
+    policy: Policy,
     schedule: Optional[HLFeeSchedule] = None,
     capital: float = 10_000.0,
     max_inventory: float = 2.0,
@@ -91,14 +157,19 @@ def backtest_mm(
 ) -> MMTickResult:
     """Backtest a market-maker policy over a stream of L2 snapshots.
 
-    Each snapshot: quote bid/ask around mid (skewed against inventory), then
-    resolve the PREVIOUS snapshot's resting orders against this snapshot's
-    book-depth delta. Fills are maker (at our price); inventory accrues funding.
+    `policy` is either an `MMPolicy` (fixed half/skew/size) OR a callable
+    `policy_fn(SnapshotState) -> (half_spread_bps, inv_skew_bps, size) | None`
+    (an evolved GP policy; None = abstain this snapshot). Each snapshot: quote
+    bid/ask around mid (skewed against inventory), then resolve the PREVIOUS
+    snapshot's resting orders against this snapshot's book-depth delta. Fills are
+    maker (at our price); inventory accrues funding.
     """
     sched = schedule or HLFeeSchedule()
-    half = max(1.0, policy.half_spread_bps) / 10_000.0
-    skew = policy.inv_skew_bps / 10_000.0
-    order_size = max(0.0, policy.size)
+    is_callable = callable(policy)
+    # Fixed-policy constants (only used when policy is an MMPolicy).
+    half = max(1.0, getattr(policy, "half_spread_bps", 10.0)) / 10_000.0
+    skew = getattr(policy, "inv_skew_bps", 0.0) / 10_000.0
+    order_size = max(0.0, getattr(policy, "size", 0.5))
 
     position = 0.0
     cash = capital
@@ -111,6 +182,11 @@ def backtest_mm(
     inventory_turnover = 0.0
     bars_in_market = 0
     quoted_snaps = 0
+
+    # Rolling microstructure state for the evolved policy's features.
+    mid_hist: deque = deque(maxlen=32)          # recent mids (returns + vol_of_vol)
+    adv_hist: deque = deque(maxlen=20)          # recent settled adverse-selection (bps)
+    eq_hist: deque = deque(maxlen=20)           # recent equity (slope)
 
     # Resting orders placed at snap i-1, resolved against snap i.
     resting_bid_px: Optional[float] = None
@@ -142,7 +218,10 @@ def backtest_mm(
             ahead = _size_ahead_better_bid(prev_bids, resting_bid_px)
             reached = bid_consumed - ahead
             if reached > 0.0:
-                fill_qty = min(resting_bid_sz, reached)
+                # Cap to remaining inventory capacity so position can NEVER exceed
+                # max_inventory (a single fill otherwise overshoots the cap).
+                fill_qty = min(resting_bid_sz, reached,
+                               max(0.0, max_inventory - position))
                 if fill_qty > 0.0:
                     notional = fill_qty * resting_bid_px
                     fee = fee_for(notional, is_maker=True, schedule=sched)
@@ -187,6 +266,8 @@ def backtest_mm(
         equity = cash + position * cur_mid
         equity_curve.append(equity)
         peak_equity = max(peak_equity, equity)
+        mid_hist.append(cur_mid)
+        eq_hist.append(equity)
 
         # 3) Settle adverse-selection measurements now that `adv_lookback` snaps passed.
         still_pending = []
@@ -197,22 +278,46 @@ def backtest_mm(
                 # Adverse: a buy that fell, or a sell that rose.
                 moved_against = max(0.0, -side * drift)
                 adverse_selection_cost += moved_against * order_size
+                adv_hist.append(moved_against * 10_000.0)   # bps
             else:
                 still_pending.append(entry)
         pending_adv = still_pending
 
         # 4) Place new resting quotes for the next interval (cancel/replace).
         inv_frac = max(-1.0, min(1.0, position / max_inventory)) if max_inventory > 0 else 0.0
-        adj = -skew * inv_frac                         # long inventory -> shift quotes down
-        bid_px = prev_mid * (1.0 - half + adj)
-        ask_px = prev_mid * (1.0 + half + adj)
+        quote_mid = cur_mid
+        if is_callable:
+            state = _build_snapshot_state(
+                i, cur, cur_mid, bid_consumed, ask_consumed, inv_frac,
+                mid_hist, adv_hist, eq_hist, equity_curve,
+                maker_fills, quoted_snaps)
+            try:
+                q = policy(state)
+            except Exception:  # noqa: BLE001 - sandbox already guards, but be safe
+                q = None
+            if isinstance(q, tuple) and len(q) == 3:
+                c_half = max(1.0, min(500.0, float(q[0]))) / 10_000.0
+                c_skew = max(-200.0, min(200.0, float(q[1]))) / 10_000.0
+                c_size = max(0.0, min(max_inventory, float(q[2])))
+                adj = -c_skew * inv_frac
+                bid_px = quote_mid * (1.0 - c_half + adj)
+                ask_px = quote_mid * (1.0 + c_half + adj)
+                this_size = c_size
+            else:
+                bid_px = ask_px = None      # abstain this snapshot
+                this_size = 0.0
+        else:
+            adj = -skew * inv_frac          # long inventory -> shift quotes down
+            bid_px = prev_mid * (1.0 - half + adj)
+            ask_px = prev_mid * (1.0 + half + adj)
+            this_size = order_size
         # Oracle guard: refuse quotes >oracle_tol from mid (Hyperliquid rejects these).
-        bid_ok = oracle_ok(bid_px, prev_mid, sched) and position < max_inventory
-        ask_ok = oracle_ok(ask_px, prev_mid, sched) and position > -max_inventory
+        bid_ok = bid_px is not None and oracle_ok(bid_px, quote_mid, sched) and position < max_inventory
+        ask_ok = ask_px is not None and oracle_ok(ask_px, quote_mid, sched) and position > -max_inventory
         resting_bid_px = bid_px if bid_ok else None
         resting_ask_px = ask_px if ask_ok else None
-        resting_bid_sz = order_size if bid_ok else 0.0
-        resting_ask_sz = order_size if ask_ok else 0.0
+        resting_bid_sz = this_size if bid_ok else 0.0
+        resting_ask_sz = this_size if ask_ok else 0.0
         if bid_ok or ask_ok:
             quoted_snaps += 1
 

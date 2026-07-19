@@ -19,12 +19,15 @@ from slate_core.discovery.evolution.program_database import ProgramDBConfig, Pro
 from slate_core.dex.data.load_data import REAL_DATA_DEFAULT, load_candles, load_markets, merge_funding
 from slate_core.dex.data.hyperliquid_client import HLClient
 from slate_core.dex.backtester.l2_tick_backtester import load_l2_snapshots
+from slate_core.dex.backtester.economics import hl_perp_fee_schedule
 from slate_core.dex.evolution.dex_controller import (
     DexMMPromptSampler, DexPairsPromptSampler, DexPromptSampler, _run_steps_parallel,
     dex_cross_market_evolution_step, dex_failure_summary, dex_mm_evolution_step,
     dex_pairs_evolution_step, run_dex_evolution, run_dex_evolution_parallel,
 )
 from slate_core.dex.evolution.param_optimizer import mm_param_step
+from slate_core.dex.evolution.gp.controller import gp_evolution_step
+from slate_core.dex.evolution.gp.fitness import textbook_archetype_curves
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,8 @@ class DexEvolutionService:
         self.l2_data_path = l2_data_path or f"sol_data_cache/L2_{coin}.jsonl"
         self.l2_stride = l2_stride            # subsample factor for search-pace
         self._snaps = None
+        self._archetype_curves = None         # GP novelty reference (textbook MM curves)
+        self._gp_schedule = None              # GP search fee schedule (maker=0% tier)
         self._hl = HLClient()
         self._dfA = None
         self._dfB = None
@@ -134,7 +139,7 @@ class DexEvolutionService:
             "running": self._running,
             "venue": "hyperliquid",
             "target": self.target,
-            "native": self.target == "market_maker",   # MM uses no LLM
+            "native": self.target in ("market_maker", "market_maker_gp"),   # no LLM
             "gate_preset": self.gate_preset,
             "llm_backend": self.llm.name,
             "interval_s": self.interval_s,
@@ -175,6 +180,8 @@ class DexEvolutionService:
                     markets_df = self._load_markets()
                 elif self.target == "market_maker":
                     snaps = self._load_snaps()      # native MM path uses L2, not bars
+                elif self.target == "market_maker_gp":
+                    snaps = self._load_snaps()      # native GP path also uses L2
                 else:
                     df = self._load_df()
                 try:                                   # P5: inject recent failure feedback
@@ -200,6 +207,24 @@ class DexEvolutionService:
                         lambda: mm_param_step(
                             self.db, snaps,
                             config=self.evolution_config, fitness_config=self.fitness_config),
+                        self.steps_per_cycle, self.concurrency)
+                elif self.target == "market_maker_gp":
+                    # NATIVE structure-level GP (no LLM): evolve the quoting policy's
+                    # FORM, not just 3 params, with novelty pressure vs textbook MMs.
+                    if self._archetype_curves is None:
+                        self._archetype_curves = textbook_archetype_curves(snaps)
+                    if self._gp_schedule is None:
+                        # Search at the maker=0% tier (>$500M vol) — the regime where
+                        # active MM can be profitable. At retail fees (+0.015%) every
+                        # active strategy loses, so the search would degenerate to
+                        # abstention; maker=0% is the meaningful MM search regime.
+                        # Caveat: structure must profit net of adverse selection AND
+                        # the strategy must qualify for the volume tier in production.
+                        self._gp_schedule = hl_perp_fee_schedule(volume_14d_usd=600_000_000)
+                    produced = await _run_steps_parallel(
+                        lambda: gp_evolution_step(
+                            self.db, snaps, archetype_curves=self._archetype_curves,
+                            fitness_config=self.fitness_config, schedule=self._gp_schedule),
                         self.steps_per_cycle, self.concurrency)
                 else:
                     produced = await run_dex_evolution_parallel(
