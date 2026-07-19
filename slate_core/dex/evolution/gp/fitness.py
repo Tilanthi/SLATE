@@ -41,7 +41,10 @@ def evaluate_gp_tree(ind: Individual, snaps: Sequence[dict],
                      schedule: Optional[HLFeeSchedule] = None,
                      n_folds: int = WALKFORWARD_FOLDS,
                      max_inventory: float = 2.0,
-                     max_complexity: int = 400) -> FitnessResult:
+                     max_complexity: int = 400,
+                     max_half_spread_bps: float = 3.0,
+                     max_inv_skew_bps: float = 15.0,
+                     adverse_selection_bps: float = 0.6) -> FitnessResult:
     """Walk-forward tick-backtest fitness + novelty for a GP individual.
 
     Returns a FitnessResult where:
@@ -80,7 +83,10 @@ def evaluate_gp_tree(ind: Individual, snaps: Sequence[dict],
     worst_curve: List[float] = []
     worst_pnl = float("inf")
     for w in windows:
-        r = backtest_mm(w, fn, schedule=schedule, max_inventory=max_inventory)
+        r = backtest_mm(w, fn, schedule=schedule, max_inventory=max_inventory,
+                        max_half_spread_bps=max_half_spread_bps,
+                        max_inv_skew_bps=max_inv_skew_bps,
+                        adverse_selection_bps=adverse_selection_bps)
         pnls.append(r.total_pnl)
         fills.append(r.maker_fills)
         acts.append(r.bars_in_market / max(1, r.n_snapshots))

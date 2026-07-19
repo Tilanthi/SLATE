@@ -554,3 +554,49 @@ and is tested. But it cannot be trusted to find alpha yet because its evaluator
 fidelity limit flagged earlier (1s snapshots can't resolve sub-second queue races
 / true adverse selection). Next: harden the fill/adverse-selection model (or
 constrain policies to conservative quote ranges) before believing GP results.
+
+---
+
+## 🛡️ Hardened the tick MM backtester so results are believable (2026-07-19)
+
+The Phase-A evaluator was exploitable: an aggressive GP found policies scoring
+~200%/year (vs ~5%/year realistic) by gaming the snapshot fill model. Root-caused
+to THREE honest-model defects and fixed each, grounded in measurement.
+
+### Diagnosis (measured, not assumed)
+The L2 DATA is honest: bid-fills are followed by **−0.61 bps** and ask-fills by
+**−0.58 bps** (realistic adverse selection — fills ARE toxic). The backtester's
+optimism came from MODEL defects, not the data.
+
+### Fixes
+1. **Inventory-cap fill bug** — a bid fill wasn't capped to remaining capacity, so
+   position could overshoot `max_inventory`, producing ±800%/fold. Capped
+   (`fill_qty = min(size, reached, max_inventory - position)`).
+2. **Explicit adverse-selection charge** (`adverse_selection_bps=0.6`, the
+   *empirically measured* SOL post-fill adverse drift) on every maker fill. MTM
+   only realizes 1 snap of adverse drift, but the real toxic-flow cost unfolds
+   over ~10 snaps — a policy could otherwise fill on a toxic order and exit before
+   the drift realized. Charging it closes that exploit.
+3. **Physically-realistic quote clamp** — constrain evolved quotes to the asset's
+   actual spread (`half_spread ∈ [1, 3] bps`, `inv_skew ∈ [-15, 15] bps`). A 15-
+   500 bps quote on a ~1 bps-spread asset (HL SOL) is an artifact; it let the GP
+   capture 30 bps "round-trips" on mean-reverting big sells no real MM could fill.
+4. **Plausibility guard** retained (reject |fold PnL| > 5% as
+   `implausible_backtest_artifact`) — safety net for residual snapshot artifacts.
+
+### Verification
+- Former +634/fold "winner" → **−1.94/fold (rejected)** under the hardened model.
+- Fixed MMs at maker=0% now show realistic small **losses** (1bps −13.97, 3bps
+  −4.33, 5bps −3.79) — adverse selection dominates, as in real markets.
+- Live GP: legitimate (non-artifact) fold PnL bounded to **single digits** (was
+  148,364); residual artifacts (>250) are caught by the guard, not stored.
+- Suite **318 passed** (+1 hardening test).
+
+### Honest bottom line
+The evaluator is now defensible: legitimate results are believable (single-digit
+$/fold), the egregious exploits are gone, and a guard catches residual snapshot-
+model artifacts. The honest conclusion the backtester now supports — unchanged
+but now trustworthy — is: **HL SOL market-making has no edge for a non-HFT
+participant; adverse selection dominates even at the maker=0% tier.** The
+fundamental 1s-snapshot limit (can't resolve sub-second queue races / true
+adverse selection) remains, so the plausibility guard stays as a necessary net.

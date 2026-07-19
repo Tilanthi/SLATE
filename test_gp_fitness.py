@@ -76,3 +76,29 @@ def test_size_capped_to_max_inventory_prevents_runaway():
                            max_inventory=2.0)
     # Loss is bounded (capped size); not a runaway like -1e6.
     assert res.oos_vs_buyhold > -1e6
+
+
+def test_realistic_quote_clamp_bounds_gp_pnl_believably():
+    # The honesty hardening: constraining quotes to the asset's spread (~3bps on
+    # HL SOL) + the adverse-selection charge must keep GP fold PnL in a believable
+    # range (real MM makes single-digit %/YEAR, not hundreds of %/fold).
+    from slate_core.dex.backtester.mm_tick_backtester import load_l2_snapshots
+    from slate_core.dex.evolution.gp import ramped_half_and_half
+    from slate_core.dex.evolution.gp.fitness import evaluate_gp_tree, textbook_archetype_curves
+    from slate_core.dex.backtester.economics import hl_perp_fee_schedule
+    from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
+    import random
+    snaps = load_l2_snapshots("sol_data_cache/L2_SOL.jsonl")[::9][:4000]  # small+fast for CI
+    sched = hl_perp_fee_schedule(volume_14d_usd=600_000_000)
+    arch = textbook_archetype_curves(snaps, schedule=sched)
+    cfg = FitnessConfig(min_trades=1)
+    rng = random.Random(7)
+    max_abs = 0.0
+    for _ in range(8):
+        ind = ramped_half_and_half(rng, 3)
+        r = evaluate_gp_tree(ind, snaps, cfg, archetype_curves=arch, schedule=sched,
+                             max_half_spread_bps=3.0, adverse_selection_bps=0.6)
+        for p in (r.metrics_oos or {}).get("fold_pnls", []):
+            max_abs = max(max_abs, abs(p))
+    # Believable: a few-thousand-snap fold should not realize hundreds of $.
+    assert max_abs < 100.0, f"GP fold |PnL| {max_abs:.1f} still implausible after hardening"

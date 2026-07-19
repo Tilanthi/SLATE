@@ -82,7 +82,8 @@ class MMTickResult:
     total_rebates: float              # cash back from negative maker fees (>=0)
     total_fees: float                 # maker+taker fees paid (>=0)
     total_funding: float              # funding paid on inventory
-    adverse_selection_cost: float     # MTM loss attributable to post-fill mid drift
+    adverse_selection_cost: float     # MTM loss attributable to post-fill mid drift (measured)
+    adverse_selection_charge: float   # explicit toxic-flow tax charged per fill (calibrated)
     maker_fills: int
     taker_fills: int
     fill_rate: float                  # maker fills / snapshots quoted (0..1)
@@ -154,6 +155,9 @@ def backtest_mm(
     max_inventory: float = 2.0,
     funding_rate_per_snap: float = 0.0,
     adv_lookback: int = 5,
+    adverse_selection_bps: float = 0.6,   # empirical SOL post-fill adverse drift (~0.6bps/fill)
+    max_half_spread_bps: float = 15.0,
+    max_inv_skew_bps: float = 30.0,
 ) -> MMTickResult:
     """Backtest a market-maker policy over a stream of L2 snapshots.
 
@@ -163,9 +167,20 @@ def backtest_mm(
     bid/ask around mid (skewed against inventory), then resolve the PREVIOUS
     snapshot's resting orders against this snapshot's book-depth delta. Fills are
     maker (at our price); inventory accrues funding.
+
+    Honesty guards (so results are believable, not gamed by aggressive policies):
+      - `adverse_selection_bps`: an explicit toxic-flow tax charged on EVERY maker
+        fill. MTM only realizes 1 snap of adverse drift, but real adverse
+        selection unfolds over ~10 snaps (empirically ~0.6bps/fill on SOL L2) — a
+        policy can otherwise fill on a toxic order and exit before the drift hits.
+        Charging ~1bps/fill makes the net spread capture realistic. Conservative.
+      - `max_half_spread_bps` / `max_inv_skew_bps`: clamp evolved quotes to ranges
+        physically realistic for a ~1bps-spread asset (HL SOL). A 50-500bps quote
+        on a 1bps book is an artifact, not a real MM strategy.
     """
     sched = schedule or HLFeeSchedule()
     is_callable = callable(policy)
+    as_rate = adverse_selection_bps / 10_000.0
     # Fixed-policy constants (only used when policy is an MMPolicy).
     half = max(1.0, getattr(policy, "half_spread_bps", 10.0)) / 10_000.0
     skew = getattr(policy, "inv_skew_bps", 0.0) / 10_000.0
@@ -177,6 +192,7 @@ def backtest_mm(
     total_fees = 0.0
     total_funding = 0.0
     adverse_selection_cost = 0.0
+    adverse_selection_charge = 0.0     # explicit toxic-flow tax (calibrated per fill)
     maker_fills = 0
     taker_fills = 0
     inventory_turnover = 0.0
@@ -231,6 +247,13 @@ def backtest_mm(
                     else:
                         total_fees += fee
                     cash -= fee                       # cost (fee>0) subtracts; rebate (fee<0) adds
+                    # Adverse-selection tax: a maker fill is disproportionately
+                    # toxic (informed flow); the real adverse drift unfolds over
+                    # ~10 snaps while MTM only sees 1. Charge it explicitly so a
+                    # policy can't profit by exiting before the drift realizes.
+                    as_charge = as_rate * notional
+                    cash -= as_charge
+                    adverse_selection_charge += as_charge
                     position += fill_qty
                     inventory_turnover += fill_qty
                     maker_fills += 1
@@ -250,6 +273,9 @@ def backtest_mm(
                     else:
                         total_fees += fee
                     cash -= fee                       # cost (fee>0) subtracts; rebate (fee<0) adds
+                    as_charge = as_rate * notional    # toxic-flow tax (sell side)
+                    cash -= as_charge
+                    adverse_selection_charge += as_charge
                     position -= fill_qty
                     inventory_turnover += fill_qty
                     maker_fills += 1
@@ -296,8 +322,10 @@ def backtest_mm(
             except Exception:  # noqa: BLE001 - sandbox already guards, but be safe
                 q = None
             if isinstance(q, tuple) and len(q) == 3:
-                c_half = max(1.0, min(500.0, float(q[0]))) / 10_000.0
-                c_skew = max(-200.0, min(200.0, float(q[1]))) / 10_000.0
+                # Clamp evolved quotes to physically-realistic ranges for a
+                # ~1bps-spread asset. A 50-500bps quote on HL SOL is an artifact.
+                c_half = max(1.0, min(max_half_spread_bps, float(q[0]))) / 10_000.0
+                c_skew = max(-max_inv_skew_bps, min(max_inv_skew_bps, float(q[1]))) / 10_000.0
                 c_size = max(0.0, min(max_inventory, float(q[2])))
                 adj = -c_skew * inv_frac
                 bid_px = quote_mid * (1.0 - c_half + adj)
@@ -344,6 +372,7 @@ def backtest_mm(
         final_equity=final_equity, total_pnl=total_pnl,
         total_rebates=total_rebates, total_fees=total_fees,
         total_funding=total_funding, adverse_selection_cost=adverse_selection_cost,
+        adverse_selection_charge=adverse_selection_charge,
         maker_fills=maker_fills, taker_fills=taker_fills, fill_rate=fill_rate,
         inventory_turnover=inventory_turnover, bars_in_market=bars_in_market,
         n_snapshots=max(0, len(snaps) - 1), max_drawdown_pct=max_dd,
