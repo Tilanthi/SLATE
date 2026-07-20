@@ -94,11 +94,11 @@ class RegimeSwitchPortfolio:
         return {coin: self.backtest(df, coin=coin) for coin, df in coins_data.items()}
 
 
-# Default regime map based on the wide-sweep findings
+# Default regime map based on the mega-sweep findings (trend-following dominates)
 DEFAULT_REGIME_MAP = {
     BEAR: ("carry_regime", {"ut": 0.01, "lb": 24, "thr": 0.0}),
-    BULL: ("mean_reversion", {"lb": 48, "z": 2.0}),
-    LOW_VOL: ("mean_reversion", {"lb": 96, "z": 2.5}),
+    BULL: ("trend_follow", {"lb": 168, "thr": 0.05}),
+    LOW_VOL: ("ema_cross", {"fast": 12, "slow": 48}),
     # SIDEWAYS: flat (no edge found)
     # HIGH_VOL: flat (no edge found)
 }

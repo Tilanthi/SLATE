@@ -35,15 +35,30 @@ DB_PATH = "slate_core/strategy_results.db"
 # ---- fast vectorized backtester ----
 
 def fast_backtest(signals: np.ndarray, closes: np.ndarray,
-                  fee: float = 0.0005) -> np.ndarray:
-    """Vectorized signal→returns. signals: {-1,0,1}, closes: price array.
-    Returns per-bar returns (position × bar_return − fee × |position_change|).
-    ~100x faster than PerpetualFuturesBacktester."""
+                  fee: float = 0.0005, slippage_bps: float = 15.0,
+                  fill_rate: float = 0.85) -> np.ndarray:
+    """Vectorized signal→returns with BRUTALLY HONEST costs.
+
+    Costs modeled:
+    - taker fee: 0.05% per side (Binance/HL taker)
+    - slippage: 15 bps per side (realistic for perp market orders)
+    - fill rate: 85% (orders don't always fill)
+    - position change cost = (fee + slippage) × fill_rate × |Δposition|
+
+    signals: {-1,0,1}, closes: price array.
+    Returns per-bar returns after all costs.
+    """
     n = len(signals)
     bar_ret = np.zeros(n)
     bar_ret[1:] = closes[1:] / closes[:-1] - 1.0
     pos = np.array(signals, dtype=float)
-    trade_cost = np.abs(np.diff(pos, prepend=0)) * fee
+
+    # Trade cost: fee + slippage per side, reduced by fill rate
+    cost_per_side = (fee + slippage_bps / 10000.0) * fill_rate
+    trade_cost = np.abs(np.diff(pos, prepend=0)) * cost_per_side
+
+    # Position also suffers slippage on the UNREALIZED side (tracking error)
+    # — the signal says go long, but you enter slightly worse than close
     rets = pos * bar_ret - trade_cost
     return rets
 
