@@ -54,10 +54,13 @@ class HLClient:
 
     def funding_history(self, coin: str, start_ms: Optional[int] = None,
                         end_ms: Optional[int] = None) -> List[Dict[str, Any]]:
+        # HL API REQUIRES startTime (returns 422 without it). Default to 1 year ago.
+        import time
+        if start_ms is None:
+            start_ms = int((time.time() - 365 * 86400) * 1000)
         out: List[Dict[str, Any]] = []
-        params: Dict[str, Any] = {"type": "fundingHistory", "coin": coin}
-        if start_ms is not None:
-            params["startTime"] = start_ms
+        params: Dict[str, Any] = {"type": "fundingHistory", "coin": coin,
+                                  "startTime": start_ms}
         if end_ms is not None:
             params["endTime"] = end_ms
         while True:
