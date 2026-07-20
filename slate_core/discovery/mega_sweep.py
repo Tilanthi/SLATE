@@ -533,7 +533,7 @@ def run_mega_sweep(coins_data: Dict[str, pd.DataFrame],
                         per_r[r] = None
 
                 conn.execute(
-                    "INSERT INTO mega_sweep_results VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO mega_sweep_results VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (full_id, stype, coin, json.dumps(params),
                      m["sharpe"], m["max_drawdown"],
                      float(np.nansum(rets) * 10000),
@@ -547,7 +547,8 @@ def run_mega_sweep(coins_data: Dict[str, pd.DataFrame],
                     "per_regime": per_r,
                 })
             except Exception as exc:
-                pass
+                if vi < 3:
+                    print(f"  ERROR {full_id}: {type(exc).__name__}: {str(exc)[:120]}")
 
             if (vi + 1) % 200 == 0:
                 conn.commit()

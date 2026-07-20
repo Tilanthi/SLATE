@@ -409,6 +409,45 @@ async def portfolio_stop():
     return {"stopped": True, "status": PORTFOLIO_SERVICE.status()}
 
 
+@app.post("/api/sweep/run")
+async def sweep_run():
+    """Run the mega strategy sweep (5000+ variants) + regime-switching portfolio.
+    Executes in the server process (outside any sandbox)."""
+    import io, contextlib
+    from slate_core.dex.data.load_data import load_candles, merge_funding
+    from slate_core.dex.data.hyperliquid_client import HLClient
+    from slate_core.discovery.mega_sweep import run_mega_sweep
+    from slate_core.discovery.regime_detector import RegimeDetector
+    from slate_core.portfolio.regime_switch import run_regime_switch_backtest
+
+    client = HLClient()
+    coins = {}
+    for coin in ["SOL", "BTC", "ETH"]:
+        df = load_candles(f"sol_data_cache/HYPERLIQUID_{coin}_1h.json")
+        df = merge_funding(df, client, coin)
+        coins[coin] = df
+
+    rd = RegimeDetector(use_hmm=False)
+    # Capture stdout
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        sweep = run_mega_sweep(coins, regime_detector=rd)
+        rsp = run_regime_switch_backtest(coins)
+
+    output = buf.getvalue()
+    combined = rsp["combined"]["metrics"]
+    return {
+        "sweep_total": sweep["total"],
+        "sweep_positive": sweep["positive"],
+        "top5": [{"id": r["id"], "sharpe": round(r["sharpe"], 2)}
+                 for r in sweep["top"][:5]],
+        "regime_switch_sharpe": round(combined["sharpe"], 2),
+        "regime_switch_dd": round(combined["max_drawdown"], 4),
+        "regime_switch_calmar": round(combined["calmar"], 2),
+        "output": output[-3000:] if len(output) > 3000 else output,
+    }
+
+
 @app.get("/api/amm/status")
 async def amm_status():
     """Status of the AMM LP evolution loop."""
