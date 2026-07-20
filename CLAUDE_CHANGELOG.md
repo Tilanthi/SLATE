@@ -600,3 +600,73 @@ but now trustworthy — is: **HL SOL market-making has no edge for a non-HFT
 participant; adverse selection dominates even at the maker=0% tier.** The
 fundamental 1s-snapshot limit (can't resolve sub-second queue races / true
 adverse selection) remains, so the plausibility guard stays as a necessary net.
+
+---
+
+## 🏗️ Architecture revision: diversified-premium portfolio + risk management (2026-07-20)
+
+**The strategic pivot**: SLATE refuted single-predictor alpha (0/1783 CEX
+directional, no DEX MM edge). The realistic path to positive risk-adjusted
+returns with low drawdown is NOT a single price-predictor — it's **harvesting
+a diversified book of risk premia (funding carry, basis, yield) under rigorous
+risk management.** This revision turns SLATE from a single-strategy discovery
+engine into a **portfolio risk-management system**.
+
+### What was built (5 layers)
+
+**Layer 1 — Premium streams** (`slate_core/premium/funding_carry.py`):
+`backtest_funding_carry(coin, df, threshold)` — backtests a funding-carry
+stream (short when funding > threshold) on the bar backtester with funding
+integration, returns `{equity_curve, returns, metrics}`. Multi-coin via
+`backtest_funding_carry_multi`. Also: `equity_curve` exposed in
+`PerpetualBacktestResult` (was internal).
+
+**Layer 2 — Portfolio backtester** (`slate_core/portfolio/portfolio_backtester.py`):
+`PortfolioBacktester.combine(stream_returns, weights)` → combined returns +
+equity curve + Sharpe/drawdown/Calmar/diversification-ratio. Plus
+`walk_forward_validate` (5-fold) + `monte_carlo` (bootstrap DD distribution) +
+`correlation_report` (detects fake diversification).
+
+**Layer 3 — Risk layer** (`slate_core/risk/risk_manager.py`):
+`PortfolioRiskController.compute_weights(streams, equity)` → risk-managed
+target weights via: inverse-vol allocation, **drawdown throttle** (cut at 8%
+DD, half at 12%, flat at 18%, restore at <4%), **regime de-risking** (reduce
+in high-vol/crash regimes). `RiskConfig` + `RiskState` track the portfolio's
+drawdown state across cycles.
+
+**Layer 4 — Portfolio service** (`slate_core/portfolio/portfolio_service.py`):
+`PortfolioService` — long-running service (copies DexEvolutionService pattern):
+loads N premium streams (funding-carry per coin), computes risk-managed weights,
+runs the portfolio backtester, reports per-stream + combined metrics + Monte
+Carlo DD + correlation + risk state. `SLATE_PIPELINE=portfolio`; endpoints
+`/api/portfolio/{status,start,stop}`.
+
+**Layer 5 — AI allocation scaffold** (`slate_core/portfolio/allocation_gp.py`):
+`AllocationGenome` + `evaluate_allocation` — defines the genome (stream weights
++ de-risk thresholds) and fitness (portfolio Sharpe/Calmar via walk-forward +
+Monte Carlo) for evolving allocation/risk policies via GP. **Full evolution
+deferred** — interface defined so it can drop in once Layers 1–4 are validated.
+
+**Supporting** (`slate_core/statistics/equity_curve.py`): `equity_to_returns`,
+`portfolio_metrics` (Sharpe/Sortino/max-DD/Calmar), `correlation_matrix`,
+`diversification_ratio`.
+
+### Tests
+`test_equity_curve.py`, `test_funding_carry.py`, `test_portfolio_backtester.py`,
+`test_risk_manager.py` (16 new tests).
+
+### What was WIRED (dormant → live)
+The audit found SLATE already owned production-ready but dormant components:
+`position_sizing` (Kelly/risk-parity/CPPI/vol-target), `portfolio_optimization`
+(mean-variance/max-Sharpe/CVaR), `tail_risk` (EVT/stress-tests). This revision
+builds the missing portfolio backtester + risk controller + service that make
+them usable as a system.
+
+### Honest status
+This revision does NOT guarantee alpha — risk premia are compensation for
+bearing risk (funding-inversion/squeeze/correlated-blowup tail events). The
+proof is in the walk-forward portfolio backtest, which the system can now run.
+The AI allocation layer is scaffolded; full evolution is a follow-on. The
+fundamental insight: SLATE's native intelligence adds genuine value on the
+META-problem (allocation/risk/regime), NOT on price prediction — and this
+revision structures the system accordingly.

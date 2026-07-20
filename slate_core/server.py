@@ -137,6 +137,19 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ DEX evolution service not available: {e}")
 
+# Portfolio Service (diversified-premium risk-managed portfolio)
+PORTFOLIO_SERVICE = None
+try:
+    from slate_core.portfolio.portfolio_service import PortfolioService
+    PORTFOLIO_SERVICE = PortfolioService(
+        coins=[c for c in os.getenv("SLATE_PORTFOLIO_COINS", "SOL,BTC,ETH").split(",") if c],
+    )
+    PORTFOLIO_AVAILABLE = True
+    logger.info("📊 Portfolio service available (diversified-premium)")
+except Exception as e:
+    PORTFOLIO_AVAILABLE = False
+    logger.warning(f"⚠️ Portfolio service not available: {e}")
+
 # AMM LP evolution service (Uniswap V3 LP). Selected via SLATE_PIPELINE=amm.
 AMM_AVAILABLE = False
 AMM_SERVICE = None
@@ -366,6 +379,34 @@ async def dex_stop():
         raise HTTPException(status_code=503, detail="DEX service not available")
     await DEX_SERVICE.stop()
     return {"stopped": True, "status": DEX_SERVICE.status()}
+
+
+# ---- Portfolio (diversified-premium risk-managed) ----
+
+@app.get("/api/portfolio/status")
+async def portfolio_status():
+    """Status of the portfolio premium-harvesting system."""
+    if not PORTFOLIO_AVAILABLE:
+        return {"status": "unavailable", "message": "Portfolio service not initialized"}
+    return {"status": "available", **PORTFOLIO_SERVICE.status()}
+
+
+@app.post("/api/portfolio/start")
+async def portfolio_start():
+    """Start the portfolio premium-harvesting loop."""
+    if not PORTFOLIO_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Portfolio service not available")
+    started = await PORTFOLIO_SERVICE.start()
+    return {"started": started, "status": PORTFOLIO_SERVICE.status()}
+
+
+@app.post("/api/portfolio/stop")
+async def portfolio_stop():
+    """Stop the portfolio loop."""
+    if not PORTFOLIO_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Portfolio service not available")
+    await PORTFOLIO_SERVICE.stop()
+    return {"stopped": True, "status": PORTFOLIO_SERVICE.status()}
 
 
 @app.get("/api/amm/status")

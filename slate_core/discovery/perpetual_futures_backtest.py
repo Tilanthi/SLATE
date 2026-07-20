@@ -178,6 +178,9 @@ class PerpetualBacktestResult:
     timeframe: str = "1d"
     bars_per_year: int = 365             # Annualization factor, detected from bar frequency
 
+    # Equity curve (for portfolio-level aggregation + multi-strategy backtesting)
+    equity_curve: List[float] = field(default_factory=list)
+
 
 class PerpetualFuturesBacktester:
     """
@@ -704,6 +707,7 @@ class PerpetualFuturesBacktester:
             validation_failures=failures,
             timeframe=config.timeframe,
             bars_per_year=bars_per_year,
+            equity_curve=equity_curve,
         )
 
         logger.info(f"Backtest complete: {strategy_name}")
