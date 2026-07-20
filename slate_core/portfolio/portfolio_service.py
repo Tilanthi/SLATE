@@ -72,6 +72,10 @@ class PortfolioService:
         stream_returns = {k: v["returns"] for k, v in self._streams.items()
                           if len(v["returns"]) > 10}
         if len(stream_returns) < self.risk.config.min_streams:
+            logger.warning("need >= %d streams with >10 bars, have %d",
+                           self.risk.config.min_streams, len(stream_returns))
+            return
+        if len(stream_returns) < self.risk.config.min_streams:
             logger.warning("need >= %d streams, have %d",
                            self.risk.config.min_streams, len(stream_returns))
             return
