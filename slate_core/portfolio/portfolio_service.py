@@ -39,9 +39,9 @@ class PortfolioService:
         self.stats = {"cycles": 0, "last_error": "", "last_rebalance": ""}
 
     def _load_streams(self):
-        """Load + backtest each premium stream (funding-carry per coin)."""
-        from slate_core.premium.funding_carry import backtest_funding_carry
-        from slate_core.dex.data.load_data import load_candles
+        """Load + backtest ALL premium variants per coin (carry, regime-aware, reversal)."""
+        from slate_core.premium.funding_carry import backtest_all_premiums
+        from slate_core.dex.data.load_data import load_candles, merge_funding
         from slate_core.dex.data.hyperliquid_client import HLClient
 
         client = HLClient()
@@ -50,39 +50,43 @@ class PortfolioService:
                 path = f"sol_data_cache/HYPERLIQUID_{coin}_1h.json"
                 df = load_candles(path)
                 try:
-                    from slate_core.dex.data.load_data import merge_funding
                     df = merge_funding(df, client, coin)
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("funding merge failed for %s: %s", coin, str(exc)[:80])
-                result = backtest_funding_carry(df, coin=coin,
-                                                threshold_pct=self.threshold,
-                                                timeframe="1h")
-                self._streams[coin] = result
-                logger.info("loaded %s: %d bars, sharpe=%.2f",
-                            coin, len(result["returns"]),
-                            result["metrics"].get("sharpe", 0))
+                variants = backtest_all_premiums(df, coin=coin, timeframe="1h")
+                for vname, result in variants.items():
+                    key = f"{coin}_{vname}"
+                    self._streams[key] = result
+                    logger.info("loaded %s: sharpe=%.2f pnl=%.1f",
+                                key, result["metrics"].get("sharpe", 0),
+                                result["total_pnl"])
             except Exception as exc:  # noqa: BLE001
                 logger.warning("stream load failed for %s: %s", coin, str(exc)[:120])
                 self.stats["last_error"] = str(exc)[:200]
 
     def _rebalance(self):
-        """Compute risk-managed weights + combined portfolio metrics."""
+        """Run the AI allocation evolution + risk-managed portfolio metrics."""
+        from slate_core.portfolio.allocation_gp import evolve_allocation
+
         if not self._streams:
             return
         stream_returns = {k: v["returns"] for k, v in self._streams.items()
                           if len(v["returns"]) > 10}
         if len(stream_returns) < self.risk.config.min_streams:
-            logger.warning("need >= %d streams with >10 bars, have %d",
-                           self.risk.config.min_streams, len(stream_returns))
-            return
-        if len(stream_returns) < self.risk.config.min_streams:
             logger.warning("need >= %d streams, have %d",
                            self.risk.config.min_streams, len(stream_returns))
             return
 
-        # Use a normalized equity (1.0 = start) for drawdown tracking
-        equity = 1.0
-        self._weights = self.risk.compute_weights(stream_returns, current_equity=equity)
+        # Phase 5: AI allocation — evolve the best risk-managed weights (native GA, no LLM)
+        evo = evolve_allocation(stream_returns, n_gen=20, pop_size=30, seed=42)
+        best = evo.get("best_genome")
+        best_metrics = evo.get("best_metrics", {})
+
+        if best:
+            self._weights = {k: round(v, 3) for k, v in best.stream_weights.items()}
+        else:
+            n = len(stream_returns)
+            self._weights = {k: 1.0 / n for k in stream_returns}
 
         combined = self.backtester.combine(stream_returns, self._weights)
         wf = self.backtester.walk_forward_validate(stream_returns, self._weights, n_folds=5)
@@ -94,6 +98,8 @@ class PortfolioService:
             "walk_forward": wf,
             "monte_carlo": mc,
             "correlation": corr,
+            "evolution_history": evo.get("history", []),
+            "evolved_metrics": best_metrics,
         }
         self.stats["cycles"] += 1
         self.stats["last_rebalance"] = "done"
