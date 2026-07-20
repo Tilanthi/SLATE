@@ -24,7 +24,7 @@ class PortfolioService:
     """Manages a diversified book of risk-premium streams under risk control."""
 
     def __init__(self, coins: Optional[List[str]] = None,
-                 funding_threshold_pct: float = 0.0001,
+                 funding_threshold_pct: float = 0.0,
                  interval_s: float = 300.0):
         self.coins = coins or ["SOL", "BTC", "ETH"]
         self.threshold = funding_threshold_pct
