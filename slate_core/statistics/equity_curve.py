@@ -65,7 +65,11 @@ def correlation_matrix(stream_returns: Dict[str, np.ndarray]) -> pd.DataFrame:
     """Correlation matrix across premium-stream return series (aligned by index)."""
     if not stream_returns:
         return pd.DataFrame()
-    df = pd.DataFrame(stream_returns)
+    min_len = min(len(v) for v in stream_returns.values())
+    if min_len == 0:
+        return pd.DataFrame()
+    aligned = {k: np.asarray(v[:min_len]) for k, v in stream_returns.items()}
+    df = pd.DataFrame(aligned)
     return df.corr()
 
 
