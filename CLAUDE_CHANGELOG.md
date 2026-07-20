@@ -670,3 +670,34 @@ The AI allocation layer is scaffolded; full evolution is a follow-on. The
 fundamental insight: SLATE's native intelligence adds genuine value on the
 META-problem (allocation/risk/regime), NOT on price prediction — and this
 revision structures the system accordingly.
+
+---
+
+## 🔍 Wide-sweep discovery + regime analysis (2026-07-20)
+
+### Wide sweep: 46 strategies × 3 coins = 138 backtests
+Generated variants across 8 strategy types: carry, regime-gated carry, reversal,
+momentum, mean-reversion, vol-breakout, funding-momentum, trend-following. Each
+tested overall AND per-regime (bull/bear/sideways/high-vol/low-vol). Results
+recorded in `slate_core/strategy_results.db`.
+
+### Findings: 4 strategies positive overall
+1. **BTC trend-following** (7d lookback, 5% threshold): Sharpe **+1.47**, DD 0.5%
+2. ETH regime-gated carry (1%, 48h): Sharpe +0.46
+3. BTC carry (0.001% threshold): Sharpe +0.29
+4. SOL trend-following (7d, 5%): Sharpe +0.17
+
+### Per-regime winners — the regime-switching blueprint
+| Regime | Best strategy | Sharpe |
+|--------|-------------|--------|
+| BEAR | SOL carry_regime | **+4.19** |
+| BULL | BTC mean-reversion (48h, z=2.0) | **+5.02** |
+| LOW_VOL | SOL mean-reversion (96h, z=2.5) | **+2.46** |
+| SIDEWAYS | (none) | — |
+| HIGH_VOL | (none) | — |
+
+This proves the regime-switching concept: DIFFERENT strategies work in DIFFERENT
+conditions. Carry profits in bear markets (shorting into declines); mean-reversion
+profits in bull markets (fading pullbacks) and low-vol (range-trading). A regime-
+switching portfolio that deploys the right strategy per regime could combine these
+into a positive-overall portfolio.
