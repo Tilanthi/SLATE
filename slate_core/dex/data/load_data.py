@@ -58,12 +58,35 @@ def refresh_store(path: str = REAL_DATA_DEFAULT, coin: str = "SOL",
 def merge_funding(df, client, coin: str = "SOL"):
     """Fetch HL funding history and add a forward-filled 'funding' column (the 8h
     funding rate carried onto each bar). funding>0 => longs pay (carry: short);
-    funding<0 => longs receive. Returns df unchanged if funding can't be fetched."""
+    funding<0 => longs receive. Returns df unchanged if funding can't be fetched.
+
+    Tries a DISK CACHE first (sol_data_cache/FUNDING_{coin}.json), then the live
+    API, caching the result for offline use."""
+    import json, os
     import pandas as pd
-    try:
-        hist = client.funding_history(coin)
-    except Exception:
-        return df
+
+    cache_path = f"sol_data_cache/FUNDING_{coin}.json"
+    hist = None
+
+    # 1) Try disk cache first
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path) as f:
+                hist = json.load(f)
+        except Exception:
+            hist = None
+
+    # 2) Fall back to live API + cache the result
+    if not hist:
+        try:
+            hist = client.funding_history(coin)
+            if hist:
+                os.makedirs("sol_data_cache", exist_ok=True)
+                with open(cache_path, "w") as f:
+                    json.dump(hist, f)
+        except Exception:
+            return df
+
     if not hist:
         return df
     fr = pd.DataFrame(hist)
