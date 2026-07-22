@@ -63,13 +63,21 @@ launchctl load ~/Library/LaunchAgents/com.slate.autoserver.plist
 
 ## 📒 Change Log (detailed records moved out)
 
-Detailed dated records — correctness fixes, ASTRA-derived hardening, the funnel,
-activity-credit, the **data lever (1,080 daily bars)**, and the **complexity cap**
-— live in **[CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md)**.
+Detailed dated records live in **[CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md)** —
+including the 2026-07-20→22 honest-evaluator build, the three-tier realism layer,
+the exhaustive alpha search, and the survivorship-corrected yield work.
 
-**Current honest state:** the closed-loop saves nothing (every template loses
-money after costs); the evolution funnel shows every candidate overfits IS≫OOS.
-The infrastructure is sound and well-instrumented; the remaining work is the science.
+**Current honest state (2026-07-22):** After an exhaustive, brutally-honest search
+(~6,000 variants across 24 markets × 1h–1d, cross-sectional long-short, regime
+detection, intelligent sizing, CEX+DEX+LP+emissions, with DSR/PBO/cross-asset
+gates), **no robust directional/cross-sectional alpha survives honest costs in
+liquid crypto perps.** The pipeline is sound (no-lookahead evaluator, real costs,
+tested). The only real positive return streams are passive **yield**: stablecoin
+LP **~3–4%/yr** (low risk) and emissions farming **~6–11%/yr** (hack/depeg-tail-laden).
+The tested honest evaluator is the source of truth:
+`from slate_core.backtest import backtest, EventBacktester, cscv_pbo, deflated_sharpe, calibrate`.
+Earlier `strategy_results.db`/`mega_sweep_results` were selected under a biased
+evaluator → untrusted. Full writeup: `HONEST_DISCOVERY_REPORT.pdf`.
 
 ---
 
@@ -167,13 +175,11 @@ git branch --show-current  # Should show: main
 
 ## 🟢 Current System Status
 
-**Server**: ✅ Running on port 8788 (launchd `com.slate.autoserver`, `KeepAlive`).
-**Primary pipeline (2026-07-20 upgrade): diversified-premium portfolio** — the strategic reframe from single-predictor search to a **portfolio of risk premia (funding carry × N coins) + rigorous risk management (drawdown throttle, vol-target, regime de-risk)** + a native-AI allocation scaffold. The portfolio system wires SLATE's dormant risk components (position sizing, optimization, tail risk) into a working pipeline with a portfolio backtester + runtime risk controller. `SLATE_PIPELINE=portfolio` selects it; endpoints `/api/portfolio/{status,start,stop}`. Earlier pipelines (DEX market_maker_gp, AMM, CEX closed-loop) remain available but are de-prioritized.
-**Discovery stores**: `perpetual_discoveries` = 0, CEX `evolution_population` = 0 — nothing clears the realistic-cost gates (CEX daily-timeframe directional edge remains unfound). DEX MM population: 12 walk-forward-confirmed survivors (pre-walk-forward gate); AMM: 116.
-**Closed-loop (CEX)**: active in background (hypothesis-driven, 6 validators). Generates hypotheses; stores nothing.
-**Evolution Layer (CEX)**: available but idle — superseded by the DEX-primary focus.
-**Market Data**: ~1,080 daily SOLUSDT-perp bars (CEX); DEX uses 5,002 hourly Hyperliquid SOL bars (`sol_data_cache/HYPERLIQUID_SOL_1h.json`).
-**Current diagnosis**: the engineering blockers to answering "is there DEX maker-rebate alpha after brutal costs?" are removed (pipeline aimed at MM, compile attrition fixed, walk-forward validation added). Whether a walk-forward-confirmed rebate edge survives the cost gate is the open empirical question. Trajectory in [CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md).
+**Server**: ✅ Running on port 8788 (launchd `com.slate.autoserver`, `KeepAlive`). Earlier pipelines (closed-loop, evolution, DEX, AMM, portfolio) remain available via `SLATE_PIPELINE=` but are **de-prioritized** — see the verdict below.
+**Honest verdict (2026-07-22):** exhaustive search found **no robust directional/cross-sectional alpha** in liquid crypto perps after brutally honest costs (DSR/PBO/cross-asset gates all fail). The realistic positive return streams are passive **yield**: stablecoin LP **~3–4%/yr** (low risk) and emissions farming **~6–11%/yr** (hack/depeg-tail-laden, survivorship-corrected). Strategic implication: **stop searching liquid-perp OHLCV directional alpha**; the sound direction is the yield side, or alpha in inefficient venues / alt-data.
+**Source-of-truth evaluator:** `slate_core/backtest/` — `honest.py` (no-lookahead, tested), `event_engine.py` (event-driven + impact + partial fills + maker adverse selection), `validation.py` (CPCV/PBO/DSR), `calibration.py` (live-fill loop), `lp.py` (honest LP), `market_maker.py`. `from slate_core.backtest import backtest`. 26 tests green.
+**Market data (real):** CEX SOL daily 1,080 bars (3yr) + 24-coin basket 1d/1h/funding (`sol_data_cache/BASKET_*`); HL hourly; DefiLlama pool histories (`sol_data_cache/yield_pools/`). All regenerable via `fetch_*.py`.
+Trajectory + detail in [CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md); report in `HONEST_DISCOVERY_REPORT.pdf`.
 
 ---
 
@@ -280,4 +286,4 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*
-*Last Updated: 2026-07-19 (**Phase A: structure-level GP MM mechanism built (LLM-free), Gate A BLOCKED on evaluator honesty** — `slate_core/dex/evolution/gp/` evolves the quoting policy's FORM (expression trees over microstructure features) via native GP + novelty pressure vs textbook archetypes; sandbox-compiled, walk-forward gated. Suite 317 green. BUT the tick backtester's fill model is too optimistic (understates adverse selection) — the GP exploits it (finds ~200%/yr policies vs ~5%/yr realistic); fixed an inventory-cap overshoot bug + added a plausibility guard, but the evaluator must be hardened before GP results can be trusted. Phase B (swarm) deferred until then. Details in `CLAUDE_CHANGELOG.md`).* Earlier 2026-07-18 — **Verified HL fees + stigmergic guidance** — encoded the real HL perp fee tiers (`hl_perp_fee_schedule`): maker +0.015%→0.000% at >$500M 14d vol, rebates −0.001/−0.002/−0.003% whale-gated. Empirical: retail MM loses, zero-maker break-even within adverse-selection uncertainty, whale rebate thin — brutal-cost verdict holds. Native **pheromone guidance** wired into the MM optimizer. Suite 301 green. Earlier 2026-07-18 — **Native (LLM-free) market-maker discovery on tick/L2 data** — the MM variation operator is no longer GLM; it's a native GA + MAP-Elites optimizer over `(half_spread, inv_skew, size)` evaluated by a realistic tick/L2 backtester with price-time-priority fills + adverse-selection capture on real `L2_SOL.jsonl` snapshots. Zero LLM calls in the MM path. Suite 296 green. Earlier 2026-07-18 — Strategic pivot: **DEX `market_maker` is now the primary discovery pipeline** — 24/7 server repointed `SLATE_PIPELINE` amm→dex + `SLATE_DEX_TARGET=market_maker`, aimed at the maker-rebate edge. AMM paused; CEX closed-loop continues as "lesser extent". Added **walk-forward validation for market-makers** and the concise/must-return anti-truncation prompt fix to all 3 DEX prompts. Live: DEX MM compile rate 71%→0%, 12/12 MM candidates, walk-forward gated. Suite 280 green. Earlier 2026-07-17 — AMM LP "never enters" fix: LLM output was **truncated at max_tokens=1024 before the `return`** → 9/10 candidates returned None→HOLD→0 entries; also `min_trades=5` (CEX preset) killed correct enter-and-hold LPs. Fixed: `max_tokens` 1024→2048, LP prompt now mandates concise code + a `return` + prefer being ENTERed, and LP uses `min_trades=1`. Live: 0 compile / 0 never-entered / **50% passed** (was ~0.4%); new top survivor +10.2% OOS APY, zero overfit. Suite 279 green. Details in `CLAUDE_CHANGELOG.md`). Same day — AMM compile-attrition fix: `_BLOCK_RE` now treats the `>>>>>>> REPLACE` terminator as **optional** — GLM omits it, so ~98% of AMM candidates died at compile on leaked markers; live compile rate dropped 99%→31%. Same day — full `slate_core` audit: 214 files, 273 tests green. Fixed 3 real bugs — **closed loop now loads daily bars** (`load_daily_data`, both `server.py` call sites; was hourly `1h_6m.csv` → every `rolling(20)` was 20 hours not 20 days); **feedback learning now receives real hypotheses** (`run_rigorous_validation` passes 1:1-paired `strategy_hypotheses` instead of `[]`, so patterns are actually extracted); **logger defined before guarded imports** (was a latent `NameError`). Also fixed: latent `LP_SEED_ARCHETYPES` import; `*_pct` double-divide (`total_return`/`max_drawdown` were 100× too small); dead imports (server + amm); stale docstring/dead `hasattr` branches/orphan comment; deleted stale `realistic_backtester.cpython-314.pyc`. Doc correction: core evolution overfit cage ends at the **two-window gate** — `EvolutionConfig.validation`'s `walkforward` is dead config, not a 5-fold step. Earlier 2026-07-15: data lever (~1,080 daily SOL bars so IS/OOS ~540/216, not ~87/35); complexity cap (death-stage `too_complex`); activity-credit in fitness; funnel-sharpening; CLAUDE.md pruned → detailed records in `CLAUDE_CHANGELOG.md`. 2026-07-14: ASTRA-derived write chokepoint `append_verified` + funnel `verdict_log.py` + proposer priming; 🔴 core backtester + fetcher were gitignored → now tracked; behavioural MAP-Elites niches; `min_fitness` gate; LICENSE + pinned `requirements.txt`.)*
+*Last Updated: 2026-07-22 — exhaustive honest alpha search concluded (no directional alpha; yield is the positive); honest evaluator + three-tier realism layer + survivorship-corrected yield work in place. Full history + the DEX/AMM/evolution engineering detail in [CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md).*

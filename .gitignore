@@ -112,3 +112,12 @@ momentum_volatility_estimator.py
 
 # Regime multi-stream data (fetched, not committed)
 data/multi_stream/
+
+# Bulky regenerable market-data caches (regenerate via fetch_*.py / fetch_basket.py /
+# fetch_yield_pools.py / fetch_amm_pool_data.py). Keep code + results + small summaries.
+sol_data_cache/BASKET_*.json
+sol_data_cache/CEX_*_1d_ohlcv.json
+sol_data_cache/AMM_*USDT_1d.json
+sol_data_cache/yield_pools/*.json
+# ...but keep the small curated pool-basket summary
+!sol_data_cache/yield_pools/_basket_summary.json

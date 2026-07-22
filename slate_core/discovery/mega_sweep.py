@@ -37,30 +37,34 @@ DB_PATH = "slate_core/strategy_results.db"
 def fast_backtest(signals: np.ndarray, closes: np.ndarray,
                   fee: float = 0.0005, slippage_bps: float = 15.0,
                   fill_rate: float = 0.85) -> np.ndarray:
-    """Vectorized signal→returns with BRUTALLY HONEST costs.
+    """Vectorized signal→returns with HONEST costs (no lookahead).
 
-    Costs modeled:
-    - taker fee: 0.05% per side (Binance/HL taker)
-    - slippage: 15 bps per side (realistic for perp market orders)
-    - fill rate: 85% (orders don't always fill)
-    - position change cost = (fee + slippage) × fill_rate × |Δposition|
+    FIXED 2026-07-20: the previous version attributed ``rets[t] = signal[t] *
+    bar_ret[t]`` — crediting a bar's own move to a signal decided from that
+    bar's close. That 1-bar lookahead manufactured a +3.43 regime-switch Sharpe
+    that collapses to −5.98 once removed (see verify_lookahead.py). The position
+    HELD during bar t is now the target decided at the close of t-1::
 
-    signals: {-1,0,1}, closes: price array.
-    Returns per-bar returns after all costs.
+        held[t] = signals[t-1]      (1-bar execution lag — the only honest way)
+        rets[t] = held[t] * (close[t]/close[t-1] - 1) - |Δheld[t]| * cost_per_side
+
+    Costs: full taker fee + slippage per side (the old ``× fill_rate`` discount
+    understated cost; fill risk is now treated as tracking error, not a rebate).
+
+    NOTE: ``strategy_results.db`` / ``mega_sweep_results`` were selected under
+    the OLD biased evaluator and MUST NOT be trusted. Use
+    ``slate_core.backtest.honest`` (tested, no-lookahead) for any real eval.
+    ``fill_rate`` is kept in the signature for callers but no longer discounts cost.
     """
     n = len(signals)
     bar_ret = np.zeros(n)
     bar_ret[1:] = closes[1:] / closes[:-1] - 1.0
-    pos = np.array(signals, dtype=float)
+    held = np.zeros(n)
+    held[1:] = np.asarray(signals, dtype=float)[:-1]   # decide at close[t-1], hold over bar t
 
-    # Trade cost: fee + slippage per side, reduced by fill rate
-    cost_per_side = (fee + slippage_bps / 10000.0) * fill_rate
-    trade_cost = np.abs(np.diff(pos, prepend=0)) * cost_per_side
-
-    # Position also suffers slippage on the UNREALIZED side (tracking error)
-    # — the signal says go long, but you enter slightly worse than close
-    rets = pos * bar_ret - trade_cost
-    return rets
+    cost_per_side = fee + slippage_bps / 10000.0
+    trade_cost = np.abs(np.diff(held, prepend=0)) * cost_per_side
+    return held * bar_ret - trade_cost
 
 
 def _metrics(returns: np.ndarray, ppy: int = 8760) -> Dict[str, float]:

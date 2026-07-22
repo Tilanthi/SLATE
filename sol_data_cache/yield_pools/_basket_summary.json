@@ -1,0 +1,282 @@
+[
+  {
+    "tag": "stable",
+    "symbol": "USDC-USDT",
+    "project": "uniswap-v3",
+    "chain": "Ethereum",
+    "pool": "e737d721-f45c-40f0-9793-9f56261862b9",
+    "tvl": 34656057,
+    "apyBase": 0.88431,
+    "apyReward": null
+  },
+  {
+    "tag": "stable",
+    "symbol": "USDT-USDC",
+    "project": "vvs-standard",
+    "chain": "Cronos",
+    "pool": "13b0db7c-491b-47d5-a2fb-e5af0a17b1d1",
+    "tvl": 20005637,
+    "apyBase": 7e-05,
+    "apyReward": null
+  },
+  {
+    "tag": "stable",
+    "symbol": "USDT-USDC",
+    "project": "hyperion",
+    "chain": "Aptos",
+    "pool": "a34c8a80-0001-4fc3-9402-7d6ac3e5234a",
+    "tvl": 6286828,
+    "apyBase": 14.81249,
+    "apyReward": 0.318
+  },
+  {
+    "tag": "stable",
+    "symbol": "USDT-USDC",
+    "project": "pharaoh-v3",
+    "chain": "Avalanche",
+    "pool": "58990934-9fb1-45f2-8882-d493c4627768",
+    "tvl": 5229776,
+    "apyBase": 0,
+    "apyReward": 6.48332
+  },
+  {
+    "tag": "stable",
+    "symbol": "USDC-USDT",
+    "project": "ferro",
+    "chain": "Cronos",
+    "pool": "922160ef-a03f-42dc-9a5e-8a202b8c28b3",
+    "tvl": 3942690,
+    "apyBase": 9e-05,
+    "apyReward": 0
+  },
+  {
+    "tag": "stable",
+    "symbol": "USDC-USDT",
+    "project": "raydium-amm",
+    "chain": "Solana",
+    "pool": "8ad76d42-6247-42f2-8281-5d59cb77b8b3",
+    "tvl": 3812461,
+    "apyBase": 1.1,
+    "apyReward": 0
+  },
+  {
+    "tag": "stable",
+    "symbol": "USDC-USDT",
+    "project": "uniswap-v3",
+    "chain": "Arbitrum",
+    "pool": "ba3fb5f5-684e-4834-afca-d58668395b02",
+    "tvl": 2416958,
+    "apyBase": 2.81525,
+    "apyReward": null
+  },
+  {
+    "tag": "stable",
+    "symbol": "USDC-USDT",
+    "project": "aerodrome-slipstream",
+    "chain": "Base",
+    "pool": "ba557f7e-f287-45a9-bc37-8f3a24ca05c7",
+    "tvl": 2268379,
+    "apyBase": null,
+    "apyReward": 0.26823
+  },
+  {
+    "tag": "emissions",
+    "symbol": "CVXCRV",
+    "project": "convex-finance",
+    "chain": "Ethereum",
+    "pool": "ef32dd3b-a03b-4f79-9b65-8420d7e04ad0",
+    "tvl": 35086097,
+    "apyBase": null,
+    "apyReward": 23.09
+  },
+  {
+    "tag": "emissions",
+    "symbol": "CRV-CVXCRV",
+    "project": "convex-finance",
+    "chain": "Ethereum",
+    "pool": "3f6f3937-1f0c-4cec-8d3b-904434085bfa",
+    "tvl": 4790800,
+    "apyBase": 0.05,
+    "apyReward": 13.87369
+  },
+  {
+    "tag": "emissions",
+    "symbol": "FRXUSD-MSUSD",
+    "project": "convex-finance",
+    "chain": "Ethereum",
+    "pool": "ee024c35-c5c3-4a41-9018-75f72ec7ae4a",
+    "tvl": 9890603,
+    "apyBase": 0.14,
+    "apyReward": 12.80996
+  },
+  {
+    "tag": "emissions",
+    "symbol": "EVAUSDT-EVAUSDC",
+    "project": "curve-dex",
+    "chain": "Ethereum",
+    "pool": "9d2981a0-af33-4a5d-b43f-b191a36fdc3b",
+    "tvl": 3318035,
+    "apyBase": 0.01,
+    "apyReward": 11.92111
+  },
+  {
+    "tag": "emissions",
+    "symbol": "WETH-CVX",
+    "project": "convex-finance",
+    "chain": "Ethereum",
+    "pool": "25d9dc49-3182-493a-bda4-0db53b25f457",
+    "tvl": 3065145,
+    "apyBase": 0.51,
+    "apyReward": 11.2952
+  },
+  {
+    "tag": "emissions",
+    "symbol": "CRV-CVXCRV",
+    "project": "curve-dex",
+    "chain": "Ethereum",
+    "pool": "38160634-07f7-4dcd-a26e-0e0d27ef5a1b",
+    "tvl": 5742361,
+    "apyBase": 0.05,
+    "apyReward": 8.78078
+  },
+  {
+    "tag": "emissions",
+    "symbol": "FRAX-USDC",
+    "project": "curve-dex",
+    "chain": "Ethereum",
+    "pool": "3f6aa14f-eb0c-4738-bf74-8bc666f7d2b1",
+    "tvl": 4052534,
+    "apyBase": 0.04,
+    "apyReward": 8.20229
+  },
+  {
+    "tag": "emissions",
+    "symbol": "REUSD-SCRVUSD",
+    "project": "convex-finance",
+    "chain": "Ethereum",
+    "pool": "1971c939-46e4-4b86-87d9-78308de47af7",
+    "tvl": 4178089,
+    "apyBase": 0.46,
+    "apyReward": 7.64846
+  },
+  {
+    "tag": "emissions",
+    "symbol": "MSETH-WETH",
+    "project": "convex-finance",
+    "chain": "Ethereum",
+    "pool": "c130b363-10fa-46d9-8221-3b23ed8027b4",
+    "tvl": 11838939,
+    "apyBase": 0.13,
+    "apyReward": 7.44878
+  },
+  {
+    "tag": "emissions",
+    "symbol": "FRXUSD-MSUSD",
+    "project": "curve-dex",
+    "chain": "Ethereum",
+    "pool": "54a73b0a-d1f0-4a82-9e9f-2a6520351527",
+    "tvl": 16822992,
+    "apyBase": 0.14,
+    "apyReward": 7.3322
+  },
+  {
+    "tag": "emissions",
+    "symbol": "WETH-CVX",
+    "project": "curve-dex",
+    "chain": "Ethereum",
+    "pool": "3e889559-f3f0-4f36-93e6-5e7d2b33ed99",
+    "tvl": 4197554,
+    "apyBase": 0.51,
+    "apyReward": 7.02751
+  },
+  {
+    "tag": "emissions",
+    "symbol": "GHO",
+    "project": "aave-v3",
+    "chain": "Ethereum",
+    "pool": "bf0660ab-38bf-48a4-9a6c-393ec0e2ff5f",
+    "tvl": 14537448,
+    "apyBase": null,
+    "apyReward": 6.6
+  },
+  {
+    "tag": "emissions",
+    "symbol": "PMUSD-CRVUSD",
+    "project": "curve-dex",
+    "chain": "Ethereum",
+    "pool": "37fb91f9-866e-4fb1-9339-1311c04a8a00",
+    "tvl": 3129877,
+    "apyBase": 0,
+    "apyReward": 6.00164
+  },
+  {
+    "tag": "emissions",
+    "symbol": "USDT-CRVUSD",
+    "project": "convex-finance",
+    "chain": "Ethereum",
+    "pool": "a3ffd3fe-b21c-44eb-94d5-22c80057a600",
+    "tvl": 9008227,
+    "apyBase": 0.13,
+    "apyReward": 5.75426
+  },
+  {
+    "tag": "emissions",
+    "symbol": "RLUSD",
+    "project": "aave-v3",
+    "chain": "Ethereum",
+    "pool": "98d07333-f5e4-4a48-8061-cfb4b73ccf79",
+    "tvl": 110467511,
+    "apyBase": 0.50289,
+    "apyReward": 5.6259
+  },
+  {
+    "tag": "emissions",
+    "symbol": "REUSD-SFRXUSD",
+    "project": "curve-dex",
+    "chain": "Ethereum",
+    "pool": "3dde1458-2baa-4b83-a451-c81ac14c8dea",
+    "tvl": 3223770,
+    "apyBase": 1.32,
+    "apyReward": 5.48085
+  },
+  {
+    "tag": "emissions",
+    "symbol": "USDC-RLUSD",
+    "project": "curve-dex",
+    "chain": "Ethereum",
+    "pool": "e91e23af-9099-45d9-8ba5-ea5b4638e453",
+    "tvl": 65327010,
+    "apyBase": 0.17,
+    "apyReward": 5.22152
+  },
+  {
+    "tag": "emissions",
+    "symbol": "FRXUSD-CRVUSD",
+    "project": "convex-finance",
+    "chain": "Ethereum",
+    "pool": "22a20de7-791a-48f2-8765-537db17b7f9e",
+    "tvl": 9426818,
+    "apyBase": 0.19,
+    "apyReward": 5.18142
+  },
+  {
+    "tag": "emissions",
+    "symbol": "USDC-CRVUSD",
+    "project": "convex-finance",
+    "chain": "Ethereum",
+    "pool": "755fcec6-f4fd-4150-9184-60f099206694",
+    "tvl": 11081478,
+    "apyBase": 0.41,
+    "apyReward": 4.96851
+  },
+  {
+    "tag": "emissions",
+    "symbol": "REUSD-SCRVUSD",
+    "project": "curve-dex",
+    "chain": "Ethereum",
+    "pool": "5c4940c7-c193-440d-b95e-9148d017e12c",
+    "tvl": 6989120,
+    "apyBase": 0.46,
+    "apyReward": 3.99362
+  }
+]

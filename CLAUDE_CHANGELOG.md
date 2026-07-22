@@ -701,3 +701,87 @@ conditions. Carry profits in bear markets (shorting into declines); mean-reversi
 profits in bull markets (fading pullbacks) and low-vol (range-trading). A regime-
 switching portfolio that deploys the right strategy per regime could combine these
 into a positive-overall portfolio.
+
+---
+
+## 2026-07-20 → 2026-07-22 — Honest evaluator, realism layer, exhaustive alpha search, yield
+
+### 2026-07-20 — Honest evaluator; +3.43 was a 1-bar lookahead artifact
+The "regime-switching Sharpe +3.43" was an artifact of a 1-bar lookahead in
+`mega_sweep.fast_backtest` (`rets = signal[t] * return_ending_at_close[t]`).
+Removing it flips the portfolio **+3.43 → −5.98** and walk-forward 5/5 → 0/5
+(proof: `verify_lookahead.py`). Fixed in place; `fast_backtest` is now
+bit-identical to the new tested evaluator. New source-of-truth evaluator
+**`slate_core/backtest/honest.py`** (no lookahead, brutal real CEX/DEX costs,
+real funding, IS/OOS + walk-forward + block-bootstrap; 13 regression tests incl.
+a reference-loop cross-check + `assert_causal` guard), with loaders (`data.py`),
+causal signal families incl. Ichimoku (`strategies.py`), and an honest MM/rebate
+backtester (`market_maker.py`). Exhaustive honest sweep (547 directional variants
++ cross-sectional carry + lead-lag + 135 MM configs + portfolios): **no high-Sharpe
+edge survives honest costs.** Intraday directional dead (`cex_1h_SOL` 0% positive);
+daily only tf with signal; best candidate = diversified daily carry+trend+meanrev,
+Sharpe ~0.6-0.8, robust but **not statistically significant**. Cross-instrument:
+fails on BTC/ETH (−0.14/−0.37). Full writeup: `HONEST_DISCOVERY_REPORT.pdf`.
+
+### 2026-07-21 — Real pool data; LP is the one positive edge
+REAL concentrated-LP data fetched **keyless** from DefiLlama (per-pool realized fee
+yield `apyBase` + `il7d`; replaces the synthetic $100M-TVL proxy in
+`amm/pool_data.py`/`lp_backtester.py`). Honest LP backtest (`slate_core/backtest/lp.py`,
+`run_lp.py`, `fetch_amm_pool_data.py`): **stablecoin LP ~4–7%/yr with ~zero IL** —
+the first honestly-validated positive return stream. Volatile-pair LP (WETH/WBTC) =
+HODL-plus-IL-risk (−16% to −24% max IL), not free yield. Tick-level liquidity-share
+still needs a paid Graph API key. Cross-sectional funding carry widened to 11-14 HL
+coins (`fetch_hl_basket.py`, `run_xs_carry.py`): still negative (blue-chip funding
+compressed). Honest evaluator now canonical: `from slate_core.backtest import backtest`.
+
+### 2026-07-21 (cont) — Three-tier realism layer (NautilusTrader + López-de-Prado)
+  * **Tier 1a — event-driven execution** (`event_engine.py`): `EventBacktester` with
+    taker fills at close (slip+impact as costs), **square-root market impact**
+    (k·σ·√(size/volume)), **partial fills by participation**, **maker adverse
+    selection**, **latency**. Proven to match `honest.backtest` exactly in simple mode.
+  * **Tier 1b — impact + capacity** (`honest.backtest(impact=True, capital=AUM)`):
+    every backtest reports capacity. At $5M impact shaves daily-portfolio Sharpe
+    0.649→0.615; capacity >$1B.
+  * **Tier 1c — validation** (`validation.py`): CPCV + PBO/CSCV + Deflated Sharpe.
+    DSR p≈0.009 (none significant after 547 trials); PBO=0.59 (directional selection
+    likely overfit).
+  * **Tier 3 — live-calibration** (`calibration.py`): OLS-fits base-slippage + impact-k
+    to realized fills; self-test recovers a known model (R²=1.0).
+  * 26 tests green; demo `run_realism_demo.py`.
+
+### 2026-07-21 (4th) — Exhaustive alpha search CONCLUDED: no directional alpha
+24 markets, real 1h–1d bars (NO 1s fiction), ~5,939 variants + cross-sectional
+long-short, regime (simple vs GMM/HMM), vol-target sizing, brutal costs, DSR/PBO/
+cross-coin-generalization gates, CEX directional + DEX maker + LP + emissions.
+  * **Regime:** simple IS-fit threshold BEATS GMM/HMM-style (mean OOS Sharpe none
+    +0.30 → simple +0.40 → GMM −0.26; ML overfits IS). Vol-target sizing neutral.
+  * **Cross-sectional** (24-coin carry/momentum/reversal/value, market-neutral): ALL
+    negative OOS, PBO 0.36.
+  * **Mega sweep** (5,939 × 24 coins × 1h/4h/1d): median OOS −1.10, 19% positive, 3%
+    >1 (≈ chance). Cross-coin "generalizers" are bull-market beta or weak ns carry.
+  * **VERDICT:** NO robust generalizable significant alpha in liquid crypto perps
+    after honest costs. Only real positives = passive YIELD. Scripts:
+    `run_regime_compare.py`, `run_xs_alpha.py`, `run_mega_honest.py`, `regime_ml.py`,
+    `fetch_basket.py`; results `mega_honest_results.csv`.
+
+### 2026-07-22 — Yield side hardened (survivorship + tail risk)
+Stablecoin LP + emissions farming, survivorship-corrected + tail-risk-sized
+(`run_yield_sweep.py`, `run_yield_honest.py`, `fetch_yield_pools.py`):
+  * **Survivorship fix:** DefiLlama has NO historical pool-universe API (`/chart`,
+    `/poolsHistorical` → 404), so true dead-pool inclusion needs on-chain Mint/Burn.
+    Implemented **point-in-time inclusion** (pool in universe at t iff live data at t,
+    no >14d gaps) + TVL-weighting + maturity filter; residual dead-pool bias
+    documented as a ~4%/yr haircut (all fetched pools are still-live → bias is real,
+    one-directional, overstates).
+  * **Tail-risk sizing:** per-pool cap + risk-free reserve + inverse-tail-risk budget;
+    monte-carlo hack/depeg stress (stable = depeg p=0.02/loss=5%; emissions = hack
+    p=0.03/loss=50%).
+  * **Honest yields:** stablecoin LP **~3–4%/yr** robust (depeg tail, recoverable);
+    TVL-weighted 4.1%/equal-weight 3.3%. Emissions farming **~6–11%/yr honest** after
+    hack-MC + survivorship haircut (buy-hold ~6%, decay-corrected rotation top3/30d
+    ~11%). Decay correction works (post-selection drag ~0.5–1.4% for mature pools).
+    Over-aggressive tail-sizing (cap15%+reserve20%) erodes emissions to breakeven →
+    the right defense is breadth across mature pools, not a heavy reserve.
+  * **CONCLUSION:** yield is genuinely positive where alpha was absent; stablecoin LP
+    (~3–4%/yr) is the solid low-risk deployable; emissions (~6–11%/yr) higher but
+    hack/depeg-tail-laden. Stop searching liquid-perp OHLCV directional alpha.
