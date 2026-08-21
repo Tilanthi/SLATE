@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 class PerpetualDatabaseManager:
     """Manage perpetual futures backtesting results database."""
 
-    def __init__(self, db_path: str = "slate_core/slate_realistic_discoveries.db"):
+    def __init__(self, db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db"):
         self.db_path = db_path
         self._init_database()
 

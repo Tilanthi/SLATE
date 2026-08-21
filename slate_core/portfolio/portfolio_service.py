@@ -16,6 +16,7 @@ import numpy as np
 from slate_core.portfolio.portfolio_backtester import PortfolioBacktester
 from slate_core.risk.risk_manager import PortfolioRiskController, RiskConfig
 from slate_core.statistics.equity_curve import portfolio_metrics
+from slate_core.config.paths import DATA_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class PortfolioService:
         client = HLClient()
         for coin in self.coins:
             try:
-                path = f"sol_data_cache/HYPERLIQUID_{coin}_1h.json"
+                path = f"{DATA_CACHE_DIR}/HYPERLIQUID_{coin}_1h.json"
                 df = load_candles(path)
                 try:
                     df = merge_funding(df, client, coin)

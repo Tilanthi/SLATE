@@ -27,9 +27,10 @@ from slate_core.discovery.regime_detector import (
     ALL_REGIMES, BEAR, BULL, HIGH_VOL, LOW_VOL, SIDEWAYS, RegimeDetector,
 )
 from slate_core.statistics.equity_curve import equity_to_returns, portfolio_metrics
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
-DB_PATH = "slate_core/strategy_results.db"
+DB_PATH = f"{CORE_ROOT}/strategy_results.db"
 
 
 # ---- fast vectorized backtester ----

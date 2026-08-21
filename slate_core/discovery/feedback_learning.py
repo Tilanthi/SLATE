@@ -23,6 +23,7 @@ from enum import Enum
 import logging
 from datetime import datetime
 import json
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -488,7 +489,7 @@ class KnowledgeBase:
     Following paper's principle: Build cumulative knowledge over time.
     """
 
-    def __init__(self, storage_path: str = 'slate_core/discovery/knowledge_base.json'):
+    def __init__(self, storage_path: str = f'{CORE_ROOT}/discovery/knowledge_base.json'):
         self.storage_path = storage_path
         self.knowledge = {
             'successful_patterns': [],

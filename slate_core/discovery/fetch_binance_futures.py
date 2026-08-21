@@ -15,6 +15,7 @@ from pathlib import Path
 import json
 import ssl
 import logging
+from slate_core.config.paths import DATA_CACHE_DIR
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -250,7 +251,7 @@ async def main():
         df['funding_rate'] = generate_funding_rates(df)
 
         # Create cache directory
-        cache_dir = Path("sol_data_cache")
+        cache_dir = Path(DATA_CACHE_DIR)
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Save full data with indicators

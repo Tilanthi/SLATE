@@ -34,10 +34,11 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PATH = "slate_core/evolution_verdicts.jsonl"
+DEFAULT_PATH = f"{CORE_ROOT}/evolution_verdicts.jsonl"
 
 
 @dataclass

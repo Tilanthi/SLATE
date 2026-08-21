@@ -22,6 +22,7 @@ from .perpetual_futures_backtest import (
     example_ema_crossover_signal
 )
 from .perpetual_database import PerpetualDatabaseManager
+from slate_core.config.paths import DATA_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class PerpetualDiscoveryIntegration:
 
     async def load_12m_data(self) -> Optional[pd.DataFrame]:
         """Load 6 months of perpetual futures data (4,182 data points)."""
-        cache_file = Path("sol_data_cache/SOLUSDT_perpetual_1d_6m_full.csv")
+        cache_file = Path(f"{DATA_CACHE_DIR}/SOLUSDT_perpetual_1d_6m_full.csv")
 
         if not cache_file.exists():
             logger.error("12-month data file not found. Run fetch_binance_futures.py first")

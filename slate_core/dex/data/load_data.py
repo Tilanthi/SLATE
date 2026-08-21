@@ -13,8 +13,9 @@ from typing import Optional
 import pandas as pd
 
 from slate_core.dex.data.hyperliquid_client import HLClient
+from slate_core.config.paths import DATA_CACHE_DIR
 
-REAL_DATA_DEFAULT = "sol_data_cache/HYPERLIQUID_SOL_1h.json"
+REAL_DATA_DEFAULT = f"{DATA_CACHE_DIR}/HYPERLIQUID_SOL_1h.json"
 # HL candles: t=openTime(ms), T=closeTime(ms), o/h/l/c/v, n, i, s
 _CAN_KEYS = ["t", "T", "o", "h", "l", "c", "v", "n", "i", "s"]
 
@@ -60,12 +61,12 @@ def merge_funding(df, client, coin: str = "SOL"):
     funding rate carried onto each bar). funding>0 => longs pay (carry: short);
     funding<0 => longs receive. Returns df unchanged if funding can't be fetched.
 
-    Tries a DISK CACHE first (sol_data_cache/FUNDING_{coin}.json), then the live
+    Tries a DISK CACHE first (data_cache/FUNDING_{coin}.json), then the live
     API, caching the result for offline use."""
     import json, os
     import pandas as pd
 
-    cache_path = f"sol_data_cache/FUNDING_{coin}.json"
+    cache_path = f"{DATA_CACHE_DIR}/FUNDING_{coin}.json"
     hist = None
 
     # 1) Try disk cache first
@@ -81,7 +82,7 @@ def merge_funding(df, client, coin: str = "SOL"):
         try:
             hist = client.funding_history(coin)
             if hist:
-                os.makedirs("sol_data_cache", exist_ok=True)
+                os.makedirs(DATA_CACHE_DIR, exist_ok=True)
                 with open(cache_path, "w") as f:
                     json.dump(hist, f)
         except Exception:
@@ -100,7 +101,7 @@ def merge_funding(df, client, coin: str = "SOL"):
     return funded
 
 
-def load_markets(coins, base: str = "sol_data_cache"):
+def load_markets(coins, base: str = DATA_CACHE_DIR):
     """Load multiple HL perp candle frames for cross-market / pairs strategies.
     Returns {coin: df}. Files must already be fetched (HYPERLIQUID_{coin}_1h.json)."""
     return {c: load_candles(f"{base}/HYPERLIQUID_{c}_1h.json") for c in coins}

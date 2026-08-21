@@ -18,10 +18,11 @@ from slate_core.amm.lp_controller import (
     LPPromptSampler, run_lp_evolution_parallel,
 )
 from slate_core.amm.pool_data import load_pool_data
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
-LP_EVOLUTION_DB_DEFAULT = "slate_core/amm_evolution.db"
+LP_EVOLUTION_DB_DEFAULT = f"{CORE_ROOT}/amm_evolution.db"
 
 
 class LPEvolutionService:

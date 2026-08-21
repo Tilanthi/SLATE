@@ -10,6 +10,7 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Tuple
 import logging
+from slate_core.config.paths import CORE_ROOT
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 class StrategyClassAnalyzer:
     """Analyze 33,000+ strategy tests to identify profitable classes and improvements."""
 
-    def __init__(self, db_path: str = "slate_core/slate_realistic_discoveries.db"):
+    def __init__(self, db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db"):
         self.db_path = db_path
         self.analysis_results = {}
 

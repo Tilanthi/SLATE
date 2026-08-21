@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from enum import Enum
 import yaml
+from slate_core.config.paths import DATA_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,7 @@ class ApiConfig:
 @dataclass
 class DataConfig:
     """Data configuration."""
-    default_cache_dir: str = "sol_data_cache"
+    default_cache_dir: str = DATA_CACHE_DIR
     default_cache_file_pattern: str = "{symbol}_{interval}_{period}.csv"
     cache_enabled: bool = True
     cache_ttl_hours: int = 24

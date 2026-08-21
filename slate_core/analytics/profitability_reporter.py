@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 import json
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ class ProfitabilityReporter:
     analysis, but automated for regular monitoring.
     """
 
-    def __init__(self, db_path: str = "slate_core/slate_realistic_discoveries.db"):
+    def __init__(self, db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db"):
         """Initialize profitability reporter with database connection."""
         self.db_path = db_path
         self.conn = None
@@ -566,7 +567,7 @@ class ProfitabilityReporter:
 _reporter: Optional[ProfitabilityReporter] = None
 
 
-def get_profitability_reporter(db_path: str = "slate_core/slate_realistic_discoveries.db") -> ProfitabilityReporter:
+def get_profitability_reporter(db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db") -> ProfitabilityReporter:
     """Get global profitability reporter instance."""
     global _reporter
     if _reporter is None:

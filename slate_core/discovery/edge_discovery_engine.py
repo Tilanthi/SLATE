@@ -41,6 +41,7 @@ import json
 from pathlib import Path
 import sqlite3
 from collections import defaultdict
+from slate_core.config.paths import DATA_CACHE_DIR, CORE_ROOT
 
 # Import persistent memory
 try:
@@ -199,7 +200,7 @@ class EdgeDiscoveryEngine:
     5. Ranks by PnL, not just Sharpe
     """
 
-    def __init__(self, db_path: str = "slate_core/slate_realistic_discoveries.db",
+    def __init__(self, db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db",
                  checkpoint_enabled: bool = False,
                  reflection_enabled: bool = True):
         self.db_path = db_path
@@ -622,7 +623,7 @@ class EdgeDiscoveryEngine:
 
         # First, try to load from CSV cache (cached real data only)
         # Use timeframe-specific CSV file that contains REAL Binance data
-        cache_file = Path(f"sol_data_cache/SOLUSDT_{timeframe}_1y.csv")
+        cache_file = Path(f"{DATA_CACHE_DIR}/SOLUSDT_{timeframe}_1y.csv")
         if cache_file.exists():
             try:
                 df = pd.read_csv(cache_file)

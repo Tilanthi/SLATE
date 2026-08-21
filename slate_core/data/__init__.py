@@ -1,29 +1,17 @@
 """
 Data Module
 
-Handles all market data operations including normalization, caching,
-and database storage, plus the regime-led discovery data layer.
+Handles all market data operations including database storage,
+plus the regime-led discovery data layer.
 
-Legacy submodules (normalizer, cache, database, fetcher, binance_fetcher) are
-imported defensively: a broken legacy import must not break the whole package
-(or block the regime data layer). Import them directly when needed.
+Submodules are imported defensively: a broken legacy import must not
+break the whole package (or block the regime data layer). Import them
+directly when needed.
 """
 
 __all__ = []
 
 # Legacy eager imports - guarded so one broken module doesn't break the package.
-try:  # pragma: no cover - legacy
-    from .normalizer import DataNormalizer, SymbolMapper
-    __all__ += ["DataNormalizer", "SymbolMapper"]
-except Exception:  # noqa: BLE001 - legacy module optional
-    pass
-
-try:  # pragma: no cover - legacy
-    from .cache import TimeseriesCache
-    __all__ += ["TimeseriesCache"]
-except Exception:  # noqa: BLE001
-    pass
-
 try:  # pragma: no cover - legacy
     from .database import (
         DatabaseManager, Ticker, Candle, Trade, PaperOrder, PaperPosition,
@@ -33,13 +21,7 @@ try:  # pragma: no cover - legacy
     __all__ += ["DatabaseManager", "Ticker", "Candle", "Trade", "PaperOrder",
                 "PaperPosition", "PaperBalance", "Strategy", "BacktestResult",
                 "RiskState", "CircuitBreakerEvent", "PortfolioSnapshot", "SignalEvent"]
-except Exception:  # noqa: BLE001
-    pass
-
-try:  # pragma: no cover - legacy
-    from .fetcher import HistoricalDataFetcher, DataQualityChecker
-    __all__ += ["HistoricalDataFetcher", "DataQualityChecker"]
-except Exception:  # noqa: BLE001
+except Exception:  # noqa: BLE001 - legacy module optional
     pass
 
 try:  # pragma: no cover - legacy

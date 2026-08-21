@@ -12,9 +12,10 @@ import time
 
 import pandas as pd
 import requests
+from slate_core.config.paths import DATA_CACHE_DIR
 
 BINANCE_KLINES = "https://fapi.binance.com/fapi/v1/klines"
-CACHE_DIR = "sol_data_cache"
+CACHE_DIR = DATA_CACHE_DIR
 
 
 def fetch_stablecoin_prices(pair: str = "USDCUSDT", interval: str = "1d",

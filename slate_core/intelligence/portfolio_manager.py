@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 import sqlite3
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +173,7 @@ class PortfolioManager:
                  total_capital: float = 10000.0,
                  allocation_method: AllocationMethod = AllocationMethod.KELLY_CRITERION,
                  risk_params: Optional[RiskParameters] = None,
-                 db_path: str = "slate_core/slate_realistic_discoveries.db"):
+                 db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db"):
         """
         Initialize portfolio manager.
 

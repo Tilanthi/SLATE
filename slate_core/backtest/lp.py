@@ -26,8 +26,9 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+from slate_core.config.paths import DATA_CACHE_DIR
 
-CACHE = "sol_data_cache"
+CACHE = DATA_CACHE_DIR
 
 
 def load_pool_history(pool_id: str) -> pd.DataFrame:

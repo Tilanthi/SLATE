@@ -7,6 +7,7 @@ import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 import time
+from slate_core.config.paths import DATA_CACHE_DIR
 
 def fetch_solusdt_perpetual_data(interval='1h', years=1):
     """Fetch SOLUSDT perpetual futures data from Binance."""
@@ -92,7 +93,7 @@ def fetch_solusdt_perpetual_data(interval='1h', years=1):
 
 if __name__ == "__main__":
     # Create cache directory
-    cache_dir = Path("sol_data_cache")
+    cache_dir = Path(DATA_CACHE_DIR)
     cache_dir.mkdir(exist_ok=True)
 
     # Fetch data

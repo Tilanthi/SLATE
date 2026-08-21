@@ -41,6 +41,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from slate_core.config.paths import DATA_CACHE_DIR
 
 # Configure logging FIRST so the guarded imports below can log safely in their
 # except-ImportError handlers (otherwise a failed import raises NameError on `logger`
@@ -127,7 +128,7 @@ try:
     from slate_core.dex.evolution.dex_service import DexEvolutionService
     DEX_SERVICE = DexEvolutionService(
         target=os.getenv("SLATE_DEX_TARGET", "directional"),
-        data_path=os.getenv("SLATE_DEX_DATA_PATH") or "sol_data_cache/HYPERLIQUID_SOL_1h.json",
+        data_path=os.getenv("SLATE_DEX_DATA_PATH") or f"{DATA_CACHE_DIR}/HYPERLIQUID_SOL_1h.json",
         coin=os.getenv("SLATE_DEX_COIN", "SOL"),
         coin_b=os.getenv("SLATE_DEX_COIN_B", "BTC"),
         markets=[c for c in os.getenv("SLATE_DEX_MARKETS", "SOL,BTC,ETH").split(",") if c],
@@ -273,7 +274,7 @@ async def start_closed_loop_discovery():
         # closed loop MUST use the same daily source as the evolution layer — feeding
         # the hourly cache here made every rolling(20) window 20 hours, not 20 days.
         from slate_core.discovery.evolution.load_data import load_daily_data
-        df = load_daily_data('sol_data_cache/SOLUSDT_perpetual_1d_36m.csv')
+        df = load_daily_data(f'{DATA_CACHE_DIR}/SOLUSDT_perpetual_1d_36m.csv')
 
         if df is None or len(df) < 50:
             raise HTTPException(status_code=400, detail="Insufficient market data for discovery")
@@ -423,7 +424,7 @@ async def sweep_run():
     client = HLClient()
     coins = {}
     for coin in ["SOL", "BTC", "ETH"]:
-        df = load_candles(f"sol_data_cache/HYPERLIQUID_{coin}_1h.json")
+        df = load_candles(f"{DATA_CACHE_DIR}/HYPERLIQUID_{coin}_1h.json")
         df = merge_funding(df, client, coin)
         coins[coin] = df
 
@@ -585,7 +586,7 @@ async def start_continuous_discovery():
                     # as the evolution layer). The closed loop must not backtest hourly
                     # bars while declaring a 1d timeframe.
                     from slate_core.discovery.evolution.load_data import load_daily_data
-                    df = load_daily_data('sol_data_cache/SOLUSDT_perpetual_1d_36m.csv')
+                    df = load_daily_data(f'{DATA_CACHE_DIR}/SOLUSDT_perpetual_1d_36m.csv')
                     logger.info(f"✅ Market data loaded: {len(df)} daily bars")
 
                     # Run discovery cycle

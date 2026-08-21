@@ -9,6 +9,7 @@ import matplotlib.dates as mdates
 from datetime import datetime
 import json
 from pathlib import Path
+from slate_core.config.paths import DATA_CACHE_DIR
 
 def load_backtest_results():
     """Load backtest results and data."""
@@ -18,7 +19,7 @@ def load_backtest_results():
         results = json.load(f)
 
     # Load price data
-    df = pd.read_csv('sol_data_cache/SOLUSDT_1h_1y.csv', index_col='timestamp', parse_dates=True)
+    df = pd.read_csv(f'{DATA_CACHE_DIR}/SOLUSDT_1h_1y.csv', index_col='timestamp', parse_dates=True)
 
     return results, df
 

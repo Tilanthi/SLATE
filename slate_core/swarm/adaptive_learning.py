@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from collections import defaultdict
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class AdaptiveLearningEngine:
     profit-based guidance that actually works with brutal costs.
     """
 
-    def __init__(self, db_path: str = "slate_core/slate_realistic_discoveries.db"):
+    def __init__(self, db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db"):
         self.db_path = db_path
         self.profitability_memory: Dict[str, ProfitabilitySignal] = {}
         self.edge_type_performance: Dict[str, Dict[str, float]] = defaultdict(lambda: {

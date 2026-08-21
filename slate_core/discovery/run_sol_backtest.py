@@ -3,11 +3,15 @@ Run rigorous walk-forward backtest on SOLUSDT perpetuals
 """
 
 import sys
-sys.path.append('/Users/gjw255/astrodata/SWARM/SLATE')
+from pathlib import Path
+
+# Make the repo root importable regardless of CWD: this file lives at
+# <repo>/slate_core/discovery/run_sol_backtest.py
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from slate_core.discovery.ml_500_5h_rigorous_backtester import RigorousWalkForwardBacktester
 import json
-from pathlib import Path
+from slate_core.config.paths import DATA_CACHE_DIR
 
 def main():
     """Run rigorous backtest on SOLUSDT data."""
@@ -23,7 +27,7 @@ def main():
 
     # Initialize backtester for SOLUSDT
     backtester = RigorousWalkForwardBacktester(
-        data_path="sol_data_cache/SOLUSDT_1h_1y.csv",
+        data_path=f"{DATA_CACHE_DIR}/SOLUSDT_1h_1y.csv",
         initial_capital=100000,
         position_size=0.30,
         stop_loss=0.05,

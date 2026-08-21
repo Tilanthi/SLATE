@@ -28,10 +28,11 @@ from slate_core.dex.evolution.dex_controller import (
 from slate_core.dex.evolution.param_optimizer import mm_param_step
 from slate_core.dex.evolution.gp.controller import gp_evolution_step
 from slate_core.dex.evolution.gp.fitness import textbook_archetype_curves
+from slate_core.config.paths import DATA_CACHE_DIR, CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
-DEX_EVOLUTION_DB_DEFAULT = "slate_core/dex_evolution.db"
+DEX_EVOLUTION_DB_DEFAULT = f"{CORE_ROOT}/dex_evolution.db"
 
 
 class DexEvolutionService:
@@ -58,7 +59,7 @@ class DexEvolutionService:
         self.coin_b = coin_b                  # P4: second leg of the pairs target
         # Native (non-LLM) market-making path: tick/L2 snapshots + GA parameter
         # optimizer. The MM target no longer calls the LLM at all.
-        self.l2_data_path = l2_data_path or f"sol_data_cache/L2_{coin}.jsonl"
+        self.l2_data_path = l2_data_path or f"{DATA_CACHE_DIR}/L2_{coin}.jsonl"
         self.l2_stride = l2_stride            # subsample factor for search-pace
         self._snaps = None
         self._archetype_curves = None         # GP novelty reference (textbook MM curves)
@@ -116,8 +117,8 @@ class DexEvolutionService:
     def _load_pair(self):
         """Load two aligned markets (coin, coin_b) for the pairs target."""
         if self._dfA is None:
-            dfA = load_candles(f"sol_data_cache/HYPERLIQUID_{self.coin}_1h.json")
-            dfB = load_candles(f"sol_data_cache/HYPERLIQUID_{self.coin_b}_1h.json")
+            dfA = load_candles(f"{DATA_CACHE_DIR}/HYPERLIQUID_{self.coin}_1h.json")
+            dfB = load_candles(f"{DATA_CACHE_DIR}/HYPERLIQUID_{self.coin_b}_1h.json")
             common = dfA.index.intersection(dfB.index)
             self._dfA = dfA.loc[common]
             self._dfB = dfB.loc[common]

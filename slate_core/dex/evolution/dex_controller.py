@@ -35,6 +35,7 @@ from slate_core.dex.evolution.dex_subprocess_eval import (
     dex_pairs_eval_fitness_subprocess, dex_cross_market_eval_fitness_subprocess,
 )
 from slate_core.dex.strategies.dex_seeds import dex_pick_seed_parent
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ DEX_SYSTEM = (
 )
 
 # Separate funnel log for the DEX pipeline (CEX uses evolution_verdicts.jsonl).
-_dex_logger = VerdictLogger("slate_core/dex_verdicts.jsonl")
+_dex_logger = VerdictLogger(f"{CORE_ROOT}/dex_verdicts.jsonl")
 
 
 def log_dex_verdict(verdict: CandidateVerdict) -> None:
@@ -67,7 +68,7 @@ def log_dex_verdict(verdict: CandidateVerdict) -> None:
 _EVALUATED_HASHES: set = set()
 
 
-def dex_failure_summary(path: str = "slate_core/dex_verdicts.jsonl", n: int = 60) -> str:
+def dex_failure_summary(path: str = f"{CORE_ROOT}/dex_verdicts.jsonl", n: int = 60) -> str:
     """Read the tail of the DEX verdict log and summarize where candidates die, for
     injection into the prompt (P5: steer the LLM away from dead patterns)."""
     import collections as _collections

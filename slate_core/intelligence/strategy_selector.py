@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import sqlite3
 from enum import Enum
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,7 @@ class StrategySelector:
     """
 
     def __init__(self,
-                 db_path: str = "slate_core/slate_realistic_discoveries.db",
+                 db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db",
                  min_sharpe_ratio: float = 0.5,
                  max_correlation: float = 0.7,
                  max_strategies: int = 10):
@@ -601,7 +602,7 @@ class StrategySelector:
 _strategy_selector: Optional[StrategySelector] = None
 
 
-def get_strategy_selector(db_path: str = "slate_core/slate_realistic_discoveries.db") -> StrategySelector:
+def get_strategy_selector(db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db") -> StrategySelector:
     """Get global strategy selector instance."""
     global _strategy_selector
     if _strategy_selector is None:

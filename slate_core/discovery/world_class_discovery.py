@@ -18,6 +18,7 @@ import logging
 from datetime import datetime
 import json
 
+from slate_core.config.paths import DATA_CACHE_DIR, CORE_ROOT
 from slate_core.discovery.world_class_strategies import (
     WorldClassQuantStrategies,
     MarketRegime,
@@ -42,7 +43,7 @@ class WorldClassDiscoveryEngine:
 
     def __init__(self):
         self.quant_strategies = WorldClassQuantStrategies()
-        self.db_path = 'slate_core/slate_realistic_discoveries.db'
+        self.db_path = f'{CORE_ROOT}/slate_realistic_discoveries.db'
         self.max_strategies_per_cycle = 50
         self.min_trades_required = 10
         self.min_win_rate = 0.45
@@ -52,7 +53,7 @@ class WorldClassDiscoveryEngine:
     def load_market_data(self) -> pd.DataFrame:
         """Load and prepare market data for strategy discovery"""
         try:
-            with open('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv', 'r') as f:
+            with open(f'{DATA_CACHE_DIR}/SOLUSDT_perpetual_1h_6m.csv', 'r') as f:
                 content = f.read()
 
             all_data = []

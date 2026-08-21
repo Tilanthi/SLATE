@@ -1,6 +1,6 @@
 """Market-data loader for the evolution layer.
 
-Default source is `sol_data_cache/SOLUSDT_perpetual_1d_36m.csv` — ~1,080 REAL
+Default source is `slate_core/data_cache/SOLUSDT_perpetual_1d_36m.csv` — ~1,080 REAL
 daily SOLUSDT-perp bars (2023-08 → present) fetched from Binance, so IS/OOS
 splits are measured on hundreds of bars, not ~35 (the overfit-from-tiny-sample
 problem). The loader still resamples to daily if handed an intraday file (e.g.
@@ -17,9 +17,10 @@ import json
 import os
 
 import pandas as pd
+from slate_core.config.paths import DATA_CACHE_DIR
 
-REAL_DATA_DEFAULT = "sol_data_cache/SOLUSDT_perpetual_1d_36m.csv"
-FUNDING_DATA_DEFAULT = "sol_data_cache/BINANCE_SOL_FUNDING.json"
+REAL_DATA_DEFAULT = f"{DATA_CACHE_DIR}/SOLUSDT_perpetual_1d_36m.csv"
+FUNDING_DATA_DEFAULT = f"{DATA_CACHE_DIR}/BINANCE_SOL_FUNDING.json"
 
 
 def load_ohlcv(path: str = REAL_DATA_DEFAULT) -> pd.DataFrame:

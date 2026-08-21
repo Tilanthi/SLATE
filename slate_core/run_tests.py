@@ -16,6 +16,7 @@ import sys
 import subprocess
 import argparse
 from pathlib import Path
+from slate_core.config.paths import CORE_ROOT
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -27,7 +28,7 @@ def run_unit_tests(verbose=False):
     print("Running Unit Tests")
     print("="*60 + "\n")
 
-    cmd = ["python3", "-m", "pytest", "slate_core/tests/", "-v"]
+    cmd = ["python3", "-m", "pytest", f"{CORE_ROOT}/tests/", "-v"]
     if verbose:
         cmd.append("-vv")
 
@@ -41,7 +42,7 @@ def run_integration_tests(verbose=False):
     print("Running Integration Tests")
     print("="*60 + "\n")
 
-    cmd = ["python3", "-m", "pytest", "slate_core/test_integration.py", "-v"]
+    cmd = ["python3", "-m", "pytest", f"{CORE_ROOT}/test_integration.py", "-v"]
     if verbose:
         cmd.append("-vv")
 

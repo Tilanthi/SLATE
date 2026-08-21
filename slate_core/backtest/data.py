@@ -18,8 +18,9 @@ import os
 from typing import Dict
 
 import pandas as pd
+from slate_core.config.paths import DATA_CACHE_DIR
 
-_CACHE = "sol_data_cache"
+_CACHE = DATA_CACHE_DIR
 
 
 def _ohlcv_from_json(path: str) -> pd.DataFrame:

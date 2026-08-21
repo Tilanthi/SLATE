@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import sqlite3
 import json
+from slate_core.config.paths import DATA_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +211,7 @@ class PerpetualFuturesBacktester:
         """
         try:
             # Try to load from cache first
-            cache_file = Path(f"sol_data_cache/SOLUSDT_perpetual_{self.config.timeframe}_{months}m.csv")
+            cache_file = Path(f"{DATA_CACHE_DIR}/SOLUSDT_perpetual_{self.config.timeframe}_{months}m.csv")
 
             if cache_file.exists():
                 df = pd.read_csv(cache_file)

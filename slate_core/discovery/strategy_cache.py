@@ -23,6 +23,7 @@ from functools import lru_cache
 import pickle
 import numpy as np
 import pandas as pd
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ class StrategyCache:
 
     def __init__(self,
                  max_memory_items: int = 1000,
-                 cache_dir: str = "slate_core/cache",
+                 cache_dir: str = f"{CORE_ROOT}/cache",
                  max_disk_items: int = 10000):
         """
         Initialize the strategy cache.

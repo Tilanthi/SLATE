@@ -7,6 +7,7 @@ import numpy as np
 from pathlib import Path
 import time
 from sklearn.ensemble import RandomForestClassifier
+from slate_core.config.paths import DATA_CACHE_DIR
 
 def analyze_backtester_reality():
     """Show exactly what the backtester does."""
@@ -16,7 +17,7 @@ def analyze_backtester_reality():
     print("=" * 80)
 
     # Load data
-    df = pd.read_csv('sol_data_cache/SOLUSDT_1h_1y.csv',
+    df = pd.read_csv(f'{DATA_CACHE_DIR}/SOLUSDT_1h_1y.csv',
                      index_col='timestamp', parse_dates=True)
 
     total_hours = len(df)

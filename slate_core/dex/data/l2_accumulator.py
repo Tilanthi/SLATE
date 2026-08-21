@@ -26,10 +26,11 @@ from typing import List
 import aiohttp
 
 from slate_core.dex.data.hyperliquid_client import HLClient
+from slate_core.config.paths import DATA_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 HL_WS_URL = "wss://api.hyperliquid.xyz/ws"
-L2_STORE_DIR = "sol_data_cache"
+L2_STORE_DIR = DATA_CACHE_DIR
 
 
 def _l2_path(coin: str) -> str:

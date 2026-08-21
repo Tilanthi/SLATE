@@ -1,3 +1,4 @@
+from slate_core.config.paths import DATA_CACHE_DIR
 """
 SLATE Configuration Constants
 Centralized configuration to eliminate hardcoded values across the codebase
@@ -49,7 +50,7 @@ BINANCE_API_KLINES = f"{BINANCE_API_BASE}/api/v3/klines"
 BINANCE_FUTURES_API_BASE = "https://fapi.binance.com"
 
 # Data cache paths
-DEFAULT_CACHE_DIR = "sol_data_cache"
+DEFAULT_CACHE_DIR = DATA_CACHE_DIR
 DEFAULT_CACHE_FILE_PATTERN = "{symbol}_{interval}_{period}.csv"
 
 # Backtest output paths

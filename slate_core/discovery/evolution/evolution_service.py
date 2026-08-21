@@ -19,11 +19,12 @@ from slate_core.discovery.evolution.llm_client import LLMClient, LLMConfig, get_
 from slate_core.discovery.evolution.llm_pool import LLMPool, LLMPoolConfig
 from slate_core.discovery.evolution.program_database import ProgramDBConfig, ProgramDatabase
 from slate_core.discovery.evolution.prompt_sampler import PromptSampler
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
-DISCOVERIES_DB_DEFAULT = "slate_core/slate_realistic_discoveries.db"
-EVOLUTION_DB_DEFAULT = "slate_core/slate_evolution.db"
+DISCOVERIES_DB_DEFAULT = f"{CORE_ROOT}/slate_realistic_discoveries.db"
+EVOLUTION_DB_DEFAULT = f"{CORE_ROOT}/slate_evolution.db"
 
 
 class EvolutionService:

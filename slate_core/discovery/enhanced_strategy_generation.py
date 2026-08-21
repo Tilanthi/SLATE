@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 import sqlite3
 from datetime import datetime, timedelta
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ class EnhancedStrategyGenerator:
     """
 
     def __init__(self, config: Optional[StrategyGeneratorConfig] = None,
-                 db_path: str = "slate_core/slate_realistic_discoveries.db"):
+                 db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db"):
         """Initialize enhanced strategy generator."""
         self.config = config or StrategyGeneratorConfig()
         self.db_path = db_path
@@ -229,7 +230,7 @@ class EnhancedStrategyGenerator:
 _enhanced_generator: Optional[EnhancedStrategyGenerator] = None
 
 
-def get_enhanced_generator(db_path: str = "slate_core/slate_realistic_discoveries.db") -> EnhancedStrategyGenerator:
+def get_enhanced_generator(db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db") -> EnhancedStrategyGenerator:
     """Get global enhanced strategy generator instance."""
     global _enhanced_generator
     if _enhanced_generator is None:

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from enum import Enum
 from datetime import datetime
+from slate_core.config.paths import CORE_ROOT
 
 class GoalType(Enum):
     """Types of autonomous trading goals"""
@@ -209,7 +210,7 @@ class AutonomousConfig:
     enable_correlation_exploration: bool = True
 
     # Safety and scope constraints
-    modification_scope: List[str] = field(default_factory=lambda: ["slate_core/"])
+    modification_scope: List[str] = field(default_factory=lambda: [f"{CORE_ROOT}/"])
     require_human_approval_for_deployment: bool = True
     emergency_stop_enabled: bool = True
 

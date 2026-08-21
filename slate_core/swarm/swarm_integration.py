@@ -10,6 +10,7 @@ import pandas as pd
 from typing import Dict, Any, Optional
 from slate_core.swarm.adaptive_learning import get_adaptive_learning_engine
 from datetime import datetime
+from slate_core.config.paths import DATA_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -347,7 +348,7 @@ class SwarmDiscoveryIntegration:
 
             # Load daily SOLUSDT data
             from pathlib import Path
-            cache_file = Path("sol_data_cache/SOLUSDT_1d_1y.csv")
+            cache_file = Path(f"{DATA_CACHE_DIR}/SOLUSDT_1d_1y.csv")
 
             if cache_file.exists():
                 import pandas as pd

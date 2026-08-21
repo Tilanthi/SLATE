@@ -1,6 +1,6 @@
 """Fetch + cache HL funding history for the portfolio premium streams.
 
-Run once to populate sol_data_cache/FUNDING_{coin}.json for each coin. The
+Run once to populate data_cache/FUNDING_{coin}.json for each coin. The
 portfolio service then loads funding from these cache files (offline, no API
 needed at runtime).
 
@@ -15,19 +15,20 @@ import os
 import sys
 
 from slate_core.dex.data.hyperliquid_client import HLClient
+from slate_core.config.paths import DATA_CACHE_DIR
 
 
 def fetch_and_cache(coin: str, client: HLClient = None) -> int:
-    """Fetch funding history from HL and cache to sol_data_cache/FUNDING_{coin}.json.
+    """Fetch funding history from HL and cache to data_cache/FUNDING_{coin}.json.
     Returns the number of funding records cached."""
     client = client or HLClient()
-    cache_path = f"sol_data_cache/FUNDING_{coin}.json"
+    cache_path = f"{DATA_CACHE_DIR}/FUNDING_{coin}.json"
     try:
         hist = client.funding_history(coin)
         if not hist:
             print(f"  {coin}: no funding data returned")
             return 0
-        os.makedirs("sol_data_cache", exist_ok=True)
+        os.makedirs(DATA_CACHE_DIR, exist_ok=True)
         with open(cache_path, "w") as f:
             json.dump(hist, f)
         print(f"  {coin}: cached {len(hist)} funding records -> {cache_path}")

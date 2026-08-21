@@ -15,12 +15,13 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/edge-discovery", tags=["edge-discovery"])
 
-DB_PATH = "slate_core/slate_realistic_discoveries.db"
+DB_PATH = f"{CORE_ROOT}/slate_realistic_discoveries.db"
 
 
 class EdgeDiscoveryTrigger(BaseModel):

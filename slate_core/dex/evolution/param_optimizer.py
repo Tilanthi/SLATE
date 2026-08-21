@@ -32,6 +32,7 @@ from slate_core.dex.backtester.mm_tick_backtester import MMPolicy, backtest_mm
 from slate_core.dex.backtester.economics import HLFeeSchedule
 from slate_core.swarm.pheromone_hypothesis_mapper import PheromoneHypothesisMapper
 from slate_core.swarm.swarm_discovery import PheromoneSignal, PheromoneType
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ MM_SEED_PARAMS = [
     {"half_spread_bps": 50.0, "inv_skew_bps": 20.0, "size": 1.0},   # wide
 ]
 
-_opt_logger = VerdictLogger("slate_core/dex_verdicts.jsonl")
+_opt_logger = VerdictLogger(f"{CORE_ROOT}/dex_verdicts.jsonl")
 
 
 def _hash(params: Dict[str, float]) -> str:

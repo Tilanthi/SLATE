@@ -23,9 +23,10 @@ from slate_core.dex.evolution.gp.genome import (
 )
 from slate_core.dex.evolution.gp.operators import vary
 from slate_core.dex.evolution.gp.fitness import evaluate_gp_tree
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
-_gp_logger = VerdictLogger("slate_core/dex_verdicts.jsonl")
+_gp_logger = VerdictLogger(f"{CORE_ROOT}/dex_verdicts.jsonl")
 
 
 def _has_gp_elite(db: ProgramDatabase) -> bool:

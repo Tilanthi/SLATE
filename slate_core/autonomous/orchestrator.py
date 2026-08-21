@@ -26,6 +26,9 @@ from .strategy_validator import StrategyValidator
 from .discovery_reporter import DiscoveryReporter
 from .trading_executor import TradingExecutor
 from .market_data_manager import MarketDataManager
+from slate_core.config.paths import CORE_ROOT
+
+logger = logging.getLogger(__name__)
 
 # Import real discovery engine for integration
 try:
@@ -34,16 +37,6 @@ try:
 except ImportError:
     DISCOVERY_ENGINE_AVAILABLE = False
     logger.warning("EdgeDiscoveryEngine not available - autonomous system will use mock discoveries")
-
-# Import trading intelligence layer for Phase 2
-try:
-    from ..intelligence.trading_intelligence_orchestrator import get_trading_intelligence_orchestrator
-    TRADING_INTELLIGENCE_AVAILABLE = True
-except ImportError:
-    TRADING_INTELLIGENCE_AVAILABLE = False
-    logger.warning("Trading Intelligence Layer not available - using basic autonomous mode")
-
-logger = logging.getLogger(__name__)
 
 
 class AutonomousState:
@@ -95,20 +88,10 @@ class AutonomousOrchestrator:
             update_interval_seconds=60  # Update every minute
         )
 
-        # Initialize trading intelligence layer (Phase 2)
+        # Trading intelligence layer removed with the legacy intelligence
+        # modules; downstream guards expect the attribute to exist.
         self.trading_intelligence = None
         self.intelligence_active = False
-        if TRADING_INTELLIGENCE_AVAILABLE:
-            try:
-                self.trading_intelligence = get_trading_intelligence_orchestrator(
-                    cycle_interval_seconds=60,
-                    enable_auto_deployment=True,
-                    enable_auto_rebalancing=True,
-                    enable_risk_management=True
-                )
-                logger.info("🧠 Trading Intelligence Layer initialized")
-            except Exception as e:
-                logger.warning(f"Failed to initialize trading intelligence: {e}")
 
         # State management
         self.autonomous_state = AutonomousState.IDLE
@@ -134,7 +117,7 @@ class AutonomousOrchestrator:
         # Integration with existing SLATE components
         if DISCOVERY_ENGINE_AVAILABLE:
             self.intelligent_discovery_engine = EdgeDiscoveryEngine(
-                db_path="slate_core/slate_realistic_discoveries.db",
+                db_path=f"{CORE_ROOT}/slate_realistic_discoveries.db",
                 checkpoint_enabled=False,
                 reflection_enabled=True
             )

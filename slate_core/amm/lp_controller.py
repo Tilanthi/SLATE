@@ -24,6 +24,7 @@ from slate_core.discovery.evolution.verdict_log import (
 )
 from slate_core.amm.lp_subprocess_eval import lp_eval_fitness_subprocess
 from slate_core.amm.lp_seeds import LP_SEED_ARCHETYPES, lp_pick_seed_parent
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ LP_SYSTEM = (
     "- Propose a SMALL change improving net yield (APY)."
 )
 
-_lp_logger = VerdictLogger("slate_core/amm_verdicts.jsonl")
+_lp_logger = VerdictLogger(f"{CORE_ROOT}/amm_verdicts.jsonl")
 _LP_EVALUATED_HASHES: set = set()
 
 

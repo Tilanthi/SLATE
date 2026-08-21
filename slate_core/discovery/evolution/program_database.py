@@ -14,6 +14,7 @@ import sqlite3
 import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
+from slate_core.config.paths import CORE_ROOT
 
 Niche = Tuple[str, str]
 
@@ -36,7 +37,7 @@ class ProgramDBConfig:
     island_pool_size: int = 50             # exploration pool cap
     inspiration_count: int = 3             # inspirations returned by sample()
     novelty_correlation_max: float = 0.7   # reserved for Phase 3 diversity
-    persist_path: Optional[str] = "slate_core/slate_evolution.db"
+    persist_path: Optional[str] = f"{CORE_ROOT}/slate_evolution.db"
 
 
 @dataclass

@@ -45,6 +45,7 @@ from slate_core.discovery.hybrid_neurosymbolic import (
     get_hybrid_strategy_system
 )
 from slate_core.discovery.perpetual_database import PerpetualDatabaseManager
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class EnhancedDiscoveryIntegration:
 
         # Database persistence
         self.db_manager = PerpetualDatabaseManager()
-        self.db_path = "slate_core/slate_realistic_discoveries.db"
+        self.db_path = f"{CORE_ROOT}/slate_realistic_discoveries.db"
 
         # System state
         self.cycle_count = 0

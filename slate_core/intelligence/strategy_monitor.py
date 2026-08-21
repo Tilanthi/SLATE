@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 import sqlite3 as sqlite
 
 from slate_core.discovery.perpetual_database import PerpetualDatabaseManager
+from slate_core.config.paths import CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ class StrategyMonitoringSystem:
 
     def __init__(self):
         self.db_manager = PerpetualDatabaseManager()
-        self.db_path = "slate_core/slate_realistic_discoveries.db"
+        self.db_path = f"{CORE_ROOT}/slate_realistic_discoveries.db"
 
         # Monitoring configuration
         self.evaluation_interval_hours = 24  # Evaluate daily

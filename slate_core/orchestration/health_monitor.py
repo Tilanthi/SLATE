@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Callable, Any
 from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
+from slate_core.config.paths import DATA_CACHE_DIR, CORE_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +211,7 @@ class SystemResourceHealthCheck(HealthCheck):
 class DatabaseHealthCheck(HealthCheck):
     """Check database connectivity and performance."""
 
-    def __init__(self, db_path: str = "slate_core/slate_realistic_discoveries.db"):
+    def __init__(self, db_path: str = f"{CORE_ROOT}/slate_realistic_discoveries.db"):
         super().__init__("database")
         self.db_path = db_path
 
@@ -331,7 +332,7 @@ class ApiConnectivityHealthCheck(HealthCheck):
 class DataCacheHealthCheck(HealthCheck):
     """Check data cache status."""
 
-    def __init__(self, cache_dir: str = "sol_data_cache"):
+    def __init__(self, cache_dir: str = DATA_CACHE_DIR):
         super().__init__("data_cache")
         self.cache_dir = cache_dir
 
