@@ -1,6 +1,7 @@
 """Tests for the daily-data loader (evolution/load_data.py)."""
 import pandas as pd
 
+from slate_core.config.paths import DATA_CACHE_DIR
 from slate_core.discovery.evolution.load_data import (
     load_ohlcv, resample_to_daily, load_daily_data, is_intraday,
 )
@@ -41,7 +42,7 @@ def test_is_intraday_false_for_daily():
 
 
 def test_load_daily_data_real_yields_daily_index():
-    df = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")
+    df = load_daily_data(f"{DATA_CACHE_DIR}/SOLUSDT_perpetual_1h_6m.csv")
     assert "close" in df.columns
     median_delta = df.index.to_series().diff().median()
     assert median_delta >= pd.Timedelta(days=1)    # daily, not hourly

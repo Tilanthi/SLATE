@@ -9,6 +9,7 @@ import pandas as pd
 
 from slate_core.discovery.evolution.load_data import load_daily_data
 from slate_core.discovery.evolution.subprocess_eval import eval_fitness_subprocess
+from slate_core.config.paths import DATA_CACHE_DIR
 
 
 _DAILY = None
@@ -17,7 +18,7 @@ _DAILY = None
 def _daily():
     global _DAILY
     if _DAILY is None:
-        _DAILY = load_daily_data("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")
+        _DAILY = load_daily_data(f"{DATA_CACHE_DIR}/SOLUSDT_perpetual_1h_6m.csv")
     return _DAILY
 
 

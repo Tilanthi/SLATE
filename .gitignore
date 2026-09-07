@@ -58,8 +58,9 @@ slate_core/evolution_verdicts.jsonl
 slate_core/dex_verdicts.jsonl
 slate_core/amm_verdicts.jsonl
 # L2 + trade accumulator output (microstructure data, grows continuously)
-sol_data_cache/L2_*.jsonl
-sol_data_cache/TRADES_*.jsonl
+slate_core/data_cache/
+slate_core/data_cache/L2_*.jsonl
+slate_core/data_cache/TRADES_*.jsonl
 
 # Environment variables
 .env

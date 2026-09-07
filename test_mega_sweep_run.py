@@ -1,5 +1,6 @@
 """Test: run the mega sweep + regime-switching portfolio (wide discovery)."""
 import sys
+from slate_core.config.paths import DATA_CACHE_DIR
 
 
 def test_mega_sweep_and_regime_switch():
@@ -13,7 +14,7 @@ def test_mega_sweep_and_regime_switch():
     client = HLClient()
     coins = {}
     for coin in ["SOL", "BTC", "ETH"]:
-        df = load_candles(f"sol_data_cache/HYPERLIQUID_{coin}_1h.json")
+        df = load_candles(f"{DATA_CACHE_DIR}/HYPERLIQUID_{coin}_1h.json")
         df = merge_funding(df, client, coin)
         coins[coin] = df
 

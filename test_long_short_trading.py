@@ -5,6 +5,7 @@ for perpetual futures trading (unlike spot trading which only allows longs)
 """
 import pandas as pd
 from slate_core.discovery.perpetual_futures_backtest import PerpetualFuturesBacktester, PerpetualBacktestConfig
+from slate_core.config.paths import DATA_CACHE_DIR
 
 print("=" * 60)
 print("TESTING LONG + SHORT TRADING CAPABILITIES")
@@ -12,7 +13,7 @@ print("=" * 60)
 
 # Load market data properly
 print("\n1. Loading market data...")
-df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
+df = pd.read_json(f'{DATA_CACHE_DIR}/SOLUSDT_perpetual_1h_6m.csv')
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 df.set_index('timestamp', inplace=True)
 print(f"   ✅ Loaded {len(df)} days of data")

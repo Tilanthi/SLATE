@@ -785,3 +785,43 @@ Stablecoin LP + emissions farming, survivorship-corrected + tail-risk-sized
   * **CONCLUSION:** yield is genuinely positive where alpha was absent; stablecoin LP
     (~3–4%/yr) is the solid low-risk deployable; emissions (~6–11%/yr) higher but
     hack/depeg-tail-laden. Stop searching liquid-perp OHLCV directional alpha.
+
+### 2026-08-21 — Standalone-package audit: slate_core closed
+Audit objective: `slate_core` as a self-contained package — no broken imports,
+no dead files, no path escapes outside the package.
+
+  * **Pruned 19 dead modules** (deleted by earlier restructures, importers already
+    gone): `discovery/{adaptive_*, enhanced_*, ensemble_strategies, walk_forward}`,
+    `server_{enhanced,closed_loop,old_broken}`, `intelligence/{autonomous_*, ensemble_*,
+    genetic_*, ml_*, trading_intelligence_*}`, `data/{cache,fetcher,normalizer}`.
+    `data/__init__.py` and `autonomous/orchestrator.py` cleaned of the orphaned
+    guarded imports (`orchestrator.trading_intelligence = None` keeps downstream
+    attribute checks working).
+  * **Path centralization** — new `slate_core/config/paths.py` exports `CORE_ROOT`,
+    `DATA_CACHE_DIR`, `REPO_ROOT`, `db_path()`; `SLATE_DATA_CACHE` env overrides the
+    cache dir. All CWD-relative `sol_data_cache/...` and `'slate_core/X'` literals
+    across 49 package modules + 12 root test files (incl. `conftest.py`) now import
+    from it. `run_sol_backtest.py`'s hardcoded absolute `sys.path.append` replaced
+    with a `__file__`-derived one.
+  * **Data cache moved into the package**: `sol_data_cache/` → `slate_core/data_cache/`
+    (5.8 GB, 172 entries, same-volume rename, server stopped for the move).
+    `.gitignore` updated (`slate_core/data_cache/`, L2/TRADES patterns).
+    `requirements.txt`: +`redis`, +`sqlalchemy` (used by live imports, were missing).
+  * **Off-by-one caught in verification**: `paths.py` used `parents[2]` (repo root)
+    instead of `parents[1]` (package) — `DATA_CACHE_DIR` pointed at a nonexistent
+    `<repo>/data_cache`, which is why 4 test files failed collection with an
+    opaque `ValueError: Expected object or value`. Fixed; the stray artifacts the
+    wrong root created (0-byte `*.db` stubs, one junk `FUNDING_SOL.json`) removed.
+  * **listing_study scripts de-absolutized**: the three scratch scripts inside
+    `data_cache/listing_study/` had hardcoded `/Users/gjw255/...` paths + sys.path
+    bootstraps; now derive from `__file__`/`paths.py` and run from any cwd.
+  * **Two test fixes**: `test_dex_data.py::merge_funding` now monkeypatches
+    `DATA_CACHE_DIR` to tmp (it was data-dependent on whatever real
+    `FUNDING_SOL.json` sat in the cache — pre-existing breakage, surfaced by the
+    move); `test_autonomous_system.py` scope check updated for the absolute
+    `modification_scope` (declaration-only config, no consumers).
+  * **Verified**: 363 tests green; imports resolve from a foreign cwd (`/tmp`);
+    server restarted via launchd, `/health` → `status: healthy`,
+    `discovery_running: true`. Fresh boots take a few minutes of CPU churn before
+    the port binds — the discovery cycles run in the event loop, so `/health`
+    may time out until the first cycles settle. Not a regression.

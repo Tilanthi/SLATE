@@ -65,9 +65,14 @@ def test_refresh_store_appends_only_new_candles(tmp_path):
     assert len(df) == 4
 
 
-def test_merge_funding_adds_forward_filled_column():
+def test_merge_funding_adds_forward_filled_column(tmp_path, monkeypatch):
     import pandas as pd
+    import slate_core.dex.data.load_data as dex_load
     from slate_core.dex.data.load_data import merge_funding
+    # merge_funding prefers a disk cache (FUNDING_{coin}.json) over the client;
+    # point it at an empty dir so the fake client below is actually exercised
+    # instead of whatever real funding history happens to sit in the cache.
+    monkeypatch.setattr(dex_load, "DATA_CACHE_DIR", str(tmp_path))
     idx = pd.date_range("2026-01-01", periods=10, freq="1h")
     df = pd.DataFrame({"close": [100.0] * 10}, index=idx)
     fake = type("C", (), {"funding_history": lambda self, coin: [
@@ -75,6 +80,8 @@ def test_merge_funding_adds_forward_filled_column():
     out = merge_funding(df, fake, "SOL")
     assert "funding" in out.columns
     assert abs(out["funding"].iloc[0] - 0.001) < 1e-9     # forward-filled
+    # the fetched history must land in the redirected cache, not the real one
+    assert (tmp_path / "FUNDING_SOL.json").exists()
 
 
 def test_load_markets_loads_multiple_coins(tmp_path):

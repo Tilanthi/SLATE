@@ -97,7 +97,7 @@ evaluator → untrusted. Full writeup: `HONEST_DISCOVERY_REPORT.pdf`.
 ### **Key Architecture**
 - **Discovery Method**: Hypothesis-driven scientific discovery (closed-loop AI)
 - **Evolution Layer**: AlphaEvolve-style evolutionary code search (`slate_core/discovery/evolution/`) — runs alongside closed-loop discovery
-- **Market Data**: Real SOLUSDT perpetual futures. Default evolution source `sol_data_cache/SOLUSDT_perpetual_1d_36m.csv` = **~1,080 daily bars** (2023-08→present, fetched from Binance) so IS/OOS are hundreds of bars. The loader (`load_data.load_daily_data`) resamples to daily if handed the legacy hourly cache `SOLUSDT_perpetual_1h_6m.csv` (4,182 hourly bars ≈ 175 days). Daily-timeframe edge only.
+- **Market Data**: Real SOLUSDT perpetual futures. Default evolution source `slate_core/data_cache/SOLUSDT_perpetual_1d_36m.csv` = **~1,080 daily bars** (2023-08→present, fetched from Binance) so IS/OOS are hundreds of bars. The loader (`load_data.load_daily_data`) resamples to daily if handed the legacy hourly cache `SOLUSDT_perpetual_1h_6m.csv` (4,182 hourly bars ≈ 175 days). Daily-timeframe edge only. All paths resolve via `slate_core/config/paths.py` (CWD-independent; `SLATE_DATA_CACHE` env overrides the cache dir).
 - **Validation**: 6 pluralistic validation methods with realistic thresholds
 - **Learning**: Continuous feedback learning system
 - **Server**: Port 8788 with 24/7 autonomous operation
@@ -178,7 +178,7 @@ git branch --show-current  # Should show: main
 **Server**: ✅ Running on port 8788 (launchd `com.slate.autoserver`, `KeepAlive`). Earlier pipelines (closed-loop, evolution, DEX, AMM, portfolio) remain available via `SLATE_PIPELINE=` but are **de-prioritized** — see the verdict below.
 **Honest verdict (2026-07-22):** exhaustive search found **no robust directional/cross-sectional alpha** in liquid crypto perps after brutally honest costs (DSR/PBO/cross-asset gates all fail). The realistic positive return streams are passive **yield**: stablecoin LP **~3–4%/yr** (low risk) and emissions farming **~6–11%/yr** (hack/depeg-tail-laden, survivorship-corrected). Strategic implication: **stop searching liquid-perp OHLCV directional alpha**; the sound direction is the yield side, or alpha in inefficient venues / alt-data.
 **Source-of-truth evaluator:** `slate_core/backtest/` — `honest.py` (no-lookahead, tested), `event_engine.py` (event-driven + impact + partial fills + maker adverse selection), `validation.py` (CPCV/PBO/DSR), `calibration.py` (live-fill loop), `lp.py` (honest LP), `market_maker.py`. `from slate_core.backtest import backtest`. 26 tests green.
-**Market data (real):** CEX SOL daily 1,080 bars (3yr) + 24-coin basket 1d/1h/funding (`sol_data_cache/BASKET_*`); HL hourly; DefiLlama pool histories (`sol_data_cache/yield_pools/`). All regenerable via `fetch_*.py`.
+**Market data (real):** CEX SOL daily 1,080 bars (3yr) + 24-coin basket 1d/1h/funding (`slate_core/data_cache/BASKET_*`); HL hourly; DefiLlama pool histories (`slate_core/data_cache/yield_pools/`). All regenerable via `fetch_*.py`.
 Trajectory + detail in [CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md); report in `HONEST_DISCOVERY_REPORT.pdf`.
 
 ---
@@ -281,9 +281,9 @@ sqlite3 slate_core/slate_realistic_discoveries.db "SELECT COUNT(*) FROM perpetua
 ### **Database & Market Data**
 - **Database**: `slate_core/slate_realistic_discoveries.db` (production, **fresh — cleared 2026-07-11**) · rich history in `slate_realistic_discoveries_backup_20260705_161518.db` (118k rows)
 - **Evolution DB**: `slate_core/slate_evolution.db` (persisted population)
-- **Market Data**: `sol_data_cache/SOLUSDT_perpetual_1d_36m.csv` — ~1,080 **daily** SOLUSDT-perp bars (2023-08→present); legacy `SOLUSDT_perpetual_1h_6m.csv` = 4,182 hourly bars (loader resamples to daily)
+- **Market Data**: `slate_core/data_cache/SOLUSDT_perpetual_1d_36m.csv` — ~1,080 **daily** SOLUSDT-perp bars (2023-08→present); legacy `SOLUSDT_perpetual_1h_6m.csv` = 4,182 hourly bars (loader resamples to daily)
 
 ---
 
 *For detailed information on any topic, see the modular documentation files listed above*
-*Last Updated: 2026-07-22 — exhaustive honest alpha search concluded (no directional alpha; yield is the positive); honest evaluator + three-tier realism layer + survivorship-corrected yield work in place. Full history + the DEX/AMM/evolution engineering detail in [CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md).*
+*Last Updated: 2026-08-21 — standalone-package audit complete (paths centralized via `slate_core/config/paths.py`, data cache moved into the package, dead modules pruned; 363 tests green). Full history + the DEX/AMM/evolution engineering detail in [CLAUDE_CHANGELOG.md](CLAUDE_CHANGELOG.md).*

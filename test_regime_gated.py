@@ -12,6 +12,7 @@ from slate_core.premium.funding_carry import backtest_premium_stream
 from slate_core.statistics.equity_curve import portfolio_metrics
 from slate_core.portfolio.portfolio_backtester import PortfolioBacktester
 from slate_core.portfolio.allocation_gp import evolve_allocation
+from slate_core.config.paths import DATA_CACHE_DIR
 
 
 def regime_gated_carry(down_threshold=-0.03, lookback=168):
@@ -33,7 +34,7 @@ def main():
     client = HLClient()
     streams = {}
     for coin in ["SOL", "BTC", "ETH"]:
-        df = load_candles(f"sol_data_cache/HYPERLIQUID_{coin}_1h.json")
+        df = load_candles(f"{DATA_CACHE_DIR}/HYPERLIQUID_{coin}_1h.json")
         df = merge_funding(df, client, coin)
         result = backtest_premium_stream(df, coin, regime_gated_carry(-0.03, 168),
                                          "regime_gated_carry", timeframe="1h")

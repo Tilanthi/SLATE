@@ -4,6 +4,7 @@ import random
 from slate_core.dex.evolution.gp import Node, Individual
 from slate_core.dex.evolution.gp.fitness import evaluate_gp_tree, textbook_archetype_curves
 from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
+from slate_core.config.paths import DATA_CACHE_DIR
 
 
 def _snap(t, mid, bids, asks, imbalance=0.1):
@@ -88,7 +89,7 @@ def test_realistic_quote_clamp_bounds_gp_pnl_believably():
     from slate_core.dex.backtester.economics import hl_perp_fee_schedule
     from slate_core.discovery.evolution.fitness_evaluator import FitnessConfig
     import random
-    snaps = load_l2_snapshots("sol_data_cache/L2_SOL.jsonl")[::9][:4000]  # small+fast for CI
+    snaps = load_l2_snapshots(f"{DATA_CACHE_DIR}/L2_SOL.jsonl")[::9][:4000]  # small+fast for CI
     sched = hl_perp_fee_schedule(volume_14d_usd=600_000_000)
     arch = textbook_archetype_curves(snaps, schedule=sched)
     cfg = FitnessConfig(min_trades=1)

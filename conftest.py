@@ -1,13 +1,15 @@
 """Root pytest configuration for SLATE.
 
 Shared fixtures used by the evolution test suite. Market data is REAL (loaded
-from sol_data_cache via pd.read_json) — no synthetic OHLCV, per project rules.
+from the package data cache via pd.read_json) — no synthetic OHLCV, per project rules.
 """
 import pandas as pd
 import pytest
 from pathlib import Path
 
-REAL_DATA = Path("sol_data_cache/SOLUSDT_perpetual_1h_6m.csv")  # JSON array, .csv ext
+from slate_core.config.paths import DATA_CACHE_DIR
+
+REAL_DATA = Path(f"{DATA_CACHE_DIR}/SOLUSDT_perpetual_1h_6m.csv")  # JSON array, .csv ext
 
 
 @pytest.fixture(scope="session")

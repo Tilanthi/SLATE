@@ -5,10 +5,11 @@ Debug test of closed-loop discovery system with detailed error reporting
 import pandas as pd
 import traceback
 from slate_core.discovery.closed_loop_integration import get_enhanced_discovery_system
+from slate_core.config.paths import DATA_CACHE_DIR
 
 # Load market data properly
 print("Loading market data...")
-df = pd.read_json('sol_data_cache/SOLUSDT_perpetual_1h_6m.csv')
+df = pd.read_json(f'{DATA_CACHE_DIR}/SOLUSDT_perpetual_1h_6m.csv')
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 df.set_index('timestamp', inplace=True)
 print(f"✅ Loaded {len(df)} days of real market data")

@@ -544,8 +544,11 @@ class TestSafetyConstraints(unittest.TestCase):
 
     def test_scope_constraints_observance(self):
         """Test system respects scope boundaries (slate_core/ only)"""
+        from slate_core.config.paths import CORE_ROOT
         config = AutonomousConfig()
-        self.assertEqual(config.modification_scope, ["slate_core/"])
+        # Scope is the package directory as an absolute path (CWD-independent),
+        # not the old relative "slate_core/" literal.
+        self.assertEqual(config.modification_scope, [f"{CORE_ROOT}/"])
         self.assertTrue(config.require_human_approval_for_deployment)
 
     def test_risk_limits_enforcement(self):
